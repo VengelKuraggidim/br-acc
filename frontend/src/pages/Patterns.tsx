@@ -47,7 +47,7 @@ export function Patterns() {
 
   const handleEntityClick = useCallback(
     (id: string) => {
-      navigate(`/graph/${encodeURIComponent(id)}`);
+      navigate(`/app/analysis/${encodeURIComponent(id)}`);
     },
     [navigate],
   );

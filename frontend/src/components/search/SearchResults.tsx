@@ -29,7 +29,7 @@ export function SearchResults({ results }: SearchResultsProps) {
         const color = entityColors[result.type as EntityType] ?? "var(--text-secondary)";
         return (
           <li key={result.id} className={styles.item}>
-            <Link to={`/graph/${result.id}`} className={styles.link}>
+            <Link to={`/app/analysis/${result.id}`} className={styles.link}>
               <span className={styles.typeBadge} style={{ borderColor: color, color }}>
                 {t(`entity.${result.type}`, result.type)}
               </span>

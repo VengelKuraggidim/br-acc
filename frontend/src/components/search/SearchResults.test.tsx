@@ -54,8 +54,8 @@ describe("SearchResults", () => {
   it("links to graph page for each result", () => {
     renderResults(sampleResults);
     const links = screen.getAllByRole("link");
-    expect(links[0]).toHaveAttribute("href", "/graph/e1");
-    expect(links[1]).toHaveAttribute("href", "/graph/e2");
+    expect(links[0]).toHaveAttribute("href", "/app/analysis/e1");
+    expect(links[1]).toHaveAttribute("href", "/app/analysis/e2");
   });
 
   it("shows source badges", () => {

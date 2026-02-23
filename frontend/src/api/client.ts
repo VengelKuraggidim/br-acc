@@ -163,12 +163,13 @@ export function getGraphData(
   entityId: string,
   depth = 1,
   types?: string[],
+  signal?: AbortSignal,
 ): Promise<GraphData> {
   const params = new URLSearchParams({ depth: String(depth) });
   if (types?.length) {
     params.set("entity_types", types.join(","));
   }
-  return apiFetch<GraphData>(`/api/v1/graph/${encodeURIComponent(entityId)}?${params}`);
+  return apiFetch<GraphData>(`/api/v1/graph/${encodeURIComponent(entityId)}?${params}`, { signal });
 }
 
 // --- Baseline ---
@@ -236,7 +237,7 @@ export function listInvestigations(
   size = 20,
 ): Promise<InvestigationListResponse> {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
-  return apiFetch<InvestigationListResponse>(`/api/v1/investigations?${params}`);
+  return apiFetch<InvestigationListResponse>(`/api/v1/investigations/?${params}`);
 }
 
 export function getInvestigation(id: string): Promise<Investigation> {
@@ -362,6 +363,78 @@ export function exportInvestigation(investigationId: string): Promise<Blob> {
     if (!res.ok) throw new ApiError(res.status, `API error: ${res.statusText}`);
     return res.blob();
   });
+}
+
+// --- Stats ---
+
+export interface StatsResponse {
+  total_nodes: number;
+  total_relationships: number;
+  person_count: number;
+  company_count: number;
+  data_sources: number;
+  indexes: number;
+}
+
+export function getStats(): Promise<StatsResponse> {
+  return apiFetch<StatsResponse>("/api/v1/meta/stats");
+}
+
+// --- Exposure & Timeline ---
+
+export interface ExposureFactor {
+  name: string;
+  value: number;
+  percentile: number;
+  weight: number;
+  sources: string[];
+}
+
+export interface ExposureResponse {
+  entity_id: string;
+  exposure_index: number;
+  factors: ExposureFactor[];
+  peer_group: string;
+  peer_count: number;
+  sources: SourceAttribution[];
+}
+
+export interface TimelineEvent {
+  id: string;
+  date: string;
+  label: string;
+  entity_type: string;
+  properties: Record<string, unknown>;
+  sources: SourceAttribution[];
+}
+
+export interface TimelineResponse {
+  entity_id: string;
+  events: TimelineEvent[];
+  total: number;
+  next_cursor: string | null;
+}
+
+export interface HealthResponse {
+  status: string;
+}
+
+export function getEntityExposure(entityId: string): Promise<ExposureResponse> {
+  return apiFetch<ExposureResponse>(`/api/v1/entity/${encodeURIComponent(entityId)}/exposure`);
+}
+
+export function getEntityTimeline(
+  entityId: string,
+  cursor?: string,
+  limit = 50,
+): Promise<TimelineResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return apiFetch<TimelineResponse>(`/api/v1/entity/${encodeURIComponent(entityId)}/timeline?${params}`);
+}
+
+export function getHealthStatus(): Promise<HealthResponse> {
+  return apiFetch<HealthResponse>("/api/v1/meta/health");
 }
 
 export function exportInvestigationPDF(
