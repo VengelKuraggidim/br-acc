@@ -242,6 +242,12 @@ CREATE INDEX temporal_violation_source_id IF NOT EXISTS
 CREATE INDEX temporal_violation_event_date IF NOT EXISTS
   FOR (t:TemporalViolation) ON (t.event_date);
 
+CREATE INDEX socio_snapshot_membership_id IF NOT EXISTS
+  FOR ()-[r:SOCIO_DE_SNAPSHOT]-() ON (r.membership_id);
+
+CREATE INDEX socio_snapshot_date IF NOT EXISTS
+  FOR ()-[r:SOCIO_DE_SNAPSHOT]-() ON (r.snapshot_date);
+
 // ── Fulltext Search Index ───────────────────────────────
 CREATE FULLTEXT INDEX entity_search IF NOT EXISTS
   FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|Inquiry|InquiryRequirement|MunicipalContract|MunicipalBid|MunicipalGazetteAct|JudicialCase|SourceDocument)

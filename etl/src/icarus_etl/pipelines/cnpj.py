@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -125,6 +126,9 @@ BQ_ESTABELECIMENTOS_RENAME = {
     "telefone_2": "telefone2",
 }
 BQ_ESTABELECIMENTOS_DROP = {"ano", "mes", "data", "cnpj", "id_municipio_rf"}
+BQ_EMPRESAS_DROP_HISTORY: set[str] = set()
+BQ_SOCIOS_DROP_HISTORY: set[str] = set()
+BQ_ESTABELECIMENTOS_DROP_HISTORY: set[str] = {"cnpj", "id_municipio_rf"}
 
 
 class _BQChunkAdapter:
@@ -179,6 +183,21 @@ def _make_partner_id(
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+def _make_membership_id(
+    source_key: str,
+    target_key: str,
+    tipo_socio: str,
+    qualificacao: str,
+    snapshot_date: str,
+    data_entrada: str,
+) -> str:
+    raw = (
+        f"{source_key}|{target_key}|{tipo_socio}|{qualificacao}|"
+        f"{snapshot_date}|{data_entrada}|receita_federal"
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()[:24]
+
+
 class CNPJPipeline(Pipeline):
     """ETL pipeline for Receita Federal CNPJ open data.
 
@@ -196,8 +215,11 @@ class CNPJPipeline(Pipeline):
         data_dir: str = "./data",
         limit: int | None = None,
         chunk_size: int = 50_000,
+        history: bool = False,
     ) -> None:
         super().__init__(driver, data_dir, limit=limit, chunk_size=chunk_size)
+        self.history = history
+        self.run_id = f"cnpj-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
         self._raw_empresas: pd.DataFrame = pd.DataFrame()
         self._raw_socios: pd.DataFrame = pd.DataFrame()
         self._raw_estabelecimentos: pd.DataFrame = pd.DataFrame()
@@ -215,6 +237,8 @@ class CNPJPipeline(Pipeline):
         self.partner_relationships: list[dict[str, Any]] = []
         # Company -> Company
         self.pj_relationships: list[dict[str, Any]] = []
+        # Historical socio snapshots
+        self.snapshot_relationships: list[dict[str, Any]] = []
 
     # --- Reference tables ---
 
@@ -344,6 +368,36 @@ class CNPJPipeline(Pipeline):
 
         cnpj_dir = Path(self.data_dir) / "cnpj"
 
+        # History mode from canonical *_history.csv exports (preferred)
+        if self.history:
+            hist_empresas = self._read_bq_csv(
+                "empresas_history.csv",
+                BQ_EMPRESAS_RENAME,
+                BQ_EMPRESAS_DROP_HISTORY,
+            )
+            hist_socios = self._read_bq_csv(
+                "socios_history.csv",
+                BQ_SOCIOS_RENAME,
+                BQ_SOCIOS_DROP_HISTORY,
+            )
+            hist_estabelecimentos = self._read_bq_csv(
+                "estabelecimentos_history.csv",
+                BQ_ESTABELECIMENTOS_RENAME,
+                BQ_ESTABELECIMENTOS_DROP_HISTORY,
+            )
+            if not hist_empresas.empty and not hist_socios.empty:
+                logger.info("Using CNPJ history mode from *_history.csv files")
+                self._raw_empresas = hist_empresas
+                self._raw_socios = hist_socios
+                self._raw_estabelecimentos = hist_estabelecimentos
+                logger.info(
+                    "Extracted (history): %d empresas, %d socios, %d estabelecimentos",
+                    len(self._raw_empresas),
+                    len(self._raw_socios),
+                    len(self._raw_estabelecimentos),
+                )
+                return
+
         # 1. Try real RF format: *EMPRE* or Empresas*
         rf_empresas = self._read_rf_chunks("*EMPRE*", EMPRESAS_COLS)
         if rf_empresas.empty:
@@ -401,6 +455,20 @@ class CNPJPipeline(Pipeline):
             len(self._raw_socios),
             len(self._raw_estabelecimentos),
         )
+
+    def _snapshot_from_row(self, row: pd.Series) -> str:
+        """Extract canonical snapshot date from row metadata."""
+        if "data" in row and str(row["data"]).strip():
+            return parse_date(str(row["data"]).strip())
+
+        ano = str(row.get("ano", "")).strip()
+        mes = str(row.get("mes", "")).strip()
+        if ano and mes:
+            try:
+                return f"{int(ano):04d}-{int(mes):02d}-01"
+            except ValueError:
+                return ""
+        return ""
 
     # --- Vectorized transform helpers ---
 
@@ -501,6 +569,7 @@ class CNPJPipeline(Pipeline):
             lambda c: self._resolve_reference("qualificacoes", c),
         )
         df["data_entrada"] = df["data_entrada"].astype(str).map(parse_date)
+        df["snapshot_date"] = df.apply(self._snapshot_from_row, axis=1)
 
         # Split PJ (tipo=1) from PF (tipo=2 or other)
         pj_mask = df["tipo"] == "1"
@@ -524,6 +593,7 @@ class CNPJPipeline(Pipeline):
             "tipo_socio": pf_strong["tipo"],
             "qualificacao": pf_strong["qualificacao"],
             "data_entrada": pf_strong["data_entrada"],
+            "snapshot_date": pf_strong["snapshot_date"],
         }).to_dict("records")  # type: ignore[assignment]
 
         pf_partial = pf_df[pf_df["doc_class"] != "cpf_valid"].copy()
@@ -561,6 +631,7 @@ class CNPJPipeline(Pipeline):
             "tipo_socio": pf_partial["tipo"],
             "qualificacao": pf_partial["qualificacao"],
             "data_entrada": pf_partial["data_entrada"],
+            "snapshot_date": pf_partial["snapshot_date"],
         }).to_dict("records")  # type: ignore[assignment]
 
         # PJ partners: keep only CNPJ-like docs for Company→Company relationships
@@ -574,6 +645,7 @@ class CNPJPipeline(Pipeline):
             "tipo_socio": pj_df["tipo"],
             "qualificacao": pj_df["qualificacao"],
             "data_entrada": pj_df["data_entrada"],
+            "snapshot_date": pj_df["snapshot_date"],
         }).to_dict("records")  # type: ignore[assignment]
 
         return (
@@ -609,6 +681,7 @@ class CNPJPipeline(Pipeline):
         df["data_entrada"] = df.get(
             "data_entrada", pd.Series("", index=df.index),
         ).astype(str).map(parse_date)
+        df["snapshot_date"] = df.apply(self._snapshot_from_row, axis=1)
 
         # Split PJ (tipo=1) from PF (tipo=2 or other)
         pj_mask = df["tipo"] == "1"
@@ -632,6 +705,7 @@ class CNPJPipeline(Pipeline):
             "tipo_socio": pf_strong["tipo"],
             "qualificacao": pf_strong["qualificacao"],
             "data_entrada": pf_strong["data_entrada"],
+            "snapshot_date": pf_strong["snapshot_date"],
         }).to_dict("records")  # type: ignore[assignment]
 
         pf_partial = pf_df[pf_df["doc_class"] != "cpf_valid"].copy()
@@ -669,6 +743,7 @@ class CNPJPipeline(Pipeline):
             "tipo_socio": pf_partial["tipo"],
             "qualificacao": pf_partial["qualificacao"],
             "data_entrada": pf_partial["data_entrada"],
+            "snapshot_date": pf_partial["snapshot_date"],
         }).to_dict("records")  # type: ignore[assignment]
 
         # PJ partners
@@ -682,6 +757,7 @@ class CNPJPipeline(Pipeline):
             "tipo_socio": pj_df["tipo"],
             "qualificacao": pj_df["qualificacao"],
             "data_entrada": pj_df["data_entrada"],
+            "snapshot_date": pj_df["snapshot_date"],
         }).to_dict("records")  # type: ignore[assignment]
 
         return (
@@ -691,6 +767,198 @@ class CNPJPipeline(Pipeline):
             partial_relationships,
             pj_relationships,
         )
+
+    def _build_snapshot_relationships(
+        self,
+        pf_rels: list[dict[str, Any]],
+        partial_rels: list[dict[str, Any]],
+        pj_rels: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+
+        def _mk_temporal_status(data_entrada: str, snapshot_date: str) -> str:
+            if not snapshot_date or not data_entrada:
+                return "unknown"
+            if data_entrada > snapshot_date:
+                return "invalid"
+            return "valid"
+
+        for rel in pf_rels:
+            snapshot = str(rel.get("snapshot_date", "")).strip()
+            data_entrada = str(rel.get("data_entrada", "")).strip()
+            rows.append(
+                {
+                    "source_label": "Person",
+                    "source_key": rel["source_key"],
+                    "target_key": rel["target_key"],
+                    "tipo_socio": rel.get("tipo_socio", ""),
+                    "qualificacao": rel.get("qualificacao", ""),
+                    "data_entrada": data_entrada,
+                    "snapshot_date": snapshot,
+                    "membership_id": _make_membership_id(
+                        str(rel["source_key"]),
+                        str(rel["target_key"]),
+                        str(rel.get("tipo_socio", "")),
+                        str(rel.get("qualificacao", "")),
+                        snapshot,
+                        data_entrada,
+                    ),
+                    "run_id": self.run_id,
+                    "source_ref": "basedosdados.br_me_cnpj.socios",
+                    "temporal_status": _mk_temporal_status(data_entrada, snapshot),
+                    "temporal_rule": "data_entrada_lte_snapshot_date",
+                },
+            )
+
+        for rel in partial_rels:
+            snapshot = str(rel.get("snapshot_date", "")).strip()
+            data_entrada = str(rel.get("data_entrada", "")).strip()
+            rows.append(
+                {
+                    "source_label": "Partner",
+                    "source_key": rel["source_key"],
+                    "target_key": rel["target_key"],
+                    "tipo_socio": rel.get("tipo_socio", ""),
+                    "qualificacao": rel.get("qualificacao", ""),
+                    "data_entrada": data_entrada,
+                    "snapshot_date": snapshot,
+                    "membership_id": _make_membership_id(
+                        str(rel["source_key"]),
+                        str(rel["target_key"]),
+                        str(rel.get("tipo_socio", "")),
+                        str(rel.get("qualificacao", "")),
+                        snapshot,
+                        data_entrada,
+                    ),
+                    "run_id": self.run_id,
+                    "source_ref": "basedosdados.br_me_cnpj.socios",
+                    "temporal_status": _mk_temporal_status(data_entrada, snapshot),
+                    "temporal_rule": "data_entrada_lte_snapshot_date",
+                },
+            )
+
+        for rel in pj_rels:
+            snapshot = str(rel.get("snapshot_date", "")).strip()
+            data_entrada = str(rel.get("data_entrada", "")).strip()
+            rows.append(
+                {
+                    "source_label": "Company",
+                    "source_key": rel["source_key"],
+                    "target_key": rel["target_key"],
+                    "tipo_socio": rel.get("tipo_socio", ""),
+                    "qualificacao": rel.get("qualificacao", ""),
+                    "data_entrada": data_entrada,
+                    "snapshot_date": snapshot,
+                    "membership_id": _make_membership_id(
+                        str(rel["source_key"]),
+                        str(rel["target_key"]),
+                        str(rel.get("tipo_socio", "")),
+                        str(rel.get("qualificacao", "")),
+                        snapshot,
+                        data_entrada,
+                    ),
+                    "run_id": self.run_id,
+                    "source_ref": "basedosdados.br_me_cnpj.socios",
+                    "temporal_status": _mk_temporal_status(data_entrada, snapshot),
+                    "temporal_rule": "data_entrada_lte_snapshot_date",
+                },
+            )
+        return rows
+
+    def _latest_projection(
+        self, rows: list[dict[str, Any]],
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
+        """Build latest SOCIO_DE projection from history rows."""
+        if not rows:
+            return [], [], []
+        df = pd.DataFrame(rows)
+        if df.empty:
+            return [], [], []
+
+        sortable = df.copy()
+        sortable["snapshot_date"] = sortable["snapshot_date"].fillna("")
+        sortable["data_entrada"] = sortable["data_entrada"].fillna("")
+        sortable = sortable.sort_values(
+            by=["source_label", "source_key", "target_key", "snapshot_date", "data_entrada"],
+            ascending=[True, True, True, False, False],
+        )
+        latest = sortable.drop_duplicates(
+            subset=["source_label", "source_key", "target_key"],
+            keep="first",
+        )
+        rel_cols = ["source_key", "target_key", "tipo_socio", "qualificacao", "data_entrada"]
+        person_rows = [
+            {str(k): v for k, v in row.items()}
+            for row in latest[latest["source_label"] == "Person"][rel_cols].to_dict("records")
+        ]
+        partner_rows = [
+            {str(k): v for k, v in row.items()}
+            for row in latest[latest["source_label"] == "Partner"][rel_cols].to_dict("records")
+        ]
+        company_rows = [
+            {str(k): v for k, v in row.items()}
+            for row in latest[latest["source_label"] == "Company"][rel_cols].to_dict("records")
+        ]
+        return person_rows, partner_rows, company_rows
+
+    def _load_snapshot_relationship_rows(
+        self,
+        loader: Neo4jBatchLoader,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        for source_label, source_key in [
+            ("Person", "cpf"),
+            ("Partner", "partner_id"),
+            ("Company", "cnpj"),
+        ]:
+            label_rows = [r for r in rows if r["source_label"] == source_label]
+            if not label_rows:
+                continue
+            query = (
+                "UNWIND $rows AS row "
+                f"MATCH (a:{source_label} {{{source_key}: row.source_key}}) "
+                "MATCH (b:Company {cnpj: row.target_key}) "
+                "MERGE (a)-[r:SOCIO_DE_SNAPSHOT {membership_id: row.membership_id}]->(b) "
+                "SET r.snapshot_date = row.snapshot_date, "
+                "    r.data_entrada = row.data_entrada, "
+                "    r.tipo_socio = row.tipo_socio, "
+                "    r.qualificacao = row.qualificacao, "
+                "    r.run_id = row.run_id, "
+                "    r.source_ref = row.source_ref, "
+                "    r.temporal_status = row.temporal_status, "
+                "    r.temporal_rule = row.temporal_rule"
+            )
+            loader.run_query(query, label_rows)
+
+    def _rebuild_latest_projection_from_snapshots(self) -> None:
+        """Rebuild factual SOCIO_DE from latest snapshot per source/target pair."""
+        with self.driver.session(database=self.neo4j_database) as session:
+            session.run(
+                "MATCH ()-[r:SOCIO_DE]->() DELETE r",
+            )
+            session.run(
+                """
+                CALL {
+                  MATCH (a)-[r:SOCIO_DE_SNAPSHOT]->(b:Company)
+                  WHERE coalesce(r.snapshot_date, '') <> ''
+                  WITH a, b, max(r.snapshot_date) AS max_snapshot
+                  MATCH (a)-[r2:SOCIO_DE_SNAPSHOT]->(b)
+                  WHERE r2.snapshot_date = max_snapshot
+                  WITH a, b, r2
+                  ORDER BY r2.data_entrada DESC
+                  WITH a, b, collect(r2)[0] AS latest
+                  MERGE (a)-[s:SOCIO_DE]->(b)
+                  SET s.tipo_socio = latest.tipo_socio,
+                      s.qualificacao = latest.qualificacao,
+                      s.data_entrada = latest.data_entrada
+                }
+                RETURN 1
+                """,
+            )
 
     def transform(self) -> None:
         """Transform raw data into normalized company, partner, and relationship records."""
@@ -720,9 +988,21 @@ class CNPJPipeline(Pipeline):
             ) = self._transform_socios_simple(self._raw_socios)
         self.partners = deduplicate_rows(partners, ["cpf"])
         self.partial_partners = deduplicate_rows(partial_partners, ["partner_id"])
-        self.relationships = pf_rels
-        self.partner_relationships = partial_rels
-        self.pj_relationships = pj_rels
+        if self.history:
+            self.snapshot_relationships = self._build_snapshot_relationships(
+                pf_rels,
+                partial_rels,
+                pj_rels,
+            )
+            (
+                self.relationships,
+                self.partner_relationships,
+                self.pj_relationships,
+            ) = self._latest_projection(self.snapshot_relationships)
+        else:
+            self.relationships = pf_rels
+            self.partner_relationships = partial_rels
+            self.pj_relationships = pj_rels
         logger.info(
             "Transformed %d strong PF partners, %d partial partners, "
             "%d PF relationships, %d Partner relationships, %d PJ relationships",
@@ -732,6 +1012,11 @@ class CNPJPipeline(Pipeline):
             len(self.partner_relationships),
             len(self.pj_relationships),
         )
+        if self.history:
+            logger.info(
+                "Transformed %d historical SOCIO_DE_SNAPSHOT rows",
+                len(self.snapshot_relationships),
+            )
 
     # --- Streaming pipeline for large datasets ---
 
@@ -802,10 +1087,15 @@ class CNPJPipeline(Pipeline):
         use_bq = not estab_files
 
         if use_bq:
-            bq_estab = self._find_bq_files("estabelecimentos*.csv")
-            bq_emp = self._find_bq_files("empresas*.csv")
-            bq_socio = self._find_bq_files("socios*.csv")
-            if not bq_estab and not bq_emp:
+            if self.history:
+                bq_estab = self._find_bq_files("estabelecimentos_history.csv")
+                bq_emp = self._find_bq_files("empresas_history.csv")
+                bq_socio = self._find_bq_files("socios_history.csv")
+            else:
+                bq_estab = self._find_bq_files("estabelecimentos*.csv")
+                bq_emp = self._find_bq_files("empresas*.csv")
+                bq_socio = self._find_bq_files("socios*.csv")
+            if not bq_estab and not bq_emp and not bq_socio:
                 logger.warning("No RF or BQ data files found")
                 return
             logger.info("Using Base dos Dados (BigQuery) format for streaming")
@@ -818,7 +1108,13 @@ class CNPJPipeline(Pipeline):
             for f in bq_estab:
                 logger.info("  Reading %s...", f.name)
                 for chunk in self._read_bq_file_chunks(
-                    f, BQ_ESTABELECIMENTOS_RENAME, BQ_ESTABELECIMENTOS_DROP,
+                    f,
+                    BQ_ESTABELECIMENTOS_RENAME,
+                    (
+                        BQ_ESTABELECIMENTOS_DROP_HISTORY
+                        if self.history
+                        else BQ_ESTABELECIMENTOS_DROP
+                    ),
                 ):
                     self._build_estab_lookup(chunk)
         else:
@@ -840,7 +1136,9 @@ class CNPJPipeline(Pipeline):
             for f in emp_files:
                 logger.info("  Processing %s...", f.name)
                 for chunk in self._read_bq_file_chunks(
-                    f, BQ_EMPRESAS_RENAME, BQ_EMPRESAS_DROP,
+                    f,
+                    BQ_EMPRESAS_RENAME,
+                    BQ_EMPRESAS_DROP_HISTORY if self.history else BQ_EMPRESAS_DROP,
                 ):
                     companies = self._transform_empresas_rf(chunk)
                     if companies:
@@ -875,7 +1173,11 @@ class CNPJPipeline(Pipeline):
         for f in socio_files:
             logger.info("  Processing %s...", f.name)
             chunks = (
-                self._read_bq_file_chunks(f, BQ_SOCIOS_RENAME, BQ_SOCIOS_DROP)
+                self._read_bq_file_chunks(
+                    f,
+                    BQ_SOCIOS_RENAME,
+                    BQ_SOCIOS_DROP_HISTORY if self.history else BQ_SOCIOS_DROP,
+                )
                 if use_bq
                 else self._read_rf_file_chunks(f, SOCIOS_COLS)
             )
@@ -893,39 +1195,50 @@ class CNPJPipeline(Pipeline):
                 if partial_partners:
                     loader.load_nodes("Partner", partial_partners, key_field="partner_id")
                     total_partial_partners += len(partial_partners)
-                if pf_rels:
-                    loader.load_relationships(
-                        rel_type="SOCIO_DE",
-                        rows=pf_rels,
-                        source_label="Person",
-                        source_key="cpf",
-                        target_label="Company",
-                        target_key="cnpj",
-                        properties=["tipo_socio", "qualificacao", "data_entrada"],
+                if self.history:
+                    snapshot_rows = self._build_snapshot_relationships(
+                        pf_rels,
+                        partial_rels,
+                        pj_rels,
                     )
+                    self._load_snapshot_relationship_rows(loader, snapshot_rows)
                     total_person_rels += len(pf_rels)
-                if partial_rels:
-                    loader.load_relationships(
-                        rel_type="SOCIO_DE",
-                        rows=partial_rels,
-                        source_label="Partner",
-                        source_key="partner_id",
-                        target_label="Company",
-                        target_key="cnpj",
-                        properties=["tipo_socio", "qualificacao", "data_entrada"],
-                    )
                     total_partial_rels += len(partial_rels)
-                if pj_rels:
-                    loader.load_relationships(
-                        rel_type="SOCIO_DE",
-                        rows=pj_rels,
-                        source_label="Company",
-                        source_key="cnpj",
-                        target_label="Company",
-                        target_key="cnpj",
-                        properties=["tipo_socio", "qualificacao", "data_entrada"],
-                    )
                     total_pj_rels += len(pj_rels)
+                else:
+                    if pf_rels:
+                        loader.load_relationships(
+                            rel_type="SOCIO_DE",
+                            rows=pf_rels,
+                            source_label="Person",
+                            source_key="cpf",
+                            target_label="Company",
+                            target_key="cnpj",
+                            properties=["tipo_socio", "qualificacao", "data_entrada"],
+                        )
+                        total_person_rels += len(pf_rels)
+                    if partial_rels:
+                        loader.load_relationships(
+                            rel_type="SOCIO_DE",
+                            rows=partial_rels,
+                            source_label="Partner",
+                            source_key="partner_id",
+                            target_label="Company",
+                            target_key="cnpj",
+                            properties=["tipo_socio", "qualificacao", "data_entrada"],
+                        )
+                        total_partial_rels += len(partial_rels)
+                    if pj_rels:
+                        loader.load_relationships(
+                            rel_type="SOCIO_DE",
+                            rows=pj_rels,
+                            source_label="Company",
+                            source_key="cnpj",
+                            target_label="Company",
+                            target_key="cnpj",
+                            properties=["tipo_socio", "qualificacao", "data_entrada"],
+                        )
+                        total_pj_rels += len(pj_rels)
             logger.info(
                 "  Person partners: %d, partial partners: %d, "
                 "Person rels: %d, Partner rels: %d, PJ rels: %d so far",
@@ -935,6 +1248,10 @@ class CNPJPipeline(Pipeline):
                 total_partial_rels,
                 total_pj_rels,
             )
+
+        if self.history:
+            logger.info("Rebuilding latest SOCIO_DE projection from SOCIO_DE_SNAPSHOT...")
+            self._rebuild_latest_projection_from_snapshots()
 
         logger.info(
             "Streaming complete: %d companies, %d Person partners, %d partial partners, "
@@ -991,3 +1308,6 @@ class CNPJPipeline(Pipeline):
                 target_key="cnpj",
                 properties=["tipo_socio", "qualificacao", "data_entrada"],
             )
+
+        if self.snapshot_relationships:
+            self._load_snapshot_relationship_rows(loader, self.snapshot_relationships)

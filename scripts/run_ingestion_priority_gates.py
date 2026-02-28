@@ -247,6 +247,24 @@ GAZETTE_MENTION_COUNT_QUERY = (
     "RETURN count(r) AS value"
 )
 
+QSA_SNAPSHOT_MONTHS_QUERY = (
+    "MATCH ()-[r:SOCIO_DE_SNAPSHOT]->() "
+    "WHERE r.snapshot_date =~ '\\d{4}-\\d{2}-\\d{2}' "
+    "RETURN collect(DISTINCT substring(r.snapshot_date, 0, 7)) AS months, "
+    "       max(r.snapshot_date) AS max_snapshot_date"
+)
+
+QSA_HISTORY_COUNT_QUERY = "MATCH ()-[r:SOCIO_DE_SNAPSHOT]->() RETURN count(r) AS value"
+
+QSA_TEMPORAL_INVALID_QUERY = (
+    "MATCH ()-[r:SOCIO_DE_SNAPSHOT]->() "
+    "WHERE r.temporal_status = 'invalid' "
+    "   OR (coalesce(r.snapshot_date, '') <> '' "
+    "       AND coalesce(r.data_entrada, '') <> '' "
+    "       AND r.data_entrada > r.snapshot_date) "
+    "RETURN count(r) AS value"
+)
+
 PNCP_MONTHS_QUERY = (
     "MATCH (b:Bid) "
     "WHERE b.source = 'pncp' AND b.date =~ '\\d{4}-\\d{2}-\\d{2}' "
@@ -305,6 +323,17 @@ def main() -> int:
         "--reference-date",
         default=date.today().isoformat(),
         help="Reference date for freshness checks (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--check-qsa-history",
+        action="store_true",
+        help="Enable QSA historical coverage gates (SOCIO_DE_SNAPSHOT).",
+    )
+    parser.add_argument(
+        "--qsa-max-lag-days",
+        type=int,
+        default=45,
+        help="Max allowed lag from latest QSA snapshot month to reference date.",
     )
     args = parser.parse_args()
 
@@ -400,6 +429,76 @@ def main() -> int:
                     "[WARN] municipal_gazette_mentions gate relaxed: "
                     f"gazette_text_available_ratio={ratio:.3f} < 0.2",
                 )
+
+            if args.check_qsa_history:
+                qsa_history_count = int(session.run(QSA_HISTORY_COUNT_QUERY).single()["value"])
+                qsa_history_ok = qsa_history_count > 0
+                print(
+                    f"[{'PASS' if qsa_history_ok else 'FAIL'}] qsa_history_rows_loaded: "
+                    f"value={qsa_history_count} expected > 0",
+                )
+                if not qsa_history_ok:
+                    failed += 1
+
+                qsa_invalid_count = int(
+                    session.run(QSA_TEMPORAL_INVALID_QUERY).single()["value"],
+                )
+                qsa_invalid_ok = qsa_invalid_count == 0
+                print(
+                    f"[{'PASS' if qsa_invalid_ok else 'FAIL'}] qsa_temporal_invalid_count: "
+                    f"value={qsa_invalid_count} expected == 0",
+                )
+                if not qsa_invalid_ok:
+                    failed += 1
+
+                qsa_row = session.run(QSA_SNAPSHOT_MONTHS_QUERY).single()
+                qsa_months = set(qsa_row["months"] or [])
+                qsa_max_snapshot_date = qsa_row["max_snapshot_date"] or ""
+                qsa_snapshot_max_month = qsa_max_snapshot_date[:7] if qsa_max_snapshot_date else ""
+                print(
+                    f"[INFO] qsa_snapshot_max_month: "
+                    f"value={qsa_snapshot_max_month or 'N/A'}",
+                )
+
+                if qsa_months:
+                    qsa_min_month = min(qsa_months)
+                    qsa_max_month = max(qsa_months)
+                    qsa_max_month_dt = _parse_iso_date(f"{qsa_max_month}-01")
+                    qsa_expected_months = _month_range(
+                        qsa_min_month,
+                        qsa_max_month_dt if qsa_max_month_dt else ref_date,
+                    )
+                    qsa_missing_months = [
+                        month for month in qsa_expected_months if month not in qsa_months
+                    ]
+                else:
+                    qsa_missing_months = []
+
+                qsa_missing_ok = len(qsa_missing_months) == 0
+                qsa_suffix = ""
+                if qsa_missing_months:
+                    qsa_suffix = f" missing_sample={','.join(qsa_missing_months[:12])}"
+                print(
+                    f"[{'PASS' if qsa_missing_ok else 'FAIL'}] qsa_missing_months_count: "
+                    f"value={len(qsa_missing_months)} expected == 0{qsa_suffix}",
+                )
+                if not qsa_missing_ok:
+                    failed += 1
+
+                if qsa_max_snapshot_date:
+                    qsa_snapshot_dt = _parse_iso_date(qsa_max_snapshot_date)
+                    qsa_lag_days = (
+                        (ref_date - qsa_snapshot_dt).days if qsa_snapshot_dt else 9999
+                    )
+                else:
+                    qsa_lag_days = 9999
+                qsa_lag_ok = qsa_lag_days <= args.qsa_max_lag_days
+                print(
+                    f"[{'PASS' if qsa_lag_ok else 'FAIL'}] qsa_latest_projection_lag_days: "
+                    f"value={qsa_lag_days} expected <= {args.qsa_max_lag_days}",
+                )
+                if not qsa_lag_ok:
+                    failed += 1
     finally:
         driver.close()
 

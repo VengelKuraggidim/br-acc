@@ -352,6 +352,12 @@ CREATE INDEX temporal_violation_source_id IF NOT EXISTS
 CREATE INDEX temporal_violation_event_date IF NOT EXISTS
   FOR (t:TemporalViolation) ON (t.event_date);
 
+CREATE INDEX socio_snapshot_membership_id IF NOT EXISTS
+  FOR ()-[r:SOCIO_DE_SNAPSHOT]-() ON (r.membership_id);
+
+CREATE INDEX socio_snapshot_date IF NOT EXISTS
+  FOR ()-[r:SOCIO_DE_SNAPSHOT]-() ON (r.snapshot_date);
+
 // ── PEPRecord Indexes ─────────────────────────────────────
 CREATE INDEX pep_record_name IF NOT EXISTS
   FOR (p:PEPRecord) ON (p.name);

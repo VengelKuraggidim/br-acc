@@ -116,6 +116,7 @@ def cli() -> None:
 @click.option("--chunk-size", type=int, default=50_000, help="Chunk size for batch processing")
 @click.option("--streaming/--no-streaming", default=False, help="Streaming mode")
 @click.option("--start-phase", type=int, default=1, help="Skip to phase N")
+@click.option("--history/--no-history", default=False, help="Enable history mode when supported")
 def run(
     source: str,
     neo4j_uri: str,
@@ -127,6 +128,7 @@ def run(
     chunk_size: int,
     streaming: bool,
     start_phase: int,
+    history: bool,
 ) -> None:
     """Run an ETL pipeline."""
     os.environ["NEO4J_DATABASE"] = neo4j_database
@@ -137,7 +139,21 @@ def run(
         raise click.ClickException(f"Unknown source: {source}. Available: {available}")
 
     pipeline_cls = PIPELINES[source]
-    pipeline = pipeline_cls(driver=driver, data_dir=data_dir, limit=limit, chunk_size=chunk_size)
+    try:
+        pipeline = pipeline_cls(
+            driver=driver,
+            data_dir=data_dir,
+            limit=limit,
+            chunk_size=chunk_size,
+            history=history,
+        )
+    except TypeError:
+        pipeline = pipeline_cls(
+            driver=driver,
+            data_dir=data_dir,
+            limit=limit,
+            chunk_size=chunk_size,
+        )
 
     if streaming and hasattr(pipeline, "run_streaming"):
         pipeline.run_streaming(start_phase=start_phase)

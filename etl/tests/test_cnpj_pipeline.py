@@ -68,6 +68,44 @@ def _write_bq_fixtures(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _write_bq_history_fixtures(tmp_path: Path) -> Path:
+    extracted = tmp_path / "cnpj" / "extracted"
+    extracted.mkdir(parents=True)
+
+    (extracted / "empresas_history.csv").write_text(
+        (
+            "ano,mes,data,cnpj_basico,razao_social,natureza_juridica,"
+            "qualificacao_responsavel,capital_social,porte,ente_federativo\n"
+            "2024,01,2024-01-01,00000000,BANCO TESTE S.A.,2046,10,1000,05,\n"
+            "2024,02,2024-02-01,00000000,BANCO TESTE S.A.,2046,10,1000,05,\n"
+        ),
+    )
+    (extracted / "socios_history.csv").write_text(
+        (
+            "ano,mes,data,cnpj_basico,tipo,nome,documento,qualificacao,"
+            "data_entrada_sociedade,id_pais,cpf_representante_legal,"
+            "nome_representante_legal,qualificacao_representante_legal,faixa_etaria\n"
+            "2024,01,2024-01-01,00000000,2,JOAO DA SILVA,***123456**,22,20200115,0,,0,0,6\n"
+            "2024,02,2024-02-01,00000000,2,JOAO DA SILVA,***123456**,22,20200115,0,,0,0,6\n"
+        ),
+    )
+    (extracted / "estabelecimentos_history.csv").write_text(
+        (
+            "ano,mes,data,cnpj_basico,cnpj_ordem,cnpj_dv,identificador_matriz_filial,"
+            "nome_fantasia,situacao_cadastral,data_situacao_cadastral,motivo_situacao_cadastral,"
+            "nome_cidade_exterior,id_pais,data_inicio_atividade,cnae_fiscal_principal,"
+            "cnae_fiscal_secundaria,sigla_uf,id_municipio,id_municipio_rf,tipo_logradouro,logradouro,"
+            "numero,complemento,bairro,cep,ddd_1,telefone_1,ddd_2,telefone_2,ddd_fax,fax,email,"
+            "situacao_especial,data_situacao_especial\n"
+            "2024,01,2024-01-01,00000000,0001,00,1,TESTE,02,20050101,0,,0,19660101,6421200,,DF,9701,,SCS,"
+            "QUADRA 01,SN,BLOCO A,ASA SUL,70073900,61,30000000,,,,,,,\n"
+            "2024,02,2024-02-01,00000000,0001,00,1,TESTE,02,20050101,0,,0,19660101,6421200,,DF,9701,,SCS,"
+            "QUADRA 01,SN,BLOCO A,ASA SUL,70073900,61,30000000,,,,,,,\n"
+        ),
+    )
+    return tmp_path
+
+
 # --- parse_capital_social ---
 
 
@@ -284,6 +322,32 @@ def test_extract_bq_format_drops_metadata(tmp_path: Path) -> None:
 
     # Estabelecimentos also drops "cnpj" (full) and "id_municipio_rf"
     assert "id_municipio_rf" not in pipeline._raw_estabelecimentos.columns
+
+
+def test_extract_bq_history_preserves_snapshot_columns(tmp_path: Path) -> None:
+    data_dir = _write_bq_history_fixtures(tmp_path)
+    pipeline = _make_pipeline(data_dir=str(data_dir), history=True)
+    pipeline.extract()
+
+    assert len(pipeline._raw_socios) == 2
+    assert "data" in pipeline._raw_socios.columns
+    assert "ano" in pipeline._raw_socios.columns
+    assert "mes" in pipeline._raw_socios.columns
+
+
+def test_transform_bq_history_builds_snapshot_and_latest_projection(tmp_path: Path) -> None:
+    data_dir = _write_bq_history_fixtures(tmp_path)
+    pipeline = _make_pipeline(data_dir=str(data_dir), history=True)
+    pipeline.extract()
+    pipeline.transform()
+
+    assert len(pipeline.snapshot_relationships) == 2
+    assert len(pipeline.partner_relationships) == 1
+    latest = pipeline.partner_relationships[0]
+    assert latest["target_key"] == "00.000.000/0001-00"
+    # Latest projection must come from the latest snapshot.
+    snapshots = sorted(r["snapshot_date"] for r in pipeline.snapshot_relationships)
+    assert snapshots[-1] == "2024-02-01"
 
 
 def test_transform_bq_format_companies(tmp_path: Path) -> None:
