@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 API_BASE = "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/"
 GOIAS_UF_CODE = "52"
 REQUEST_TIMEOUT = 30.0
-REQUEST_DELAY = 0.5
-FINBRA_YEARS = range(2020, 2026)
+REQUEST_DELAY = 0.3
+# RREO uses nr_periodo=6 (annual summary, 6th bimester)
+RREO_YEARS = range(2021, 2025)
+RREO_ANEXO = "RREO-Anexo 01"
 
 
 class TcmGoPipeline(Pipeline):
@@ -132,42 +134,78 @@ class TcmGoPipeline(Pipeline):
             logger.warning("Failed to fetch entes from API: %s", exc)
 
     def _extract_finbra_api(self) -> None:
-        """Fetch fiscal data for each Goias municipality from finbra endpoint."""
+        """Fetch fiscal data for Goias municipalities from SICONFI RREO endpoint.
+
+        Uses RREO (Resumo da Execucao Orcamentaria) Anexo 01 which contains
+        revenue and expenditure summaries per municipality per year.
+        The 6th bimester (nr_periodo=6) gives the annual totals.
+        """
         if not self._municipalities:
             logger.warning("No municipalities to fetch fiscal data for")
             return
 
-        url = f"{API_BASE}finbra"
+        url = f"{API_BASE}rreo"
         records: list[dict[str, Any]] = []
-        try:
-            with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-                for year in FINBRA_YEARS:
-                    for muni in self._municipalities:
-                        cod_ibge = str(muni.get("cod_ibge", ""))
-                        params = {
-                            "an_exercicio": str(year),
-                            "id_ente": cod_ibge,
-                        }
-                        try:
-                            resp = client.get(url, params=params)
-                            resp.raise_for_status()
-                            data = resp.json()
-                            items = (
-                                data.get("items", [])
-                                if isinstance(data, dict)
-                                else data
-                            )
-                            records.extend(items)
-                        except httpx.HTTPError as exc:
-                            logger.debug(
-                                "Failed finbra for %s/%d: %s", cod_ibge, year, exc
-                            )
-                        time.sleep(REQUEST_DELAY)
-        except httpx.HTTPError as exc:
-            logger.warning("HTTP error during finbra extraction: %s", exc)
+        total_munis = len(self._municipalities)
+
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            for year in RREO_YEARS:
+                fetched_year = 0
+                for idx, muni in enumerate(self._municipalities):
+                    cod_ibge = str(muni.get("cod_ibge", ""))
+                    params = {
+                        "an_exercicio": str(year),
+                        "nr_periodo": "6",
+                        "co_tipo_demonstrativo": "RREO",
+                        "no_anexo": RREO_ANEXO,
+                        "id_ente": cod_ibge,
+                    }
+                    try:
+                        resp = client.get(url, params=params)
+                        if resp.status_code == 404:
+                            continue
+                        resp.raise_for_status()
+                        data = resp.json()
+                        items = (
+                            data.get("items", [])
+                            if isinstance(data, dict)
+                            else data
+                        )
+                        # Keep only top-level summary accounts to reduce volume
+                        for item in items:
+                            conta = str(item.get("conta", ""))
+                            if any(kw in conta.upper() for kw in (
+                                "RECEITAS (EXCETO INTRA",
+                                "RECEITA CORRENTE",
+                                "RECEITA TRIBUTÁRIA",
+                                "RECEITA DE TRANSFERÊNCIA",
+                                "DESPESAS (EXCETO INTRA",
+                                "DESPESAS CORRENTES",
+                                "DESPESAS DE CAPITAL",
+                                "DESPESA TOTAL COM PESSOAL",
+                            )):
+                                item["an_exercicio"] = str(year)
+                                records.append(item)
+                        fetched_year += 1
+                    except httpx.HTTPError as exc:
+                        logger.debug(
+                            "Failed RREO for %s/%d: %s", cod_ibge, year, exc
+                        )
+                    time.sleep(REQUEST_DELAY)
+
+                    # Limit for testing
+                    if self.limit and len(records) >= self.limit:
+                        break
+
+                logger.info(
+                    "  Year %d: fetched %d/%d municipalities",
+                    year, fetched_year, total_munis,
+                )
+                if self.limit and len(records) >= self.limit:
+                    break
 
         self._raw_fiscal = records
-        logger.info("Fetched %d fiscal records from API", len(self._raw_fiscal))
+        logger.info("Fetched %d fiscal records from RREO API", len(self._raw_fiscal))
 
     # ------------------------------------------------------------------
     # Transform
@@ -204,9 +242,12 @@ class TcmGoPipeline(Pipeline):
                 continue
 
             conta = str(row.get("conta", "")).strip()
-            coluna = str(row.get("coluna", "")).strip()
-            descricao = str(row.get("coluna", "") or row.get("descricao", "")).strip()
-            exercicio = str(row.get("exercicio", "") or row.get("an_exercicio", "")).strip()
+            coluna = str(row.get("coluna", "") or row.get("rotulo", "")).strip()
+            descricao = conta
+            exercicio = str(
+                row.get("exercicio", "")
+                or row.get("an_exercicio", "")
+            ).strip()
             valor = row.get("valor")
 
             if valor is None or valor == "":
