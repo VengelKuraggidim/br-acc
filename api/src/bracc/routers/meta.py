@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from neo4j import AsyncSession
 
 from bracc.dependencies import get_session
-from bracc.services.neo4j_service import execute_query_single
+from bracc.services.neo4j_service import execute_query, execute_query_single
 from bracc.services.public_guard import should_hide_person_entities
 from bracc.services.source_registry import load_source_registry, source_registry_summary
 
@@ -23,6 +23,37 @@ async def neo4j_health(
     if record and record["ok"] == 1:
         return {"neo4j": "connected"}
     return {"neo4j": "error"}
+
+
+@router.get("/person-count")
+async def person_count_by_uf(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    uf: str = "GO",
+) -> dict[str, Any]:
+    record = await execute_query_single(
+        session, "person_counts_by_uf", {"uf": uf.upper()}
+    )
+    if not record:
+        return {"uf": uf.upper(), "total": 0}
+    return {
+        "uf": uf.upper(),
+        "total": record["total"],
+        "deputados_federais": record["deputados_federais"],
+        "deputados_estaduais": record["deputados_estaduais"],
+        "vereadores": record["vereadores"],
+        "prefeitos": record["prefeitos"],
+        "senadores": record["senadores"],
+        "governadores": record["governadores"],
+    }
+
+
+@router.get("/election-cargos")
+async def election_cargos(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    uf: str = "GO",
+) -> list[dict[str, Any]]:
+    records = await execute_query(session, "election_cargos", {"uf": uf.upper()})
+    return [{"cargo": r["cargo"], "total": r["total"]} for r in records]
 
 
 @router.get("/stats")
