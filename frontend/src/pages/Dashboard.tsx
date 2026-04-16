@@ -54,6 +54,9 @@ export function Dashboard() {
             className={styles.searchInput}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
+            }}
             placeholder={t("search.placeholder")}
           />
           <button type="submit" className={styles.searchBtn} disabled={searching}>

@@ -32,6 +32,9 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
         className={styles.input}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
+        }}
         placeholder={t("search.placeholder")}
         aria-label={t("search.placeholder")}
       />

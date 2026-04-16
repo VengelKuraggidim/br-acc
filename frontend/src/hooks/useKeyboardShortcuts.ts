@@ -24,8 +24,12 @@ function matchShortcut(e: KeyboardEvent, shortcut: string): boolean {
 export function useKeyboardShortcuts(): void {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      const el = e.target as HTMLElement;
+      const tag = el.tagName;
+      const isInput =
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+        el.isContentEditable ||
+        el.getAttribute("role") === "textbox";
       const hasModifier = e.metaKey || e.ctrlKey;
 
       // In input fields, only allow shortcuts with modifier keys (e.g. Cmd+K)
