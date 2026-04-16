@@ -18,7 +18,6 @@ import { registerActions, type Action } from "@/actions/registry";
 import { CommandPalette } from "@/components/common/CommandPalette";
 import { Kbd } from "@/components/common/Kbd";
 import { KeyboardShortcutsHelp } from "@/components/common/KeyboardShortcutsHelp";
-import { PixDonate } from "@/components/common/PixDonate";
 import { StatusBar } from "@/components/common/StatusBar";
 import { ToastContainer } from "@/components/common/ToastContainer";
 import { IS_PATTERNS_ENABLED, IS_PUBLIC_MODE } from "@/config/runtime";
@@ -206,7 +205,6 @@ export function AppShell() {
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
       <KeyboardShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <ToastContainer />
-      <PixDonate />
     </div>
   );
 }

@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import { Link, Outlet } from "react-router";
 
 import { IS_PUBLIC_MODE } from "@/config/runtime";
-import { PixDonate } from "@/components/common/PixDonate";
 import { useAuthStore } from "@/stores/auth";
 
 import styles from "./PublicShell.module.css";
@@ -49,7 +48,6 @@ export function PublicShell() {
       <main className={styles.content}>
         <Outlet />
       </main>
-      <PixDonate />
     </div>
   );
 }

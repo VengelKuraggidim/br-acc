@@ -3,7 +3,7 @@
   position: fixed;
   bottom: 48px;
   right: 20px;
-  z-index: var(--z-modal);
+  z-index: 9999;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -31,7 +31,7 @@
   position: fixed;
   bottom: 48px;
   right: 20px;
-  z-index: var(--z-modal);
+  z-index: 9999;
   width: 280px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);

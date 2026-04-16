@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Heart, X, Copy, Check } from "lucide-react";
 
 import styles from "./PixDonate.module.css";
@@ -30,20 +31,16 @@ export function PixDonate() {
     }
   }, []);
 
-  if (!open) {
-    return (
-      <button
-        className={styles.fab}
-        onClick={() => setOpen(true)}
-        title="Apoie o projeto via PIX"
-        aria-label="Apoie o projeto via PIX"
-      >
-        <Heart size={18} />
-      </button>
-    );
-  }
-
-  return (
+  const content = !open ? (
+    <button
+      className={styles.fab}
+      onClick={() => setOpen(true)}
+      title="Apoie o projeto via PIX"
+      aria-label="Apoie o projeto via PIX"
+    >
+      <Heart size={18} />
+    </button>
+  ) : (
     <div className={styles.panel}>
       <div className={styles.header}>
         <span className={styles.title}>
@@ -74,4 +71,6 @@ export function PixDonate() {
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 }

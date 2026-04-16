@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useParams } from "react-router";
 import { AppShell } from "./components/common/AppShell";
 import { PublicShell } from "./components/common/PublicShell";
 import { Spinner } from "./components/common/Spinner";
+import { PixDonate } from "./components/common/PixDonate";
 import { IS_PATTERNS_ENABLED, IS_PUBLIC_MODE } from "./config/runtime";
 import { Baseline } from "./pages/Baseline";
 import { Dashboard } from "./pages/Dashboard";
@@ -48,6 +49,8 @@ export function App() {
   }, [restore]);
 
   return (
+    <>
+    <PixDonate />
     <Routes>
       {/* Public shell — landing, login, register */}
       <Route
@@ -89,5 +92,6 @@ export function App() {
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
