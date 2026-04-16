@@ -107,16 +107,16 @@ class FolhaGoPipeline(Pipeline):
         """Fetch all records from a CKAN datastore resource using pagination."""
         records: list[dict[str, Any]] = []
         offset = 0
-        total_limit = self.limit or float("inf")
+        total_limit = self.limit
 
         with httpx.Client(timeout=60) as client:
-            while len(records) < total_limit:
-                page_size = min(_PAGE_LIMIT, int(total_limit) - len(records))
+            while total_limit is None or len(records) < total_limit:
+                remaining = _PAGE_LIMIT if total_limit is None else min(_PAGE_LIMIT, total_limit - len(records))
                 resp = client.get(
                     f"{_CKAN_BASE}/datastore_search",
                     params={
                         "resource_id": resource_id,
-                        "limit": page_size,
+                        "limit": remaining,
                         "offset": offset,
                     },
                 )

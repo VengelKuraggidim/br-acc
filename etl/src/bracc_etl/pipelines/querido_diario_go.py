@@ -126,12 +126,12 @@ class QueridoDiarioGoPipeline(Pipeline):
     def _fetch_from_api(self) -> list[dict[str, Any]]:
         """Fetch gazette entries from Querido Diário API for Goiás municipalities."""
         records: list[dict[str, Any]] = []
-        total_limit = self.limit or float("inf")
+        total_limit = self.limit
 
         with httpx.Client(timeout=_TIMEOUT) as client:
             for keyword in _APPOINTMENT_KEYWORDS:
                 offset = 0
-                while len(records) < total_limit:
+                while total_limit is None or len(records) < total_limit:
                     params: dict[str, Any] = {
                         "territory_ids": "52",
                         "querystring": keyword,
