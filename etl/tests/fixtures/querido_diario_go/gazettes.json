@@ -1,0 +1,24 @@
+{
+  "gazettes": [
+    {
+      "territory_id": "5208707",
+      "territory_name": "Goiânia",
+      "date": "2026-03-10",
+      "edition": "8451",
+      "is_extra_edition": false,
+      "txt_url": "https://queridodiario.ok.org.br/api/gazettes/5208707/2026-03-10/1.txt",
+      "excerpts": "PORTARIA N. 1234/2026 - O Prefeito Municipal resolve nomear MARIA DA SILVA SANTOS para o cargo de Diretora do Departamento de Educação. Contrato com a empresa 12.345.678/0001-95 para fornecimento de material escolar.",
+      "url": "https://queridodiario.ok.org.br/api/gazettes/5208707/2026-03-10"
+    },
+    {
+      "territory_id": "5201108",
+      "territory_name": "Anápolis",
+      "date": "2026-03-12",
+      "edition": "4210",
+      "is_extra_edition": true,
+      "txt_url": "https://queridodiario.ok.org.br/api/gazettes/5201108/2026-03-12/1.txt",
+      "excerpts": "DECRETO N. 567/2026 - Fica autorizada a contratação da empresa 98.765.432/0001-10 (CONSTRUTORA ALFA LTDA) para execução de obras de pavimentação. Valor total: R$ 1.500.000,00.",
+      "url": "https://queridodiario.ok.org.br/api/gazettes/5201108/2026-03-12"
+    }
+  ]
+}

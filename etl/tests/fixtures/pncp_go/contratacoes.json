@@ -1,0 +1,118 @@
+{
+  "data": [
+    {
+      "dataAtualizacao": "2025-03-10T14:30:00",
+      "orgaoEntidade": {
+        "cnpj": "01409580000138",
+        "razaoSocial": "GOVERNO DO ESTADO DE GOIAS",
+        "poderId": "E",
+        "esferaId": "E"
+      },
+      "anoCompra": 2025,
+      "sequencialCompra": 12,
+      "numeroCompra": "012/2025",
+      "processo": "202500012345678",
+      "objetoCompra": "AQUISICAO DE EQUIPAMENTOS DE INFORMATICA PARA SECRETARIA DE EDUCACAO",
+      "orgaoSubRogado": null,
+      "unidadeOrgao": {
+        "ufNome": "Goias",
+        "codigoUnidade": "01409580000138",
+        "ufSigla": "GO",
+        "municipioNome": "Goiania",
+        "nomeUnidade": "Secretaria de Educacao",
+        "codigoIbge": "5208707"
+      },
+      "valorTotalHomologado": null,
+      "srp": false,
+      "dataInclusao": "2025-03-01T08:00:00",
+      "amparoLegal": {
+        "codigo": 1,
+        "nome": "Lei 14.133/2021, Art. 28, I",
+        "descricao": "pregao"
+      },
+      "dataAberturaProposta": "2025-03-15T09:00:00",
+      "dataEncerramentoProposta": "2025-03-25T18:00:00",
+      "informacaoComplementar": "",
+      "linkSistemaOrigem": "",
+      "justificativaPresencial": "",
+      "dataPublicacaoPncp": "2025-03-01T08:00:00",
+      "dataAtualizacaoGlobal": "2025-03-10T14:30:00",
+      "numeroControlePNCP": "01409580000138-1-000012/2025",
+      "modalidadeId": 6,
+      "linkProcessoEletronico": null,
+      "modoDisputaId": 1,
+      "valorTotalEstimado": 750000.00,
+      "modalidadeNome": "Pregao - Eletronico",
+      "modoDisputaNome": "Aberto",
+      "tipoInstrumentoConvocatorioCodigo": 1,
+      "tipoInstrumentoConvocatorioNome": "Edital",
+      "fontesOrcamentarias": [],
+      "situacaoCompraId": 1,
+      "situacaoCompraNome": "Divulgada no PNCP",
+      "usuarioNome": "SISTEMA",
+      "fornecedores": [
+        {
+          "cnpj": "12345678000195",
+          "razaoSocial": "TECH SOLUTIONS GOIANIA LTDA"
+        }
+      ]
+    },
+    {
+      "dataAtualizacao": "2025-02-20T11:00:00",
+      "orgaoEntidade": {
+        "cnpj": "01005580000170",
+        "razaoSocial": "PREFEITURA MUNICIPAL DE ANAPOLIS",
+        "poderId": "N",
+        "esferaId": "M"
+      },
+      "anoCompra": 2025,
+      "sequencialCompra": 3,
+      "numeroCompra": "003/2025",
+      "processo": "202500098765",
+      "objetoCompra": "CONTRATACAO DE SERVICOS DE PAVIMENTACAO ASFALTICA",
+      "orgaoSubRogado": null,
+      "unidadeOrgao": {
+        "ufNome": "Goias",
+        "codigoUnidade": "01005580000170",
+        "ufSigla": "GO",
+        "municipioNome": "Anapolis",
+        "nomeUnidade": "Prefeitura Municipal",
+        "codigoIbge": "5201108"
+      },
+      "valorTotalHomologado": 2500000.00,
+      "srp": true,
+      "dataInclusao": "2025-02-15T10:00:00",
+      "amparoLegal": {
+        "codigo": 3,
+        "nome": "Lei 14.133/2021, Art. 28, II",
+        "descricao": "concorrencia"
+      },
+      "dataAberturaProposta": "2025-03-01T09:00:00",
+      "dataEncerramentoProposta": "2025-03-10T18:00:00",
+      "informacaoComplementar": null,
+      "linkSistemaOrigem": "",
+      "justificativaPresencial": null,
+      "dataPublicacaoPncp": "2025-02-15T10:00:00",
+      "dataAtualizacaoGlobal": "2025-02-20T11:00:00",
+      "numeroControlePNCP": "01005580000170-1-000003/2025",
+      "modalidadeId": 5,
+      "linkProcessoEletronico": null,
+      "modoDisputaId": 2,
+      "valorTotalEstimado": 2500000.00,
+      "modalidadeNome": "Concorrencia - Eletronica",
+      "modoDisputaNome": "Fechado",
+      "tipoInstrumentoConvocatorioCodigo": 1,
+      "tipoInstrumentoConvocatorioNome": "Edital",
+      "fontesOrcamentarias": [],
+      "situacaoCompraId": 1,
+      "situacaoCompraNome": "Divulgada no PNCP",
+      "usuarioNome": "SISTEMA",
+      "fornecedores": []
+    }
+  ],
+  "totalRegistros": 2,
+  "totalPaginas": 1,
+  "numeroPagina": 1,
+  "paginasRestantes": 0,
+  "empty": false
+}

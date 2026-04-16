@@ -1,0 +1,20 @@
+[
+  {
+    "numero": "1234",
+    "ano": "2026",
+    "tipo": "PL",
+    "ementa": "Dispoe sobre a criacao de ciclovias na regiao metropolitana",
+    "autor": "JOAO DA SILVA",
+    "situacao": "Em Tramitacao",
+    "data": "2026-02-10"
+  },
+  {
+    "numero": "1235",
+    "ano": "2026",
+    "tipo": "Resolucao",
+    "ementa": "Altera o regimento interno da Camara Municipal",
+    "autor": "MARIA OLIVEIRA",
+    "situacao": "Aprovada",
+    "data": "2026-03-01"
+  }
+]

@@ -9,6 +9,7 @@ from bracc_etl.pipelines.bcb import BcbPipeline
 from bracc_etl.pipelines.bndes import BndesPipeline
 from bracc_etl.pipelines.caged import CagedPipeline
 from bracc_etl.pipelines.camara import CamaraPipeline
+from bracc_etl.pipelines.camara_goiania import CamaraGoianiaPipeline
 from bracc_etl.pipelines.camara_inquiries import CamaraInquiriesPipeline
 from bracc_etl.pipelines.ceaf import CeafPipeline
 from bracc_etl.pipelines.cepim import CepimPipeline
@@ -21,6 +22,7 @@ from bracc_etl.pipelines.datajud import DatajudPipeline
 from bracc_etl.pipelines.datasus import DatasusPipeline
 from bracc_etl.pipelines.dou import DouPipeline
 from bracc_etl.pipelines.eu_sanctions import EuSanctionsPipeline
+from bracc_etl.pipelines.folha_go import FolhaGoPipeline
 from bracc_etl.pipelines.holdings import HoldingsPipeline
 from bracc_etl.pipelines.ibama import IbamaPipeline
 from bracc_etl.pipelines.icij import ICIJPipeline
@@ -32,7 +34,9 @@ from bracc_etl.pipelines.opensanctions import OpenSanctionsPipeline
 from bracc_etl.pipelines.pep_cgu import PepCguPipeline
 from bracc_etl.pipelines.pgfn import PgfnPipeline
 from bracc_etl.pipelines.pncp import PncpPipeline
+from bracc_etl.pipelines.pncp_go import PncpGoPipeline
 from bracc_etl.pipelines.querido_diario import QueridoDiarioPipeline
+from bracc_etl.pipelines.querido_diario_go import QueridoDiarioGoPipeline
 from bracc_etl.pipelines.rais import RaisPipeline
 from bracc_etl.pipelines.renuncias import RenunciasPipeline
 from bracc_etl.pipelines.sanctions import SanctionsPipeline
@@ -42,6 +46,7 @@ from bracc_etl.pipelines.siconfi import SiconfiPipeline
 from bracc_etl.pipelines.siop import SiopPipeline
 from bracc_etl.pipelines.stf import StfPipeline
 from bracc_etl.pipelines.stj_dados_abertos import StjPipeline
+from bracc_etl.pipelines.tcm_go import TcmGoPipeline
 from bracc_etl.pipelines.tcu import TcuPipeline
 from bracc_etl.pipelines.tesouro_emendas import TesouroEmendasPipeline
 from bracc_etl.pipelines.transferegov import TransferegovPipeline
@@ -101,6 +106,12 @@ PIPELINES: dict[str, type] = {
     "datajud": DatajudPipeline,
     "tesouro_emendas": TesouroEmendasPipeline,
     "stj_dados_abertos": StjPipeline,
+    # Goiás state/municipal pipelines
+    "folha_go": FolhaGoPipeline,
+    "tcm_go": TcmGoPipeline,
+    "pncp_go": PncpGoPipeline,
+    "querido_diario_go": QueridoDiarioGoPipeline,
+    "camara_goiania": CamaraGoianiaPipeline,
 }
 
 
