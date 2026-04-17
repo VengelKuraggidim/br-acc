@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 from pathlib import Path
@@ -17,6 +16,7 @@ from bracc_etl.transforms import (
     normalize_name,
     parse_number_smart,
     row_pick,
+    stable_id as _stable_id,
     strip_document,
 )
 
@@ -32,13 +32,6 @@ _COMMISSIONED_KEYWORDS = re.compile(
 
 _CKAN_BASE = "https://dadosabertos.go.gov.br/api/3/action"
 _PAGE_LIMIT = 5_000
-
-
-def _stable_id(*parts: str, length: int = 24) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
-
 
 
 def _is_commissioned(role: str) -> bool:

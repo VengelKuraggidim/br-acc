@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
@@ -16,6 +15,7 @@ from bracc_etl.transforms import (
     format_cnpj,
     normalize_name,
     parse_date,
+    stable_id as _stable_id,
     strip_document,
 )
 
@@ -49,11 +49,6 @@ _APPOINTMENT_NAME_RE = re.compile(
     r"([A-ZÀ-ÖØ-Ýa-zà-öø-ý /\-]+?)(?:\.|,|;|\n|$)",
     re.IGNORECASE,
 )
-
-
-def _stable_id(*parts: str, length: int = 24) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
 def _classify_act(text: str) -> str:

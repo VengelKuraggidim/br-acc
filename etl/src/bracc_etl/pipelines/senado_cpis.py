@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,6 +16,7 @@ from bracc_etl.transforms import (
     normalize_name,
     parse_date,
     row_pick,
+    stable_id as _stable_id,
     strip_document,
 )
 
@@ -29,11 +29,6 @@ _TEMPORAL_RULE = (
     "event_date>=inquiry.date_start and "
     "(inquiry.date_end is null or event_date<=inquiry.date_end)"
 )
-
-
-def _stable_id(*parts: str, length: int = 20) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
 def _make_cpi_id(code: str, name: str) -> str:
@@ -199,7 +194,7 @@ class SenadoCpisPipeline(Pipeline):
 
             inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
-                inquiry_id = _stable_id(code, name)
+                inquiry_id = _stable_id(code, name, length=20)
 
             inquiry = {
                 "inquiry_id": inquiry_id,
@@ -258,7 +253,7 @@ class SenadoCpisPipeline(Pipeline):
                 name = row_pick(row, "name", "nome", "nome_cpi")
                 if not name:
                     continue
-                inquiry_id = _stable_id(code, name)
+                inquiry_id = _stable_id(code, name, length=20)
 
             person_name = normalize_name(
                 row_pick(row, "member_name", "nome_parlamentar", "name")
@@ -314,7 +309,7 @@ class SenadoCpisPipeline(Pipeline):
             date = parse_date(row_pick(row, "date", "data"))
 
             if not requirement_id:
-                requirement_id = _stable_id(inquiry_id, req_type, text[:200])
+                requirement_id = _stable_id(inquiry_id, req_type, text[:200], length=20)
 
             requirements.append({
                 "requirement_id": requirement_id,
@@ -342,7 +337,7 @@ class SenadoCpisPipeline(Pipeline):
             })
             if temporal_status == "invalid":
                 self.temporal_violations.append({
-                    "violation_id": _stable_id("req", inquiry_id, requirement_id, date),
+                    "violation_id": _stable_id("req", inquiry_id, requirement_id, date, length=20),
                     "edge_type": "TEM_REQUERIMENTO",
                     "rule": _TEMPORAL_RULE,
                     "event_date": date,
@@ -415,7 +410,7 @@ class SenadoCpisPipeline(Pipeline):
             date_precision = row_pick(row, "date_precision") or "unknown"
 
             if not session_id:
-                session_id = _stable_id(inquiry_id, date, topic[:200])
+                session_id = _stable_id(inquiry_id, date, topic[:200], length=20)
 
             sessions.append({
                 "session_id": session_id,
@@ -441,7 +436,7 @@ class SenadoCpisPipeline(Pipeline):
             })
             if temporal_status == "invalid":
                 self.temporal_violations.append({
-                    "violation_id": _stable_id("sess", inquiry_id, session_id, date),
+                    "violation_id": _stable_id("sess", inquiry_id, session_id, date, length=20),
                     "edge_type": "REALIZOU_SESSAO",
                     "rule": _TEMPORAL_RULE,
                     "event_date": date,

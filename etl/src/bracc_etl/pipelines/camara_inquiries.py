@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,6 +16,7 @@ from bracc_etl.transforms import (
     normalize_name,
     parse_date,
     row_pick,
+    stable_id as _stable_id,
     strip_document,
 )
 
@@ -24,11 +24,6 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
-
-def _stable_id(*parts: str, length: int = 20) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
 
 class CamaraInquiriesPipeline(Pipeline):
     """ETL pipeline for Câmara CPI/CPMI inquiry metadata and requirements."""
@@ -110,7 +105,7 @@ class CamaraInquiriesPipeline(Pipeline):
                 continue
 
             if not inquiry_id:
-                inquiry_id = _stable_id(code, name)
+                inquiry_id = _stable_id(code, name, length=20)
 
             kind = row_pick(row, "kind", "tipo").upper()
             if not kind:
@@ -166,7 +161,7 @@ class CamaraInquiriesPipeline(Pipeline):
             date = parse_date(row_pick(row, "date", "data"))
 
             if not requirement_id:
-                requirement_id = _stable_id(inquiry_id, req_type, text[:200])
+                requirement_id = _stable_id(inquiry_id, req_type, text[:200], length=20)
 
             requirements.append({
                 "requirement_id": requirement_id,
@@ -245,7 +240,7 @@ class CamaraInquiriesPipeline(Pipeline):
             extraction_method = row_pick(row, "extraction_method")
 
             if not session_id:
-                session_id = _stable_id(inquiry_id, date, topic[:200])
+                session_id = _stable_id(inquiry_id, date, topic[:200], length=20)
 
             sessions.append({
                 "session_id": session_id,

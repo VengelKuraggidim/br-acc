@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,6 +16,7 @@ from bracc_etl.transforms import (
     parse_date,
     parse_number_smart,
     row_pick,
+    stable_id as _stable_id,
     strip_document,
 )
 
@@ -24,13 +24,6 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
-
-
-def _stable_id(*parts: str, length: int = 24) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
-
 
 
 def _valid_cnpj(value: str) -> str:
@@ -253,7 +246,10 @@ class MidesPipeline(Pipeline):
                 ),
             )
             total_price = cap_contract_value(
-                parse_number_smart(row_pick(row, "total_price", "valor_total", "valor"), default=None),
+                parse_number_smart(
+                    row_pick(row, "total_price", "valor_total", "valor"),
+                    default=None,
+                ),
             )
 
             if not item_id:

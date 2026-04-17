@@ -15,7 +15,6 @@ Relationships:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from pathlib import Path
@@ -30,6 +29,7 @@ from bracc_etl.transforms import (
     normalize_name,
     parse_date,
     parse_number_smart,
+    stable_id as _stable_id,
 )
 
 if TYPE_CHECKING:
@@ -39,11 +39,6 @@ logger = logging.getLogger(__name__)
 
 _API_BASE = "https://www.goiania.go.leg.br"
 _TIMEOUT = 30
-
-
-def _stable_id(*parts: str, length: int = 24) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
 class CamaraGoianiaPipeline(Pipeline):

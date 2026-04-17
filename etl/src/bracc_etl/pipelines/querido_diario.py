@@ -14,17 +14,13 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     extract_cnpjs_with_spans,
     parse_date,
+    stable_id as _stable_id,
 )
 
 if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
-
-def _stable_id(*parts: str, length: int = 24) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

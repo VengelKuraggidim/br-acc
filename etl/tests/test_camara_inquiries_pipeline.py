@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
-
 from bracc_etl.pipelines.camara_inquiries import CamaraInquiriesPipeline, _stable_id
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -32,23 +30,11 @@ class TestStableId:
     def test_deterministic(self) -> None:
         assert _stable_id("a", "b") == _stable_id("a", "b")
 
-    def test_default_length_is_20(self) -> None:
-        assert len(_stable_id("a")) == 20
+    def test_default_length_is_24(self) -> None:
+        assert len(_stable_id("a")) == 24
 
     def test_respects_custom_length(self) -> None:
         assert len(_stable_id("a", length=8)) == 8
-
-
-class TestGetHelper:
-    def test_returns_first_non_empty(self) -> None:
-        pipeline = _make_pipeline()
-        row = pd.Series({"a": "", "b": "ok", "c": "unused"})
-        assert pipeline._get(row, "a", "b", "c") == "ok"
-
-    def test_returns_empty_when_all_missing(self) -> None:
-        pipeline = _make_pipeline()
-        row = pd.Series({"a": ""})
-        assert pipeline._get(row, "a", "b") == ""
 
 
 class TestReadCsvOptional:

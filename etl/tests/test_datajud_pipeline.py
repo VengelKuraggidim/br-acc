@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from bracc_etl.pipelines.datajud import DatajudPipeline, _pick, _stable_id
+from bracc_etl.pipelines.datajud import DatajudPipeline, _stable_id
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -41,20 +41,6 @@ class TestStableId:
     def test_separator_prevents_collisions(self) -> None:
         # ("ab", "c") and ("a", "bc") must not hash identically.
         assert _stable_id("ab", "c") != _stable_id("a", "bc")
-
-
-class TestPick:
-    def test_returns_first_non_empty(self) -> None:
-        row = pd.Series({"a": "", "b": "hit", "c": "later"})
-        assert _pick(row, "a", "b", "c") == "hit"
-
-    def test_returns_empty_when_all_missing(self) -> None:
-        row = pd.Series({"a": "", "b": ""})
-        assert _pick(row, "a", "b", "c") == ""
-
-    def test_strips_whitespace(self) -> None:
-        row = pd.Series({"a": "   ", "b": "  value  "})
-        assert _pick(row, "a", "b") == "value"
 
 
 class TestDatajudTransform:

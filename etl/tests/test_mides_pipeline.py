@@ -3,11 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
-
 from bracc_etl.pipelines.mides import (
     MidesPipeline,
-    _pick,
     _stable_id,
     _valid_cnpj,
 )
@@ -51,16 +48,6 @@ class TestStableId:
 
     def test_default_length(self) -> None:
         assert len(_stable_id("x")) == 24
-
-
-class TestPick:
-    def test_first_non_empty_wins(self) -> None:
-        row = pd.Series({"a": "", "b": "  hit ", "c": "later"})
-        assert _pick(row, "a", "b", "c") == "hit"
-
-    def test_all_missing_returns_empty(self) -> None:
-        row = pd.Series({"a": ""})
-        assert _pick(row, "a", "b") == ""
 
 
 class TestMidesTransform:

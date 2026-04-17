@@ -22,6 +22,7 @@ from bracc_etl.transforms.document_formatting import (
 )
 from bracc_etl.transforms.name_normalization import normalize_name
 from bracc_etl.transforms.row_access import row_pick
+from bracc_etl.transforms.stable_id import stable_id
 from bracc_etl.transforms.value_sanitization import (
     MAX_CONTRACT_VALUE,
     cap_contract_value,
@@ -45,6 +46,7 @@ __all__ = [
     "parse_number_smart",
     "parse_numeric_comma",
     "row_pick",
+    "stable_id",
     "strip_document",
     "validate_cnpj",
     "validate_cpf",

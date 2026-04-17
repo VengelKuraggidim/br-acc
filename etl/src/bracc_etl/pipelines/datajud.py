@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from pathlib import Path
@@ -17,6 +16,7 @@ from bracc_etl.transforms import (
     normalize_name,
     parse_date,
     row_pick,
+    stable_id as _stable_id,
     strip_document,
 )
 
@@ -24,13 +24,6 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
-
-
-def _stable_id(*parts: str, length: int = 24) -> str:
-    raw = "|".join(parts)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
-
 
 
 class DatajudPipeline(Pipeline):
