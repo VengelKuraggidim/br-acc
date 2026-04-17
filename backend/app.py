@@ -377,38 +377,20 @@ class BraccClient:
 
     async def contagem_go(self) -> dict[str, int]:
         """Get counts for all GO-specific node types."""
-        counts = {}
-        for node_type, key in [
-            ("state_employee", "servidores_estaduais"),
-            ("go_municipality", "municipios_go"),
-            ("go_procurement", "licitacoes_go"),
-            ("go_appointment", "nomeacoes_go"),
-            ("go_vereador", "vereadores_goiania"),
-        ]:
-            try:
-                resp = await self.client.get(
-                    "/api/v1/search",
-                    params={"q": "*", "type": node_type, "size": 1},
-                )
-                if resp.status_code == 200:
-                    counts[key] = resp.json().get("total", 0)
-                else:
-                    counts[key] = 0
-            except httpx.HTTPError:
-                counts[key] = 0
-        # Commissioned positions
         try:
-            resp = await self.client.get(
-                "/api/v1/search",
-                params={"q": "comissionado", "type": "state_employee", "size": 1},
-            )
-            if resp.status_code == 200:
-                counts["cargos_comissionados"] = resp.json().get("total", 0)
-            else:
-                counts["cargos_comissionados"] = 0
+            resp = await self.client.get("/api/v1/go/counts")
+            if resp.status_code != 200:
+                return {}
+            data = resp.json()
         except httpx.HTTPError:
-            counts["cargos_comissionados"] = 0
-        return counts
+            return {}
+        return {
+            "servidores_estaduais": int(data.get("state_employees", 0)),
+            "cargos_comissionados": int(data.get("commissioned", 0)),
+            "municipios_go": int(data.get("municipalities", 0)),
+            "licitacoes_go": int(data.get("procurements", 0)),
+            "nomeacoes_go": int(data.get("appointments", 0)),
+        }
 
 
 bracc = BraccClient(BRACC_API_URL)

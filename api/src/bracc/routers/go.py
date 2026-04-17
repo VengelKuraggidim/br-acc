@@ -2,12 +2,21 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from neo4j import AsyncSession
+from pydantic import BaseModel
 
 from bracc.dependencies import get_session
 from bracc.models.entity import SourceAttribution
 from bracc.models.search import SearchResponse, SearchResult
-from bracc.services.neo4j_service import execute_query, sanitize_props
+from bracc.services.neo4j_service import execute_query, execute_query_single, sanitize_props
 from bracc.services.public_guard import sanitize_public_properties
+
+
+class GoCounts(BaseModel):
+    state_employees: int
+    commissioned: int
+    municipalities: int
+    procurements: int
+    appointments: int
 
 router = APIRouter(prefix="/api/v1/go", tags=["goias"])
 
@@ -90,6 +99,26 @@ async def search_go_procurements(
         total=len(results),
         page=1,
         size=len(results),
+    )
+
+
+@router.get("/counts", response_model=GoCounts)
+async def go_counts(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> GoCounts:
+    """Return entity counts for GO-scoped node labels."""
+    record = await execute_query_single(session, "go_counts", {})
+    if record is None:
+        return GoCounts(
+            state_employees=0, commissioned=0, municipalities=0,
+            procurements=0, appointments=0,
+        )
+    return GoCounts(
+        state_employees=int(record["state_employees"] or 0),
+        commissioned=int(record["commissioned"] or 0),
+        municipalities=int(record["municipalities"] or 0),
+        procurements=int(record["procurements"] or 0),
+        appointments=int(record["appointments"] or 0),
     )
 
 

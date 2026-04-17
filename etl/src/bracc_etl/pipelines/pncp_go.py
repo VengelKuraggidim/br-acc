@@ -146,7 +146,20 @@ class PncpGoPipeline(Pipeline):
                             )
                             break
 
-                        payload = resp.json()
+                        if not resp.content:
+                            # PNCP sometimes replies 200 with empty body for
+                            # modalidades without records in the window.
+                            break
+
+                        try:
+                            payload = resp.json()
+                        except json.JSONDecodeError as exc:
+                            logger.warning(
+                                "PNCP API returned non-JSON "
+                                "(modalidade %d, window %s-%s, page %d): %s",
+                                modalidade_code, win_start, win_end, page, exc,
+                            )
+                            break
 
                         if isinstance(payload, dict) and "data" in payload:
                             records = payload["data"]
