@@ -65,6 +65,24 @@ CREATE CONSTRAINT municipal_bid_item_id_unique IF NOT EXISTS
 CREATE CONSTRAINT municipal_gazette_act_id_unique IF NOT EXISTS
   FOR (a:MunicipalGazetteAct) REQUIRE a.municipal_gazette_act_id IS UNIQUE;
 
+CREATE CONSTRAINT state_employee_id IF NOT EXISTS
+  FOR (e:StateEmployee) REQUIRE e.employee_id IS UNIQUE;
+
+CREATE CONSTRAINT state_agency_id IF NOT EXISTS
+  FOR (a:StateAgency) REQUIRE a.agency_id IS UNIQUE;
+
+CREATE CONSTRAINT go_procurement_id IF NOT EXISTS
+  FOR (p:GoProcurement) REQUIRE p.procurement_id IS UNIQUE;
+
+CREATE CONSTRAINT go_municipality_id IF NOT EXISTS
+  FOR (m:GoMunicipality) REQUIRE m.municipality_id IS UNIQUE;
+
+CREATE CONSTRAINT municipal_revenue_id IF NOT EXISTS
+  FOR (r:MunicipalRevenue) REQUIRE r.revenue_id IS UNIQUE;
+
+CREATE CONSTRAINT municipal_expenditure_id IF NOT EXISTS
+  FOR (x:MunicipalExpenditure) REQUIRE x.expenditure_id IS UNIQUE;
+
 CREATE CONSTRAINT judicial_case_id_unique IF NOT EXISTS
   FOR (j:JudicialCase) REQUIRE j.judicial_case_id IS UNIQUE;
 
