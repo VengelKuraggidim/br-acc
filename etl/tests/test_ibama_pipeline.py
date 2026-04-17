@@ -6,14 +6,18 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from bracc_etl.pipelines.ibama import IbamaPipeline
-from tests._mock_helpers import mock_session
+from tests._mock_helpers import mock_driver, mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _make_pipeline() -> IbamaPipeline:
+def _make_pipeline(data_dir: str | None = None, **kwargs: object) -> IbamaPipeline:
     driver = MagicMock()
-    return IbamaPipeline(driver, data_dir=str(FIXTURES))
+    return IbamaPipeline(
+        driver,
+        data_dir=data_dir or str(FIXTURES),
+        **kwargs,  # type: ignore[arg-type]
+    )
 
 
 def _load_fixture(pipeline: IbamaPipeline) -> None:
@@ -133,3 +137,81 @@ def test_load_calls_batch_loader() -> None:
     # Should have called session.run for:
     # Embargo nodes, Company nodes, Person nodes, EMBARGADA rels = 4 calls minimum
     assert session.run.call_count >= 4
+
+
+class TestParseArea:
+    def test_comma_decimal(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_area("150,5") == 150.5
+
+    def test_integer_string(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_area("30") == 30.0
+
+    def test_empty_string_returns_zero(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_area("") == 0.0
+
+    def test_invalid_returns_zero(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_area("not a number") == 0.0
+
+
+class TestPrimaryBiome:
+    def test_single_biome(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._primary_biome("Cerrado") == "Cerrado"
+
+    def test_comma_separated_returns_first(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._primary_biome("Amazonia, Cerrado, Caatinga") == "Amazonia"
+
+    def test_strips_whitespace_from_first(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._primary_biome("  Mata Atlantica , Pampa") == "Mata Atlantica"
+
+    def test_empty_returns_empty(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._primary_biome("") == ""
+        assert pipeline._primary_biome("   ") == ""
+
+
+def test_extract_missing_data_dir(tmp_path: Path) -> None:
+    """Missing `ibama/` dir leaves `_raw` empty without raising."""
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    pipeline.extract()
+    assert pipeline._raw.empty
+
+
+def test_extract_dir_without_csv(tmp_path: Path) -> None:
+    """Dir exists but CSV doesn't → `_raw` empty, no raise."""
+    (tmp_path / "ibama").mkdir()
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    pipeline.extract()
+    assert pipeline._raw.empty
+
+
+def test_extract_respects_limit(tmp_path: Path) -> None:
+    """`limit=1` keeps only the first row."""
+    ibama_dir = tmp_path / "ibama"
+    ibama_dir.mkdir()
+    (ibama_dir / "areas_embargadas.csv").write_text(
+        "SEQ_TAD;CPF_CNPJ_EMBARGADO;NOME_PESSOA_EMBARGADA;DAT_EMBARGO;"
+        "QTD_AREA_EMBARGADA;DES_TIPO_BIOMA;SIG_UF_TAD;NOM_MUNICIPIO_TAD;"
+        "DES_INFRACAO;NUM_AUTO_INFRACAO;NUM_PROCESSO\n"
+        "1;11222333000181;EMPRESA A;15/03/2023;10,5;Cerrado;DF;BRASILIA;INFR A;AUTO-1;PROC-1\n"
+        "2;11222333000181;EMPRESA A;16/03/2023;11,5;Cerrado;DF;BRASILIA;INFR B;AUTO-2;PROC-2\n",
+        encoding="utf-8",
+    )
+    pipeline = _make_pipeline(data_dir=str(tmp_path), limit=1)
+    pipeline.extract()
+    assert len(pipeline._raw) == 1
+
+
+def test_load_short_circuits_when_empty(tmp_path: Path) -> None:
+    """No embargoes/companies/persons/rels → loader should not open a session."""
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    pipeline.extract()
+    pipeline.transform()
+    pipeline.load()
+    assert not mock_driver(pipeline).session.called
