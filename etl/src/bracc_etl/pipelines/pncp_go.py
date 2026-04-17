@@ -53,19 +53,20 @@ _MODALIDADE_MAP: dict[int, str] = {
     13: "ata_pre_existente",
 }
 
-_RATE_LIMIT_SLEEP = 0.5
-# PNCP frequently returns slow responses on modalidades with many records.
-# 90s tolerates the p99 we observed; anything less triggers timeouts.
-_HTTP_TIMEOUT = 90
+_RATE_LIMIT_SLEEP = 0.3
+# Shorter timeout + fewer retries: a dead modalidade+window should fail
+# fast (~45s worst case) rather than blocking the whole extract for
+# minutes. p95 healthy responses are well under 15s.
+_HTTP_TIMEOUT = 20
 # API requires tamanhoPagina >= 10
 _DEFAULT_PAGE_SIZE = 50
 # API requires codigoModalidadeContratacao; iterate all modalidades.
 _MODALIDADE_CODES = tuple(_MODALIDADE_MAP.keys())
 # API rejects date ranges > 365 days with HTTP 422.
-# We use 30-day windows to keep response payloads small and avoid timeouts.
+# 30-day windows keep response payloads small.
 _WINDOW_DAYS = 30
-# Retry a timed-out request a few times with backoff before giving up.
-_MAX_RETRIES = 3
+# Worst-case: 2 timeouts * 20s + 2s + 4s backoff = ~46s per dead request.
+_MAX_RETRIES = 2
 _RETRY_BACKOFF = 2.0
 
 

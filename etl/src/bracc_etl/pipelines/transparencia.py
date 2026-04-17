@@ -150,13 +150,25 @@ class TransparenciaPipeline(Pipeline):
             codigo = str(row.get("codigo_autor", "")).strip()
             nome = normalize_name(str(row["nome_autor"]))
             author_key = codigo if codigo else nome.replace(" ", "_")
+            objeto = normalize_name(str(row["objeto"]))
+            numero = str(row.get("numero", "")).strip()
+            municipio = str(row.get("municipio", "")).strip()
+            ano = str(row.get("ano", "")).strip()
+            aid = f"{author_key}_{ano}_{numero}_{municipio}" if numero else f"{author_key}_{objeto}_{municipio}"
 
             amendments.append({
-                "amendment_id": f"{author_key}_{normalize_name(str(row['objeto']))}",
+                "amendment_id": aid,
                 "author_key": author_key,
                 "name": nome,
-                "object": normalize_name(str(row["objeto"])),
+                "object": objeto,
                 "value": parse_brl_flexible(str(row["valor"])),
+                "amendment_type": str(row.get("tipo", "")).strip(),
+                "function": str(row.get("funcao", "")).strip(),
+                "municipality": municipio,
+                "uf": str(row.get("uf", "")).strip(),
+                "year": ano,
+                "value_committed": parse_brl_flexible(str(row.get("valor_empenhado", row["valor"]))),
+                "value_paid": parse_brl_flexible(str(row.get("valor_pago", "0"))),
             })
         self.amendments = deduplicate_rows(amendments, ["amendment_id"])
 
@@ -253,6 +265,13 @@ class TransparenciaPipeline(Pipeline):
                         "amendment_id": a["amendment_id"],
                         "object": a["object"],
                         "value": a["value"],
+                        "type": a.get("amendment_type", ""),
+                        "function": a.get("function", ""),
+                        "municipality": a.get("municipality", ""),
+                        "uf": a.get("uf", ""),
+                        "year": a.get("year", ""),
+                        "value_committed": a.get("value_committed", 0.0),
+                        "value_paid": a.get("value_paid", 0.0),
                     }
                     for a in self.amendments
                 ],
