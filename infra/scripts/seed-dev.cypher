@@ -219,8 +219,173 @@ CREATE (po1:PublicOffice {
 MATCH (p1:Person {cpf: '11111111111'}), (po1:PublicOffice {cpf: '11111111111'})
 CREATE (p1)-[:RECEBEU_SALARIO]->(po1);
 
+// ── Goias-specific fixtures (Fiscal Cidadao backend) ─────
+// The Fiscal Cidadao wrapper (/status, /buscar, /municipios, /licitacoes,
+// /vereadores, /nomeacoes, /servidores) expects these GO-scoped node types
+// with uf='GO' so the landing page shows non-zero counts in dev.
+
+// GO politicians + Election records (for /api/v1/meta/person-count)
+CREATE (pgo1:Person {
+  cpf: 'GO_POL_01', name: 'PEDRO DEPUTADO FEDERAL', uf: 'GO',
+  is_pep: true, partido: 'PT', cargo: 'DEPUTADO FEDERAL'
+});
+CREATE (pgo2:Person {
+  cpf: 'GO_POL_02', name: 'JULIA DEPUTADA ESTADUAL', uf: 'GO',
+  is_pep: true, partido: 'PSD', cargo: 'DEPUTADO ESTADUAL'
+});
+CREATE (pgo3:Person {
+  cpf: 'GO_POL_03', name: 'FERNANDO SENADOR', uf: 'GO',
+  is_pep: true, partido: 'MDB', cargo: 'SENADOR'
+});
+
+CREATE (ego1:Election {
+  election_id: 'ELE-GO-DF-2022', year: 2022,
+  cargo: 'DEPUTADO FEDERAL', uf: 'GO', municipio: ''
+});
+CREATE (ego2:Election {
+  election_id: 'ELE-GO-DE-2022', year: 2022,
+  cargo: 'DEPUTADO ESTADUAL', uf: 'GO', municipio: ''
+});
+CREATE (ego3:Election {
+  election_id: 'ELE-GO-SN-2022', year: 2022,
+  cargo: 'SENADOR', uf: 'GO', municipio: ''
+});
+
+MATCH (p:Person {cpf: 'GO_POL_01'}), (e:Election {election_id: 'ELE-GO-DF-2022'})
+CREATE (p)-[:CANDIDATO_EM]->(e);
+MATCH (p:Person {cpf: 'GO_POL_02'}), (e:Election {election_id: 'ELE-GO-DE-2022'})
+CREATE (p)-[:CANDIDATO_EM]->(e);
+MATCH (p:Person {cpf: 'GO_POL_03'}), (e:Election {election_id: 'ELE-GO-SN-2022'})
+CREATE (p)-[:CANDIDATO_EM]->(e);
+
+// State agencies + employees (folha_go schema)
+CREATE (sa1:StateAgency {
+  agency_id: 'AGN-SEF-GO', name: 'Secretaria da Fazenda de Goias',
+  uf: 'GO', source: 'folha_go'
+});
+CREATE (sa2:StateAgency {
+  agency_id: 'AGN-SEDUC-GO', name: 'Secretaria da Educacao de Goias',
+  uf: 'GO', source: 'folha_go'
+});
+
+CREATE (se1:StateEmployee {
+  employee_id: 'EMP-GO-001', name: 'MARCOS SERVIDOR FAZENDA',
+  role: 'AUDITOR FISCAL', agency: 'Secretaria da Fazenda de Goias',
+  salary_gross: 18500.0, is_commissioned: false, uf: 'GO',
+  source: 'folha_go'
+});
+CREATE (se2:StateEmployee {
+  employee_id: 'EMP-GO-002', name: 'PATRICIA CARGO COMISSIONADO',
+  role: 'DIRETORA DAS-5', agency: 'Secretaria da Fazenda de Goias',
+  salary_gross: 22000.0, is_commissioned: true, uf: 'GO',
+  source: 'folha_go'
+});
+CREATE (se3:StateEmployee {
+  employee_id: 'EMP-GO-003', name: 'ANDRE PROFESSOR ESTADUAL',
+  role: 'PROFESSOR PIV-I', agency: 'Secretaria da Educacao de Goias',
+  salary_gross: 7800.0, is_commissioned: false, uf: 'GO',
+  source: 'folha_go'
+});
+
+MATCH (e:StateEmployee {employee_id: 'EMP-GO-001'}), (a:StateAgency {agency_id: 'AGN-SEF-GO'})
+CREATE (e)-[:LOTADO_EM]->(a);
+MATCH (e:StateEmployee {employee_id: 'EMP-GO-002'}), (a:StateAgency {agency_id: 'AGN-SEF-GO'})
+CREATE (e)-[:LOTADO_EM]->(a);
+MATCH (e:StateEmployee {employee_id: 'EMP-GO-003'}), (a:StateAgency {agency_id: 'AGN-SEDUC-GO'})
+CREATE (e)-[:LOTADO_EM]->(a);
+
+// GO municipalities (tcm_go schema)
+CREATE (mgo1:GoMunicipality {
+  municipality_id: 'MUN-GOIANIA', name: 'Goiania', cod_ibge: '5208707',
+  population: 1555626, total_revenue: 4500000000.0, total_expenditure: 4200000000.0,
+  uf: 'GO', source: 'tcm_go'
+});
+CREATE (mgo2:GoMunicipality {
+  municipality_id: 'MUN-APARECIDA', name: 'Aparecida de Goiania', cod_ibge: '5201108',
+  population: 590146, total_revenue: 1400000000.0, total_expenditure: 1300000000.0,
+  uf: 'GO', source: 'tcm_go'
+});
+CREATE (mgo3:GoMunicipality {
+  municipality_id: 'MUN-ANAPOLIS', name: 'Anapolis', cod_ibge: '5201108',
+  population: 391772, total_revenue: 950000000.0, total_expenditure: 890000000.0,
+  uf: 'GO', source: 'tcm_go'
+});
+
+// GO procurements (pncp_go schema)
+CREATE (proc1:GoProcurement {
+  procurement_id: 'PROC-GO-001', object: 'Construcao de escola municipal em Goiania',
+  agency_name: 'PREFEITURA DE GOIANIA', cnpj_agency: '01612092000123',
+  amount_estimated: 2800000.0, modality: 'Concorrencia',
+  published_at: '2025-03-10', municipality: 'Goiania', uf: 'GO',
+  source: 'pncp_go'
+});
+CREATE (proc2:GoProcurement {
+  procurement_id: 'PROC-GO-002', object: 'Pavimentacao asfaltica - rodovia estadual GO-060',
+  agency_name: 'AGETOP - Agencia Goiana de Transportes', cnpj_agency: '04000000000199',
+  amount_estimated: 15400000.0, modality: 'Concorrencia',
+  published_at: '2025-02-22', municipality: 'Trindade', uf: 'GO',
+  source: 'pncp_go'
+});
+CREATE (proc3:GoProcurement {
+  procurement_id: 'PROC-GO-003', object: 'Aquisicao de medicamentos - SMS Anapolis',
+  agency_name: 'SECRETARIA MUNICIPAL DE SAUDE DE ANAPOLIS',
+  cnpj_agency: '01075555000188',
+  amount_estimated: 780000.0, modality: 'Pregao Eletronico',
+  published_at: '2025-04-05', municipality: 'Anapolis', uf: 'GO',
+  source: 'pncp_go'
+});
+
+// GO appointments (querido_diario_go schema)
+CREATE (app1:GoAppointment {
+  appointment_id: 'APP-GO-001', person_name: 'CARLOS NOMEADO SECRETARIO',
+  role: 'Secretario Municipal de Obras', agency: 'Prefeitura de Goiania',
+  act_date: '2025-02-15', appointment_type: 'nomeacao',
+  territory_name: 'Goiania', uf: 'GO', source: 'querido_diario_go'
+});
+CREATE (app2:GoAppointment {
+  appointment_id: 'APP-GO-002', person_name: 'LUCIANA EXONERADA DAS',
+  role: 'Assessora Especial DAS-4', agency: 'Governo do Estado de Goias',
+  act_date: '2025-03-01', appointment_type: 'exoneracao',
+  territory_name: 'Goias', uf: 'GO', source: 'querido_diario_go'
+});
+
+// Goiania city council members (camara_goiania schema)
+CREATE (v1:GoVereador {
+  vereador_id: 'VER-GYN-001', name: 'AMANDA VEREADORA GOIANIA',
+  party: 'PT', municipality: 'Goiania',
+  total_expenses: 68000.0, proposals_count: 14, uf: 'GO',
+  source: 'camara_goiania'
+});
+CREATE (v2:GoVereador {
+  vereador_id: 'VER-GYN-002', name: 'RICARDO VEREADOR GOIANIA',
+  party: 'PL', municipality: 'Goiania',
+  total_expenses: 54000.0, proposals_count: 7, uf: 'GO',
+  source: 'camara_goiania'
+});
+CREATE (v3:GoVereador {
+  vereador_id: 'VER-GYN-003', name: 'DANIELA VEREADORA GOIANIA',
+  party: 'PSOL', municipality: 'Goiania',
+  total_expenses: 42000.0, proposals_count: 21, uf: 'GO',
+  source: 'camara_goiania'
+});
+
+// Election record for Goiania vereadores (so person-count.vereadores > 0)
+CREATE (ego4:Election {
+  election_id: 'ELE-GYN-VER-2024', year: 2024,
+  cargo: 'VEREADOR', uf: 'GO', municipio: 'Goiania'
+});
+CREATE (pv1:Person {
+  cpf: 'GO_VER_01', name: 'AMANDA VEREADORA GOIANIA',
+  uf: 'GO', is_pep: true, partido: 'PT', cargo: 'VEREADOR'
+});
+MATCH (p:Person {cpf: 'GO_VER_01'}), (e:Election {election_id: 'ELE-GYN-VER-2024'})
+CREATE (p)-[:CANDIDATO_EM]->(e);
+
 // ── Summary ─────────────────────────────────────────────
-// Nodes: 5 Person, 5 Company, 10 Contract, 1 Amendment, 1 Sanction, 1 Election, 1 PublicOffice
-// Relationships: 2 family, 3 SOCIO_DE, 1 AUTOR_EMENDA, 9 VENCEU,
-//   1 SANCIONADA, 1 CANDIDATO_EM, 1 DOOU, 1 RECEBEU_SALARIO
-// All 5 patterns should return results with this data
+// Base fixtures: 5 Person, 5 Company, 10 Contract, 1 Amendment, 1 Sanction, 1 Election, 1 PublicOffice
+// GO fixtures: 4 Person(GO), 4 Election(GO), 2 StateAgency, 3 StateEmployee,
+//   3 GoMunicipality, 3 GoProcurement, 2 GoAppointment, 3 GoVereador
+// All 5 patterns continue to exercise, and Fiscal Cidadao /status shows
+// deputados_federais=1, deputados_estaduais=1, senadores=1, vereadores=1
+// and GO counters (servidores_estaduais=3, cargos_comissionados=1,
+// municipios_go=3, licitacoes_go=3, nomeacoes_go=2, vereadores_goiania=3).
