@@ -70,7 +70,6 @@ scripts/audit-prompts/
 
 # Screenshots and images (large binary files)
 *.png
-!docs/brand/wtg-header.png
 
 # Local report artifacts in repository root
 /*.pdf

@@ -1,6 +1,6 @@
 # br/acc open graph
 
-[![WTG Header](docs/brand/bracc-header.jpg)](docs/brand/bracc-header.jpg)
+[![br/acc header](docs/brand/bracc-header.jpg)](docs/brand/bracc-header.jpg)
 
 [English](README.md) | [Portugues](docs/pt-BR/README.md)
 
