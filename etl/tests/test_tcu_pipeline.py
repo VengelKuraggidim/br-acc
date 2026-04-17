@@ -3,15 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pandas as pd
+
 from bracc_etl.pipelines.tcu import TcuPipeline
-from tests._mock_helpers import mock_session
+from tests._mock_helpers import mock_driver, mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _make_pipeline() -> TcuPipeline:
+def _make_pipeline(data_dir: str | None = None) -> TcuPipeline:
     driver = MagicMock()
-    return TcuPipeline(driver, data_dir=str(FIXTURES))
+    return TcuPipeline(driver, data_dir=data_dir or str(FIXTURES))
 
 
 def _load_fixtures(pipeline: TcuPipeline) -> None:
@@ -153,3 +155,193 @@ def test_load_calls_session() -> None:
     # Should have called session.run for:
     # Sanction nodes, Person nodes, Person rels, Company nodes, Company rels = 5 calls minimum
     assert session.run.call_count >= 5
+
+
+# --- Additional unit / branch coverage ---
+
+
+def test_read_csv_parses_pipe_separated(tmp_path: Path) -> None:
+    """`_read_csv` must handle TCU's pipe delimiter and UTF-8 encoding."""
+    csv_path = tmp_path / "sample.csv"
+    csv_path.write_text(
+        "a|b|c\n1|2|3\n4|5|6\n",
+        encoding="utf-8",
+    )
+    pipeline = _make_pipeline()
+    df = pipeline._read_csv(csv_path)
+    assert list(df.columns) == ["a", "b", "c"]
+    assert len(df) == 2
+    assert df.iloc[0]["a"] == "1"
+
+
+def test_inidoneo_with_cpf_creates_person_not_company() -> None:
+    """Row in licitantes-inidoneos with a CPF (11 digits) → Person + Sanction."""
+    pipeline = _make_pipeline()
+    pipeline._raw_inidoneos = pd.DataFrame(
+        [
+            {
+                "CPF_CNPJ": "12345678909",
+                "NOME": "Pessoa Inidonea",
+                "PROCESSO": "TC-X",
+                "DELIBERACAO": "Acordao X",
+                "DATA TRANSITO JULGADO": "01/01/2024",
+                "DATA FINAL": "01/01/2029",
+                "DATA ACORDAO": "20/12/2023",
+                "UF": "SP",
+                "MUNICIPIO": "SAO PAULO",
+            }
+        ]
+    )
+    pipeline._raw_inabilitados = pd.DataFrame()
+    pipeline._raw_irregulares = pd.DataFrame()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame()
+    pipeline.transform()
+
+    assert len(pipeline.sanctioned_persons) == 1
+    assert pipeline.sanctioned_persons[0]["cpf"] == "123.456.789-09"
+    assert pipeline.sanctioned_companies == []
+    # Sanction still created.
+    assert len(pipeline.sanctions) == 1
+    assert pipeline.sanctions[0]["type"] == "tcu_inidoneo"
+
+
+def test_inidoneo_with_invalid_doc_creates_sanction_only() -> None:
+    """A short/invalid doc produces a Sanction but no Person/Company link."""
+    pipeline = _make_pipeline()
+    pipeline._raw_inidoneos = pd.DataFrame(
+        [
+            {
+                "CPF_CNPJ": "123",
+                "NOME": "Doc Curto",
+                "PROCESSO": "TC-Y",
+                "DELIBERACAO": "Acordao Y",
+                "DATA TRANSITO JULGADO": "01/02/2024",
+                "DATA FINAL": "01/02/2029",
+                "DATA ACORDAO": "20/01/2024",
+                "UF": "SP",
+                "MUNICIPIO": "SAO PAULO",
+            }
+        ]
+    )
+    pipeline._raw_inabilitados = pd.DataFrame()
+    pipeline._raw_irregulares = pd.DataFrame()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame()
+    pipeline.transform()
+
+    assert len(pipeline.sanctions) == 1
+    assert pipeline.sanctioned_persons == []
+    assert pipeline.sanctioned_companies == []
+
+
+def test_irregulares_with_invalid_doc_creates_sanction_only() -> None:
+    """Same skip-only-entity behavior in the contas-irregulares processor."""
+    pipeline = _make_pipeline()
+    pipeline._raw_irregulares = pd.DataFrame(
+        [
+            {
+                "CPF_CNPJ": "notdigits",
+                "NOME": "Sem Doc",
+                "PROCESSO": "TC-Z",
+                "DELIBERACAO": "Acordao Z",
+                "DATA TRANSITO JULGADO": "10/05/2023",
+                "UF": "MG",
+                "MUNICIPIO": "BELO HORIZONTE",
+            }
+        ]
+    )
+    pipeline._raw_inabilitados = pd.DataFrame()
+    pipeline._raw_inidoneos = pd.DataFrame()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame()
+    pipeline.transform()
+
+    assert len(pipeline.sanctions) == 1
+    assert pipeline.sanctioned_persons == []
+    assert pipeline.sanctioned_companies == []
+
+
+def test_sanctions_are_deduplicated_by_sanction_id() -> None:
+    """deduplicate_rows on sanction_id must collapse accidental duplicates."""
+    pipeline = _make_pipeline()
+    pipeline._raw_inabilitados = pd.DataFrame()
+    pipeline._raw_inidoneos = pd.DataFrame()
+    pipeline._raw_irregulares = pd.DataFrame()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame()
+    pipeline.transform()
+
+    # Seed two identical-id entries and re-run dedupe via the public
+    # `transform()` is complex; directly assert the invariant.
+    pipeline.sanctions = [
+        {"sanction_id": "same", "type": "a"},
+        {"sanction_id": "same", "type": "b"},
+        {"sanction_id": "other", "type": "c"},
+    ]
+    from bracc_etl.transforms import deduplicate_rows
+
+    result = deduplicate_rows(pipeline.sanctions, ["sanction_id"])
+    ids = [r["sanction_id"] for r in result]
+    assert sorted(ids) == ["other", "same"]
+
+
+def test_load_short_circuits_for_empty_collections(tmp_path: Path) -> None:
+    """No sanctions/persons/companies → load should not open a session at all."""
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    # Leave all _raw_* frames empty → transform is a no-op for entities.
+    pipeline._raw_inabilitados = pd.DataFrame()
+    pipeline._raw_inidoneos = pd.DataFrame()
+    pipeline._raw_irregulares = pd.DataFrame()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame()
+    pipeline.transform()
+    pipeline.load()
+    assert not mock_driver(pipeline).session.called
+
+
+def test_inabilitado_short_cpf_is_skipped_entirely() -> None:
+    """inabilitados rows with non-11-digit CPF generate no sanction at all."""
+    pipeline = _make_pipeline()
+    pipeline._raw_inabilitados = pd.DataFrame(
+        [
+            {
+                "CPF": "000",  # too short
+                "NOME": "Curto",
+                "PROCESSO": "TC-SHORT",
+                "DELIBERACAO": "",
+                "DATA TRANSITO JULGADO": "",
+                "DATA FINAL": "",
+                "DATA ACORDAO": "",
+                "UF": "",
+                "MUNICIPIO": "",
+            }
+        ]
+    )
+    pipeline._raw_inidoneos = pd.DataFrame()
+    pipeline._raw_irregulares = pd.DataFrame()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame()
+    pipeline.transform()
+    assert pipeline.sanctions == []
+    assert pipeline.sanctioned_persons == []
+
+
+def test_irregulares_eleitorais_short_cpf_is_skipped_entirely() -> None:
+    """Electoral file also skips the whole row when CPF is invalid."""
+    pipeline = _make_pipeline()
+    pipeline._raw_irregulares_eleitorais = pd.DataFrame(
+        [
+            {
+                "CPF": "12",
+                "NOME": "Curtinho",
+                "PROCESSO": "TC-EL",
+                "DELIBERACAO": "",
+                "DATA TRANSITO JULGADO": "",
+                "DATA FINAL": "",
+                "UF": "",
+                "MUNICIPIO": "",
+                "CARGO/FUNCAO": "VEREADOR",
+            }
+        ]
+    )
+    pipeline._raw_inabilitados = pd.DataFrame()
+    pipeline._raw_inidoneos = pd.DataFrame()
+    pipeline._raw_irregulares = pd.DataFrame()
+    pipeline.transform()
+    assert pipeline.sanctions == []
+    assert pipeline.sanctioned_persons == []
