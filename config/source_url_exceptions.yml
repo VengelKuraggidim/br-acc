@@ -3,6 +3,10 @@
 
 allow_broken_404_410:
   - bolsa_familia_bpc
+  # upstream portals removed/relocated with no clear replacement; pipelines are not_built
+  - cnciai_improbidade
+  - icmbio_cnuc
+  - tce_rs
 
 allow_auth_or_rate_limited:
   - datajud
