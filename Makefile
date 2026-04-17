@@ -1,4 +1,4 @@
-.PHONY: help setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: help setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract generate-pipeline-status generate-source-summary generate-reference-metrics
 
 # Default target when running `make` with no arguments.
 .DEFAULT_GOAL := help
@@ -29,6 +29,7 @@ help:
 	@echo "  Data loading"
 	@echo "    bootstrap-demo   Small deterministic synthetic graph"
 	@echo "    bootstrap-all    Heavy real-ingest orchestration (hours)"
+	@echo "    bootstrap-go     Goias-scoped real-ingest orchestration (subset of bootstrap-all)"
 	@echo "    download-<src>   Fetch raw files for one source"
 	@echo "    etl-<src>        Run one ETL pipeline against Neo4j"
 	@echo ""
@@ -177,6 +178,15 @@ bootstrap-all-noninteractive:
 
 bootstrap-all-report:
 	python3 scripts/run_bootstrap_all.py --repo-root . --report-latest
+
+bootstrap-go:
+	bash scripts/bootstrap_go_public.sh
+
+bootstrap-go-noninteractive:
+	bash scripts/bootstrap_go_public.sh --noninteractive --yes-reset
+
+bootstrap-go-report:
+	python3 scripts/run_bootstrap_all.py --repo-root . --output-label bootstrap-go --report-latest
 
 # ── Quality checks ────────────────────────────────────────
 check-public-claims:

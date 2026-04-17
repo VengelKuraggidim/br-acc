@@ -54,6 +54,7 @@ def main() -> int:
 
     expected = int(contract.get("expected_implemented_count", len(contract_ids)))
     registry_ids = _parse_implemented_registry_ids(Path(args.registry_path))
+    contract_mode = str(contract.get("contract_mode", "full")).strip().lower()
 
     errors: list[str] = []
     if len(contract_ids) != expected:
@@ -61,12 +62,14 @@ def main() -> int:
             f"contract sources={len(contract_ids)} but expected_implemented_count={expected}",
         )
 
-    missing_from_contract = sorted(registry_ids - contract_ids)
     extra_in_contract = sorted(contract_ids - registry_ids)
-    if missing_from_contract:
-        errors.append(f"in registry but missing from contract: {missing_from_contract}")
     if extra_in_contract:
         errors.append(f"in contract but not implemented in registry: {extra_in_contract}")
+
+    if contract_mode != "subset":
+        missing_from_contract = sorted(registry_ids - contract_ids)
+        if missing_from_contract:
+            errors.append(f"in registry but missing from contract: {missing_from_contract}")
 
     if errors:
         print("FAIL")
@@ -74,7 +77,10 @@ def main() -> int:
             print(f"- {err}", file=sys.stderr)
         return 1
 
-    print(f"PASS: contract/registry parity OK ({len(contract_ids)} implemented sources)")
+    mode_note = "subset" if contract_mode == "subset" else "full"
+    print(
+        f"PASS: contract/registry parity OK ({len(contract_ids)} sources, mode={mode_note})"
+    )
     return 0
 
 
