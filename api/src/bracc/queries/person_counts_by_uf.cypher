@@ -11,7 +11,11 @@ CALL {
   RETURN count(DISTINCT p) AS deputados_estaduais
 }
 CALL {
-  MATCH (p:Person)-[:CANDIDATO_EM]->(e:Election {uf: $uf, cargo: 'VEREADOR'})
+  // Scope vereadores to the capital (GOIANIA for GO) to keep the count
+  // semantically aligned with the `vereadores_goiania` field consumers
+  // expect. Without this, the count aggregates candidates across all
+  // 246 GO municipalities (>18k), which is misleading.
+  MATCH (p:Person)-[:CANDIDATO_EM]->(e:Election {uf: $uf, cargo: 'VEREADOR', municipio: 'GOIANIA'})
   RETURN count(DISTINCT p) AS vereadores
 }
 CALL {

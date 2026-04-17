@@ -701,6 +701,38 @@
 
     .loading-text { font-size: 13px; color: var(--text-dim); }
 
+    .crossing-badge {
+      position: fixed;
+      top: 168px;
+      right: 16px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(20, 24, 32, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 180ms ease-out, transform 180ms ease-out;
+      max-width: calc(100vw - 32px);
+    }
+    .crossing-badge.is-visible { display: inline-flex; opacity: 0.95; transform: translateY(0); }
+    .crossing-badge .mini-spinner {
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.18);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
     .empty {
       text-align: center;
       padding: 40px 20px;
@@ -761,6 +793,12 @@
   </style>
 </head>
 <body>
+
+<!-- Discrete cross-referencing indicator -->
+<div id="crossingBadge" class="crossing-badge" role="status" aria-live="polite">
+  <span class="mini-spinner"></span>
+  <span>Cruzando dados — isso pode levar alguns segundos...</span>
+</div>
 
 <!-- HEADER -->
 <div class="header">
@@ -947,9 +985,25 @@ async function carregarInicio() {
       </div>
       <div class="stat">
         <div class="stat-value">${d.vereadores_goiania}</div>
-        <div class="stat-label">Vereadores</div>
+        <div class="stat-label">Vereadores${d.vereadores_goiania === 0 ? ' <span title="A Câmara Municipal de Goiânia não publica API de dados abertos legíveis por máquina; aguardando publicação oficial para habilitar esta fonte." style="color:var(--warning,#f59e0b);cursor:help;">&#9432;</span>' : ''}</div>
       </div>
     </div>
+
+    ${d.vereadores_goiania === 0 || d.nomeacoes_go === 0 ? `
+    <div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:var(--warning-bg,rgba(245,158,11,0.15));">&#9888;</span>
+          Fontes externas indisponíveis
+        </div>
+      </div>
+      <div class="card">
+        <p style="font-size:12px; line-height:1.6; color:var(--text-secondary); margin:0;">
+          ${d.vereadores_goiania === 0 ? '<strong>Vereadores de Goiânia:</strong> a Câmara Municipal não expõe dados abertos em formato consultável. Enquanto a Câmara não publicar, esse campo fica zerado — não é falha do app.<br>' : ''}
+          ${d.nomeacoes_go === 0 ? '<strong>Nomeações em diários oficiais GO:</strong> o projeto Querido Diário ainda não indexa municípios de Goiás. Estamos aguardando a cobertura ser ampliada.' : ''}
+        </p>
+      </div>
+    </div>` : ''}
 
     <div class="section fade-in">
       <div class="section-header">
@@ -1116,12 +1170,22 @@ function renderResultados(items, total, query) {
 // === PERFIL DO POLITICO ===
 let perfilAtualId = null;
 
+function mostrarCrossingBadge() {
+  const el = document.getElementById("crossingBadge");
+  if (el) el.classList.add("is-visible");
+}
+function esconderCrossingBadge() {
+  const el = document.getElementById("crossingBadge");
+  if (el) el.classList.remove("is-visible");
+}
+
 async function abrirPerfil(entityId) {
   perfilAtualId = entityId;
   history.replaceState(null, "", `#perfil/${encodeURIComponent(entityId)}`);
   irPara("pagePerfil", null);
   document.getElementById("perfilContent").innerHTML =
     '<div class="loading"><div class="spinner"></div><span class="loading-text">Carregando perfil...</span></div>';
+  mostrarCrossingBadge();
 
   try {
     const r = await fetch(`${API}/politico/${encodeURIComponent(entityId)}`);
@@ -1132,6 +1196,8 @@ async function abrirPerfil(entityId) {
     document.getElementById("perfilContent").innerHTML = `
       <button class="back-btn" onclick="voltarResultados()">&#8249; Voltar</button>
       <div class="empty"><div class="empty-icon">&#9888;</div>${e.message}</div>`;
+  } finally {
+    esconderCrossingBadge();
   }
 }
 
