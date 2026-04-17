@@ -1,4 +1,4 @@
-.PHONY: setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs generate-pipeline-status generate-source-summary generate-reference-metrics
 
 # ── Development ─────────────────────────────────────────
 setup-env:
@@ -112,6 +112,12 @@ test-integration: test-integration-api test-integration-etl
 # ── Full check (run before commit) ─────────────────────
 check: lint type-check test
 	@echo "All checks passed."
+
+# Mirror of what CI runs on every PR: lint + type + tests + neutrality +
+# registry/docs governance. Use this before opening a PR to avoid green-
+# local / red-CI surprises.
+pre-commit: check neutrality check-public-claims check-pipeline-contracts check-pipeline-inputs
+	@echo "Pre-commit bundle passed (lint/type/test + neutrality + governance)."
 
 # ── Neutrality audit ───────────────────────────────────
 neutrality:

@@ -26,12 +26,19 @@ cd ../frontend && npm install
 
 ## Quality Checks
 
-Run these before opening a pull request:
+Run this before opening a pull request:
 
 ```bash
-make check
-make neutrality
+make pre-commit
 ```
+
+`pre-commit` bundles everything CI enforces on every PR — lint,
+type-check, unit tests, neutrality audit, and registry/docs
+governance — so you don't get a green-local / red-CI surprise.
+
+Individual targets are also available: `make check` (lint + type +
+tests only), `make neutrality`, `make check-public-claims`,
+`make check-pipeline-contracts`, `make check-pipeline-inputs`.
 
 ## Pull Request Expectations
 
