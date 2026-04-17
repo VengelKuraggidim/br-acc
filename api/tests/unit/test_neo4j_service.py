@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bracc.services.neo4j_service import CypherLoader, execute_query, execute_query_single
+from bracc.services.neo4j_service import (
+    CypherLoader,
+    execute_query,
+    execute_query_single,
+    sanitize_props,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +65,54 @@ class TestCypherLoader:
             assert "clearable" not in CypherLoader._cache
         finally:
             mod.QUERIES_DIR = original
+
+
+class TestSanitizeProps:
+    def test_passes_primitives_unchanged(self) -> None:
+        props = {
+            "name": "ACME",
+            "active": True,
+            "count": 42,
+            "value": 3.14,
+            "nullable": None,
+        }
+        assert sanitize_props(props) == props
+
+    def test_joins_list_with_comma_space(self) -> None:
+        result = sanitize_props({"tags": ["a", "b", "c"]})
+        assert result == {"tags": "a, b, c"}
+
+    def test_list_of_mixed_items_stringified(self) -> None:
+        result = sanitize_props({"values": [1, "two", 3.0]})
+        assert result == {"values": "1, two, 3.0"}
+
+    def test_empty_list_becomes_empty_string(self) -> None:
+        assert sanitize_props({"tags": []}) == {"tags": ""}
+
+    def test_dict_is_stringified(self) -> None:
+        # Neo4j can return maps / embedded structures; sanitize_props
+        # converts them to str so the API contract stays JSON-safe.
+        result = sanitize_props({"meta": {"key": "value"}})
+        assert isinstance(result["meta"], str)
+        assert result["meta"] == "{'key': 'value'}"
+
+    def test_neo4j_temporal_type_stringified(self) -> None:
+        class _FakeDate:
+            def __str__(self) -> str:
+                return "2024-01-15"
+
+        result = sanitize_props({"created": _FakeDate()})
+        assert result == {"created": "2024-01-15"}
+
+    def test_bool_is_preserved_not_stringified(self) -> None:
+        # bool is a subclass of int; make sure isinstance check treats
+        # it as scalar (not converted to "True" string).
+        result = sanitize_props({"flag": True})
+        assert result == {"flag": True}
+        assert result["flag"] is True
+
+    def test_empty_input_returns_empty_dict(self) -> None:
+        assert sanitize_props({}) == {}
 
 
 class TestExecuteQuery:
