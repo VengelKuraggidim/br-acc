@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -15,24 +14,9 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cpf,
     normalize_name,
+    parse_brl_flexible,
     strip_document,
 )
-
-
-def _parse_brl(value: str | None) -> float:
-    """Parse Brazilian monetary string to float (e.g. '1.234.567,89')."""
-    if not value:
-        return 0.0
-    cleaned = str(value).strip()
-    cleaned = re.sub(r"[R$\s]", "", cleaned)
-    if not cleaned:
-        return 0.0
-    if "," in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
 
 
 def _classify_amendment_type(raw_type: str) -> str:
@@ -164,15 +148,15 @@ class SiopPipeline(Pipeline):
 
             # Sum monetary values across all rows for this amendment
             amount_committed = sum(
-                _parse_brl(self._resolve_col(r, "VALOR EMPENHADO", "Valor Empenhado"))
+                parse_brl_flexible(self._resolve_col(r, "VALOR EMPENHADO", "Valor Empenhado"))
                 for _, r in group.iterrows()
             )
             amount_settled = sum(
-                _parse_brl(self._resolve_col(r, "VALOR LIQUIDADO", "Valor Liquidado"))
+                parse_brl_flexible(self._resolve_col(r, "VALOR LIQUIDADO", "Valor Liquidado"))
                 for _, r in group.iterrows()
             )
             amount_paid = sum(
-                _parse_brl(self._resolve_col(r, "VALOR PAGO", "Valor Pago"))
+                parse_brl_flexible(self._resolve_col(r, "VALOR PAGO", "Valor Pago"))
                 for _, r in group.iterrows()
             )
 

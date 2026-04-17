@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -15,25 +14,10 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cnpj,
     normalize_name,
+    parse_brl_flexible,
     parse_date,
     strip_document,
 )
-
-
-def _parse_brl(value: str | None) -> float:
-    """Parse Brazilian monetary string to float (e.g. '1.234.567,89')."""
-    if not value:
-        return 0.0
-    cleaned = str(value).strip()
-    cleaned = re.sub(r"[R$\s]", "", cleaned)
-    if not cleaned:
-        return 0.0
-    if "," in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
 
 
 class TransferegovPipeline(Pipeline):
@@ -123,11 +107,11 @@ class TransferegovPipeline(Pipeline):
 
             # Sum values across all rows for this amendment
             value_empenhado = sum(
-                _parse_brl(str(r["Valor Empenhado"]))
+                parse_brl_flexible(str(r["Valor Empenhado"]))
                 for _, r in group.iterrows()
             )
             value_pago = sum(
-                _parse_brl(str(r["Valor Pago"]))
+                parse_brl_flexible(str(r["Valor Pago"]))
                 for _, r in group.iterrows()
             )
 
@@ -171,7 +155,7 @@ class TransferegovPipeline(Pipeline):
             digits = strip_document(doc_raw)
             tipo = str(row["Tipo Favorecido"]).strip()
             nome = normalize_name(str(row["Favorecido"]))
-            valor = _parse_brl(str(row["Valor Recebido"]))
+            valor = parse_brl_flexible(str(row["Valor Recebido"]))
             municipio = str(row["Município Favorecido"]).strip()
             uf = str(row["UF Favorecido"]).strip()
 
@@ -231,7 +215,7 @@ class TransferegovPipeline(Pipeline):
 
             convenente = normalize_name(str(row["Convenente"]))
             objeto = normalize_name(str(row["Objeto Convênio"]))
-            valor = _parse_brl(str(row["Valor Convênio"]))
+            valor = parse_brl_flexible(str(row["Valor Convênio"]))
             data_pub = parse_date(str(row["Data Publicação Convênio"]))
             funcao = normalize_name(str(row["Nome Função"]))
 

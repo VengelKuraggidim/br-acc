@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from bracc_etl.pipelines.siop import SiopPipeline, _classify_amendment_type, _parse_brl
+from bracc_etl.pipelines.siop import SiopPipeline, _classify_amendment_type
 from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -37,35 +37,6 @@ class TestSiopPipelineMetadata:
 
     def test_source_id(self) -> None:
         assert SiopPipeline.source_id == "siop"
-
-
-# ── BRL Parsing ──────────────────────────────────────────────────────
-
-
-class TestParseBrl:
-    def test_standard_format(self) -> None:
-        assert _parse_brl("1.500.000,00") == 1_500_000.0
-
-    def test_with_currency_symbol(self) -> None:
-        assert _parse_brl("R$ 1.500.000,00") == 1_500_000.0
-
-    def test_decimal_only(self) -> None:
-        assert _parse_brl("750.000,25") == 750_000.25
-
-    def test_empty_string(self) -> None:
-        assert _parse_brl("") == 0.0
-
-    def test_none(self) -> None:
-        assert _parse_brl(None) == 0.0
-
-    def test_whitespace(self) -> None:
-        assert _parse_brl("  ") == 0.0
-
-    def test_garbage(self) -> None:
-        assert _parse_brl("abc") == 0.0
-
-    def test_zero(self) -> None:
-        assert _parse_brl("0,00") == 0.0
 
 
 # ── Amendment Type Classification ────────────────────────────────────

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +17,7 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cnpj,
     normalize_name,
+    parse_brl_flexible,
     parse_date,
     strip_document,
 )
@@ -26,27 +26,6 @@ logger = logging.getLogger(__name__)
 
 # Classified contracts (Polícia Federal etc.) use this sentinel CNPJ.
 _SIGILOSO_CNPJ = "-11"
-
-
-def _parse_brl(value: str | None) -> float:
-    """Parse Brazilian monetary string to float.
-
-    Handles formats like "1.234.567,89" and "1234567.89".
-    """
-    if not value:
-        return 0.0
-    cleaned = str(value).strip()
-    # Remove currency symbol and whitespace
-    cleaned = re.sub(r"[R$\s]", "", cleaned)
-    if not cleaned:
-        return 0.0
-    # Brazilian format: dots as thousands sep, comma as decimal
-    if "," in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
 
 
 def _extract_cpf_middle6(cpf_raw: str) -> str | None:
@@ -137,7 +116,7 @@ class TransparenciaPipeline(Pipeline):
             contracts.append({
                 "contract_id": f"{cnpj_digits}_{row['data_inicio']}",
                 "object": normalize_name(str(row["objeto"])),
-                "value": cap_contract_value(_parse_brl(str(row["valor"]))),
+                "value": cap_contract_value(parse_brl_flexible(str(row["valor"]))),
                 "contracting_org": normalize_name(str(row["orgao_contratante"])),
                 "date": date,
                 "cnpj": cnpj,
@@ -151,7 +130,7 @@ class TransparenciaPipeline(Pipeline):
             cpf_partial = _extract_cpf_middle6(raw_cpf)
             name = normalize_name(str(row["nome"]))
             org = normalize_name(str(row["orgao"]))
-            salary = _parse_brl(str(row["remuneracao"]))
+            salary = parse_brl_flexible(str(row["remuneracao"]))
 
             servidor_id = _make_servidor_id(cpf_partial, name)
             office_id = _make_office_id(cpf_partial, name, org)
@@ -177,7 +156,7 @@ class TransparenciaPipeline(Pipeline):
                 "author_key": author_key,
                 "name": nome,
                 "object": normalize_name(str(row["objeto"])),
-                "value": _parse_brl(str(row["valor"])),
+                "value": parse_brl_flexible(str(row["valor"])),
             })
         self.amendments = deduplicate_rows(amendments, ["amendment_id"])
 
