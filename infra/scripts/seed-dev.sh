@@ -21,7 +21,7 @@ if command -v cypher-shell &>/dev/null; then
     -u "${NEO4J_USER}" \
     -f "${CYPHER_FILE}"
 elif command -v docker &>/dev/null; then
-  docker exec -i -e NEO4J_PASSWORD="${NEO4J_PASSWORD}" bracc-neo4j cypher-shell \
+  docker exec -i -e NEO4J_PASSWORD="${NEO4J_PASSWORD}" fiscal-neo4j cypher-shell \
     -u "${NEO4J_USER}" \
     < "${CYPHER_FILE}"
 else
