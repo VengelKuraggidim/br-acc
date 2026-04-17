@@ -9,3 +9,59 @@
 2026-04-17 23:23:04,540 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=4&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
 2026-04-17 23:23:08,508 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=4&pagina=2&tamanhoPagina=50 "HTTP/1.1 200 "
 2026-04-17 23:23:46,981 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=4&pagina=3&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:24:34,033 WARNING PNCP API timeout after 2 retries (modalidade 4, window 20240417-20250416, page 3) — skipping rest of modalidade
+2026-04-17 23:24:34,035 INFO   modalidade 4 (dialogo_competitivo): 100 records
+2026-04-17 23:25:24,025 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=5&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:26:54,020 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=5&pagina=2&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:26:54,029 WARNING PNCP API request failed (modalidade 5, window 20240417-20250416, page 2): Server error '500 ' for url 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=5&pagina=2&tamanhoPagina=50'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+2026-04-17 23:27:26,675 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=5&pagina=1&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:28:13,689 WARNING PNCP API timeout after 2 retries (modalidade 5, window 20250417-20260416, page 1) — skipping rest of modalidade
+2026-04-17 23:28:13,689 INFO   modalidade 5 (concorrencia): 50 records
+2026-04-17 23:28:24,733 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=6&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:28:36,001 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=6&pagina=2&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:30:08,519 WARNING PNCP API timeout after 2 retries (modalidade 6, window 20240417-20250416, page 3) — skipping rest of modalidade
+2026-04-17 23:30:08,519 INFO   modalidade 6 (pregao_eletronico): 100 records
+2026-04-17 23:30:11,393 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=7&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:30:52,506 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=7&pagina=2&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:31:39,561 WARNING PNCP API timeout after 2 retries (modalidade 7, window 20240417-20250416, page 2) — skipping rest of modalidade
+2026-04-17 23:31:39,561 INFO   modalidade 7 (cotacao_eletronica): 50 records
+2026-04-17 23:31:56,786 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=8&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:32:13,638 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=8&pagina=2&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:32:30,853 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=8&pagina=3&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:32:47,806 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=8&pagina=4&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:33:04,263 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=8&pagina=5&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:34:36,826 WARNING PNCP API timeout after 2 retries (modalidade 8, window 20240417-20250416, page 6) — skipping rest of modalidade
+2026-04-17 23:34:36,827 INFO   modalidade 8 (dispensa): 250 records
+2026-04-17 23:34:43,931 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:34:51,618 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=2&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:34:59,209 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=3&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:35:07,033 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=4&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:35:14,641 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=5&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:35:21,985 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=6&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:36:17,117 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=7&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:37:05,080 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=8&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:37:12,790 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=9&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:38:07,411 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=10&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:38:08,186 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=11&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:38:09,016 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=12&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:38:16,630 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=13&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:38:17,537 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=14&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:39:12,424 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=15&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:40:07,239 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=16&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:41:30,241 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=17&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:41:30,241 WARNING PNCP API request failed (modalidade 9, window 20240417-20250416, page 17): Server error '500 ' for url 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=9&pagina=17&tamanhoPagina=50'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+2026-04-17 23:43:02,421 WARNING PNCP API timeout after 2 retries (modalidade 9, window 20250417-20260416, page 1) — skipping rest of modalidade
+2026-04-17 23:43:02,421 INFO   modalidade 9 (inexigibilidade): 800 records
+2026-04-17 23:43:34,487 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=10&pagina=1&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:44:21,555 WARNING PNCP API timeout after 2 retries (modalidade 10, window 20240417-20250416, page 1) — skipping rest of modalidade
+2026-04-17 23:44:21,859 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=11&pagina=1&tamanhoPagina=50 "HTTP/1.1 204 "
+2026-04-17 23:44:21,969 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=11&pagina=1&tamanhoPagina=50 "HTTP/1.1 204 "
+2026-04-17 23:45:09,452 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20260417&dataFinal=20260417&uf=GO&codigoModalidadeContratacao=11&pagina=1&tamanhoPagina=50 "HTTP/1.1 204 "
+2026-04-17 23:45:12,301 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:45:15,528 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=2&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:45:16,120 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=3&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:46:06,894 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=4&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:46:07,569 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=5&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:46:37,993 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=6&tamanhoPagina=50 "HTTP/1.1 500 "
