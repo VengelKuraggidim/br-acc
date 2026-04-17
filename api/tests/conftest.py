@@ -4,8 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from bracc.config import settings
 from bracc.main import app
 from bracc.services.auth_service import create_access_token
+
+# main.py's boot-time check enforces >=32 bytes in prod, but tests skip boot,
+# so the 23-byte default triggered InsecureKeyLengthWarning on every auth test.
+settings.jwt_secret_key = "test-secret-key-at-least-32-bytes-for-hs256"
 
 
 @pytest.fixture
