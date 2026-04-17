@@ -5,19 +5,25 @@ import { AppShell } from "./components/common/AppShell";
 import { PublicShell } from "./components/common/PublicShell";
 import { Spinner } from "./components/common/Spinner";
 import { IS_PATTERNS_ENABLED, IS_PUBLIC_MODE } from "./config/runtime";
-import { Baseline } from "./pages/Baseline";
 import { Dashboard } from "./pages/Dashboard";
-import { Investigations } from "./pages/Investigations";
 import { Landing } from "./pages/Landing";
-import { Login } from "./pages/Login";
-import { Patterns } from "./pages/Patterns";
-import { Register } from "./pages/Register";
 import { Search } from "./pages/Search";
-import { SharedInvestigation } from "./pages/SharedInvestigation";
 import { useAuthStore } from "./stores/auth";
 
-const EntityAnalysis = lazy(() => import("./pages/EntityAnalysis").then((m) => ({ default: m.EntityAnalysis })));
+const Login = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
+const Register = lazy(() => import("./pages/Register").then((m) => ({ default: m.Register })));
+const EntityAnalysis = lazy(() =>
+  import("./pages/EntityAnalysis").then((m) => ({ default: m.EntityAnalysis })),
+);
 const Emendas = lazy(() => import("./pages/Emendas").then((m) => ({ default: m.Emendas })));
+const Patterns = lazy(() => import("./pages/Patterns").then((m) => ({ default: m.Patterns })));
+const Investigations = lazy(() =>
+  import("./pages/Investigations").then((m) => ({ default: m.Investigations })),
+);
+const Baseline = lazy(() => import("./pages/Baseline").then((m) => ({ default: m.Baseline })));
+const SharedInvestigation = lazy(() =>
+  import("./pages/SharedInvestigation").then((m) => ({ default: m.SharedInvestigation })),
+);
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -58,12 +64,29 @@ export function App() {
         )}
       >
         <Route index element={<Landing />} />
-        {!IS_PUBLIC_MODE && <Route path="login" element={<Login />} />}
-        {!IS_PUBLIC_MODE && <Route path="register" element={<Register />} />}
+        {!IS_PUBLIC_MODE && (
+          <Route
+            path="login"
+            element={<Suspense fallback={<Spinner />}><Login /></Suspense>}
+          />
+        )}
+        {!IS_PUBLIC_MODE && (
+          <Route
+            path="register"
+            element={<Suspense fallback={<Spinner />}><Register /></Suspense>}
+          />
+        )}
       </Route>
 
       {/* Public — shared investigation (no auth, no shell) */}
-      <Route path="shared/:token" element={<SharedInvestigation />} />
+      <Route
+        path="shared/:token"
+        element={
+          <Suspense fallback={<Spinner />}>
+            <SharedInvestigation />
+          </Suspense>
+        }
+      />
 
       {/* Authenticated shell — the intelligence workspace */}
       <Route
@@ -79,11 +102,34 @@ export function App() {
         <Route path="analysis/:entityId" element={<Suspense fallback={<Spinner />}><EntityAnalysis /></Suspense>} />
         <Route path="emendas" element={<Suspense fallback={<Spinner />}><Emendas /></Suspense>} />
         <Route path="graph/:entityId" element={<GraphRedirect />} />
-        {IS_PATTERNS_ENABLED && <Route path="patterns" element={<Patterns />} />}
-        {IS_PATTERNS_ENABLED && <Route path="patterns/:entityId" element={<Patterns />} />}
-        <Route path="baseline/:entityId" element={<Baseline />} />
-        {!IS_PUBLIC_MODE && <Route path="investigations" element={<Investigations />} />}
-        {!IS_PUBLIC_MODE && <Route path="investigations/:investigationId" element={<Investigations />} />}
+        {IS_PATTERNS_ENABLED && (
+          <Route
+            path="patterns"
+            element={<Suspense fallback={<Spinner />}><Patterns /></Suspense>}
+          />
+        )}
+        {IS_PATTERNS_ENABLED && (
+          <Route
+            path="patterns/:entityId"
+            element={<Suspense fallback={<Spinner />}><Patterns /></Suspense>}
+          />
+        )}
+        <Route
+          path="baseline/:entityId"
+          element={<Suspense fallback={<Spinner />}><Baseline /></Suspense>}
+        />
+        {!IS_PUBLIC_MODE && (
+          <Route
+            path="investigations"
+            element={<Suspense fallback={<Spinner />}><Investigations /></Suspense>}
+          />
+        )}
+        {!IS_PUBLIC_MODE && (
+          <Route
+            path="investigations/:investigationId"
+            element={<Suspense fallback={<Spinner />}><Investigations /></Suspense>}
+          />
+        )}
       </Route>
 
       {/* Catch-all */}

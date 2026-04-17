@@ -9,6 +9,17 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router"],
+          "i18n-vendor": ["i18next", "react-i18next"],
+          "form-vendor": ["react-hook-form", "@hookform/resolvers", "zod"],
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     proxy: {
