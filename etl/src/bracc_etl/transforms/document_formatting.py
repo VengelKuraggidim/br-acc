@@ -21,6 +21,14 @@ def format_cnpj(cnpj: str | None) -> str:
     return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
 
 
+def mask_cpf(cpf: str | None) -> str:
+    """Mask a CPF for LGPD-compliant public display, showing only the last 4 digits."""
+    digits = strip_document(cpf)
+    if len(digits) != 11:
+        return "***.***.***-**"
+    return f"***.***.*{digits[7]}{digits[8]}-{digits[9]}{digits[10]}"
+
+
 def _cpf_check_digits(digits: str) -> bool:
     if len(digits) != 11 or len(set(digits)) == 1:
         return False

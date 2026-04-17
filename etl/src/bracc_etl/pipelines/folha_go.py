@@ -13,6 +13,7 @@ from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
     deduplicate_rows,
+    mask_cpf,
     normalize_name,
     strip_document,
 )
@@ -59,14 +60,6 @@ def _pick(row: pd.Series, *keys: str) -> str:
         if value and value.lower() not in ("nan", "none", ""):
             return value
     return ""
-
-
-def mask_cpf(cpf: str) -> str:
-    """Mask CPF for LGPD compliance, showing only last 4 digits."""
-    digits = strip_document(cpf)
-    if len(digits) != 11:
-        return "***.***.***-**"
-    return f"***.***.*{digits[7]}{digits[8]}-{digits[9]}{digits[10]}"
 
 
 def _is_commissioned(role: str) -> bool:

@@ -8,7 +8,6 @@ from bracc_etl.pipelines.querido_diario_go import (
     _classify_act,
     _extract_appointments,
     _extract_cnpjs,
-    _mask_cpf,
     _stable_id,
 )
 
@@ -68,12 +67,6 @@ class TestHelpers:
         assert len(results) == 1
         assert "MARIA" in results[0]["person_name"].upper()
         assert "Diretora" in results[0]["role"]
-
-    def test_mask_cpf(self) -> None:
-        masked = _mask_cpf("123.456.789-09")
-        assert masked.startswith("***")
-        assert "123" not in masked
-
 
 class TestTransform:
     def test_transform_counts(self) -> None:

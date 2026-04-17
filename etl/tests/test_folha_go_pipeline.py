@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.folha_go import FolhaGoPipeline, _is_commissioned, mask_cpf
+from bracc_etl.pipelines.folha_go import FolhaGoPipeline, _is_commissioned
+from bracc_etl.transforms import mask_cpf
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

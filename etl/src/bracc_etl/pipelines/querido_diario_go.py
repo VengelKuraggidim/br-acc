@@ -64,14 +64,6 @@ def _classify_act(text: str) -> str:
     return "outro"
 
 
-def _mask_cpf(cpf: str) -> str:
-    """Mask CPF for LGPD compliance, keeping only last 4 digits visible."""
-    digits = strip_document(cpf)
-    if len(digits) != 11:
-        return "***.***.***-**"
-    return f"***.***.*{digits[7]}{digits[8]}-{digits[9]}{digits[10]}"
-
-
 def _extract_cnpjs(text: str) -> list[tuple[str, str]]:
     """Extract CNPJ patterns from text, returning (formatted_cnpj, span)."""
     out: list[tuple[str, str]] = []
