@@ -101,10 +101,26 @@ class FolhaGoPipeline(Pipeline):
 
         if not records:
             return pd.DataFrame()
-        return pd.DataFrame(records).astype(str)
+        df = pd.DataFrame(records).astype(str)
+        # Normalize CKAN column names to match transform's row_pick keys.
+        df.columns = df.columns.str.lower()
+        df = df.rename(columns={
+            "nomeservidor": "nome",
+            "nomecargo": "cargo",
+            "valorprovento": "remuneracao_bruta",
+            "valorliquido": "salario_liquido",
+            "codorgao": "orgao_codigo",
+            "anomes": "periodo",
+        })
+        return df
 
     def _discover_resource_id(self, dataset_name: str) -> str | None:
-        """Search for a resource_id by dataset name via CKAN API."""
+        """Return the most recent datastore-active CSV resource id.
+
+        CKAN lists the PDF data dictionary as the first resource, which has
+        ``datastore_active=False``. Pick the first CSV whose datastore is
+        active — that is the latest monthly payroll snapshot.
+        """
         try:
             with httpx.Client(timeout=30) as client:
                 resp = client.get(
@@ -113,8 +129,9 @@ class FolhaGoPipeline(Pipeline):
                 )
                 resp.raise_for_status()
                 resources = resp.json().get("result", {}).get("resources", [])
-                if resources:
-                    return str(resources[0]["id"])
+                for r in resources:
+                    if r.get("datastore_active") and str(r.get("format", "")).upper() == "CSV":
+                        return str(r["id"])
         except (httpx.HTTPError, KeyError, IndexError):
             logger.warning("[folha_go] Could not discover resource for %s", dataset_name)
         return None

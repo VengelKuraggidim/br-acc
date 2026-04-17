@@ -181,6 +181,7 @@ const resources = {
         recentSearches: "Buscas recentes",
         clearRecent: "Limpar",
         resultCount: "{{count}} resultados",
+        crossing: "Cruzando dados...",
       },
       entity: {
         person: "Pessoa",
@@ -309,7 +310,7 @@ const resources = {
       patterns: {
         title: "Padrões de Análise",
         selectEntity: "Selecione uma entidade para analisar padrões.",
-        noResults: "Nenhum padrão encontrado para esta entidade.",
+        noResults: "Avaliação indisponível no momento. Não foi possível obter dados suficientes desta entidade para análise de padrões.",
         loadError: "Erro ao carregar padrões.",
         runError: "Erro ao analisar padrões.",
       },
@@ -350,7 +351,7 @@ const resources = {
         peerAvgValue: "Média de Valor do Setor",
         comparison: "Comparação",
         ratio: "{{value}}% da média do {{dimension}}",
-        noData: "Sem dados de comparação.",
+        noData: "Avaliação indisponível no momento. Não há dados de comparação para esta entidade.",
         peers: "{{count}} pares",
       },
       analysis: {
@@ -369,8 +370,8 @@ const resources = {
         baselineComparison: "Comparação com Pares",
         navigation: "Navegação da análise",
         selectNode: "Selecione um nó no grafo para ver detalhes.",
-        noConnections: "Nenhuma conexão encontrada.",
-        noPatterns: "Nenhum padrão encontrado.",
+        noConnections: "Avaliação indisponível no momento. Não foi possível recuperar as conexões desta entidade.",
+        noPatterns: "Avaliação indisponível no momento. Não foi possível analisar padrões desta entidade.",
         noTimeline: "Nenhum evento no período.",
         loadMore: "Carregar mais",
         exposure: "Índice de exposição",
@@ -396,7 +397,7 @@ const resources = {
         exportScreenshotDesc: "Capturar imagem do grafo atual",
         recentAnalyses: "Análises recentes",
         patternScanner: "Busca por padrão",
-        noExposure: "Dados insuficientes para calcular exposição.",
+        noExposure: "Avaliação indisponível no momento. Não há dados suficientes para calcular o índice de exposição.",
         entityNotFound: "Entidade não encontrada.",
       },
       command: {
@@ -641,6 +642,7 @@ const resources = {
         recentSearches: "Recent searches",
         clearRecent: "Clear",
         resultCount: "{{count}} results",
+        crossing: "Cross-referencing data...",
       },
       entity: {
         person: "Person",
@@ -769,7 +771,7 @@ const resources = {
       patterns: {
         title: "Analysis Patterns",
         selectEntity: "Select an entity to analyze patterns.",
-        noResults: "No patterns found for this entity.",
+        noResults: "Evaluation unavailable at this time. Insufficient data for this entity to perform pattern analysis.",
         loadError: "Failed to load patterns.",
         runError: "Failed to run pattern analysis.",
       },
@@ -810,7 +812,7 @@ const resources = {
         peerAvgValue: "Sector Avg Value",
         comparison: "Comparison",
         ratio: "{{value}}% of {{dimension}} average",
-        noData: "No comparison data.",
+        noData: "Evaluation unavailable at this time. No comparison data for this entity.",
         peers: "{{count}} peers",
       },
       analysis: {
@@ -829,8 +831,8 @@ const resources = {
         baselineComparison: "Peer Comparison",
         navigation: "Analysis navigation",
         selectNode: "Select a node on the graph to see details.",
-        noConnections: "No connections found.",
-        noPatterns: "No patterns found.",
+        noConnections: "Evaluation unavailable at this time. Could not retrieve connections for this entity.",
+        noPatterns: "Evaluation unavailable at this time. Could not analyze patterns for this entity.",
         noTimeline: "No events in this period.",
         loadMore: "Load more",
         exposure: "Exposure index",
@@ -856,7 +858,7 @@ const resources = {
         exportScreenshotDesc: "Capture current graph view",
         recentAnalyses: "Recent analyses",
         patternScanner: "Pattern search",
-        noExposure: "Insufficient data to calculate exposure.",
+        noExposure: "Evaluation unavailable at this time. Insufficient data to calculate the exposure index.",
         entityNotFound: "Entity not found.",
       },
       command: {

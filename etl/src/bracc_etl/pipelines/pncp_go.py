@@ -55,7 +55,12 @@ _MODALIDADE_MAP: dict[int, str] = {
 
 _RATE_LIMIT_SLEEP = 0.5
 _HTTP_TIMEOUT = 30
+# API requires tamanhoPagina >= 10
 _DEFAULT_PAGE_SIZE = 50
+# API requires codigoModalidadeContratacao; iterate all modalidades.
+_MODALIDADE_CODES = tuple(_MODALIDADE_MAP.keys())
+# API rejects date ranges > 365 days with HTTP 422.
+_MAX_WINDOW_DAYS = 365
 
 
 def _make_procurement_id(cnpj_digits: str, year: int | str, sequential: int | str) -> str:
@@ -86,59 +91,97 @@ class PncpGoPipeline(Pipeline):
     # Extract
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _split_date_windows(
+        date_start: str, date_end: str,
+    ) -> list[tuple[str, str]]:
+        """Split a date range into API-compatible windows (<= 365 days each)."""
+        start = datetime.strptime(date_start, "%Y%m%d")  # noqa: DTZ007
+        end = datetime.strptime(date_end, "%Y%m%d")  # noqa: DTZ007
+        windows: list[tuple[str, str]] = []
+        cursor = start
+        while cursor <= end:
+            window_end = min(cursor + timedelta(days=_MAX_WINDOW_DAYS - 1), end)
+            windows.append((cursor.strftime("%Y%m%d"), window_end.strftime("%Y%m%d")))
+            cursor = window_end + timedelta(days=1)
+        return windows
+
     def _fetch_from_api(
         self,
         date_start: str,
         date_end: str,
     ) -> list[dict[str, Any]]:
-        """Fetch GO procurements from PNCP API with pagination."""
+        """Fetch GO procurements from PNCP API with pagination.
+
+        The endpoint requires `codigoModalidadeContratacao` and rejects
+        windows > 365 days. We iterate all modalidades and chunk the
+        requested range into yearly windows.
+        """
         url = f"{_API_BASE}contratacoes/publicacao"
         all_records: list[dict[str, Any]] = []
-        page = 1
+        windows = self._split_date_windows(date_start, date_end)
 
         with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
-            while True:
-                params: dict[str, str | int] = {
-                    "dataInicial": date_start,
-                    "dataFinal": date_end,
-                    "uf": "GO",
-                    "pagina": page,
-                    "tamanhoPagina": _DEFAULT_PAGE_SIZE,
-                }
-                try:
-                    resp = client.get(url, params=params)
-                    resp.raise_for_status()
-                except httpx.HTTPError as exc:
-                    logger.warning(
-                        "PNCP API request failed (page %d): %s", page, exc,
+            for modalidade_code in _MODALIDADE_CODES:
+                mod_count = 0
+                for win_start, win_end in windows:
+                    page = 1
+                    while True:
+                        params: dict[str, str | int] = {
+                            "dataInicial": win_start,
+                            "dataFinal": win_end,
+                            "uf": "GO",
+                            "codigoModalidadeContratacao": modalidade_code,
+                            "pagina": page,
+                            "tamanhoPagina": _DEFAULT_PAGE_SIZE,
+                        }
+                        try:
+                            resp = client.get(url, params=params)
+                            resp.raise_for_status()
+                        except httpx.HTTPError as exc:
+                            logger.warning(
+                                "PNCP API request failed "
+                                "(modalidade %d, window %s-%s, page %d): %s",
+                                modalidade_code, win_start, win_end, page, exc,
+                            )
+                            break
+
+                        payload = resp.json()
+
+                        if isinstance(payload, dict) and "data" in payload:
+                            records = payload["data"]
+                        elif isinstance(payload, list):
+                            records = payload
+                        else:
+                            logger.warning(
+                                "Unexpected API response "
+                                "(modalidade %d, window %s-%s, page %d)",
+                                modalidade_code, win_start, win_end, page,
+                            )
+                            break
+
+                        if not records:
+                            break
+
+                        all_records.extend(records)
+                        mod_count += len(records)
+
+                        pages_remaining = 0
+                        if isinstance(payload, dict):
+                            pages_remaining = payload.get("paginasRestantes", 0)
+                        if pages_remaining <= 0:
+                            break
+
+                        page += 1
+                        time.sleep(_RATE_LIMIT_SLEEP)
+
+                if mod_count:
+                    logger.info(
+                        "  modalidade %d (%s): %d records",
+                        modalidade_code,
+                        _MODALIDADE_MAP.get(modalidade_code, "?"),
+                        mod_count,
                     )
-                    break
-
-                payload = resp.json()
-
-                if isinstance(payload, dict) and "data" in payload:
-                    records = payload["data"]
-                elif isinstance(payload, list):
-                    records = payload
-                else:
-                    logger.warning("Unexpected API response format on page %d", page)
-                    break
-
-                if not records:
-                    break
-
-                all_records.extend(records)
-                logger.info("  Fetched page %d (%d records)", page, len(records))
-
-                # Check for remaining pages
-                pages_remaining = 0
-                if isinstance(payload, dict):
-                    pages_remaining = payload.get("paginasRestantes", 0)
-                if pages_remaining <= 0:
-                    break
-
-                page += 1
-                time.sleep(_RATE_LIMIT_SLEEP)
 
         return all_records
 

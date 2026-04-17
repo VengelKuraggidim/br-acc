@@ -35,6 +35,12 @@ export function Search() {
       <SearchBar onSearch={handleSearch} isLoading={isLoading} />
       {error && <p className={styles.error}>{error}</p>}
       {isLoading && (
+        <div className={styles.crossingBadge} role="status" aria-live="polite">
+          <Spinner size="sm" />
+          <span>{t("search.crossing")}</span>
+        </div>
+      )}
+      {isLoading && (
         <div className={styles.loading}>
           <Spinner />
         </div>

@@ -330,8 +330,8 @@ class BraccClient:
     async def buscar_servidores_go(self, query: str, limit: int = 20) -> list[dict]:
         """Search state employees in GO."""
         resp = await self.client.get(
-            "/api/v1/search",
-            params={"q": query, "type": "state_employee", "size": limit},
+            "/api/v1/go/employees",
+            params={"q": query, "limit": limit},
         )
         if resp.status_code == 200:
             return resp.json().get("results", [])
@@ -347,8 +347,8 @@ class BraccClient:
     async def buscar_licitacoes_go(self, query: str = "", limit: int = 20) -> list[dict]:
         """Search GO procurements."""
         resp = await self.client.get(
-            "/api/v1/search",
-            params={"q": query or "*", "type": "go_procurement", "size": limit},
+            "/api/v1/go/procurements",
+            params={"q": query, "limit": limit},
         )
         if resp.status_code == 200:
             return resp.json().get("results", [])
