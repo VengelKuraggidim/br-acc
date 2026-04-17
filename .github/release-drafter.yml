@@ -35,6 +35,7 @@ exclude-labels:
   - ci
   - refactor-internal
   - no-release-note
+  - dependencies
 
 version-resolver:
   major:
