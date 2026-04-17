@@ -101,12 +101,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check for banned words
-        run: |
-          ! grep -rn \
-            "suspicious\|corrupt\|criminal\|fraudulent\|illegal\|guilty" \
-            api/src/ etl/src/ frontend/src/ \
-            --include="*.py" --include="*.ts" --include="*.tsx" --include="*.json" \
-            || (echo "NEUTRALITY VIOLATION: banned words found in source" && exit 1)
+        run: make neutrality
 
   integration:
     name: Integration Tests
