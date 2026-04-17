@@ -5,6 +5,7 @@ import click
 from neo4j import GraphDatabase
 
 from bracc_etl.linking_hooks import run_post_load_hooks
+from bracc_etl.pipelines.alego import AlegoPipeline
 from bracc_etl.pipelines.bcb import BcbPipeline
 from bracc_etl.pipelines.bndes import BndesPipeline
 from bracc_etl.pipelines.caged import CagedPipeline
@@ -44,9 +45,13 @@ from bracc_etl.pipelines.senado import SenadoPipeline
 from bracc_etl.pipelines.senado_cpis import SenadoCpisPipeline
 from bracc_etl.pipelines.siconfi import SiconfiPipeline
 from bracc_etl.pipelines.siop import SiopPipeline
+from bracc_etl.pipelines.ssp_go import SspGoPipeline
+from bracc_etl.pipelines.state_portal_go import StatePortalGoPipeline
 from bracc_etl.pipelines.stf import StfPipeline
 from bracc_etl.pipelines.stj_dados_abertos import StjPipeline
+from bracc_etl.pipelines.tce_go import TceGoPipeline
 from bracc_etl.pipelines.tcm_go import TcmGoPipeline
+from bracc_etl.pipelines.tcmgo_sancoes import TcmgoSancoesPipeline
 from bracc_etl.pipelines.tcu import TcuPipeline
 from bracc_etl.pipelines.tesouro_emendas import TesouroEmendasPipeline
 from bracc_etl.pipelines.transferegov import TransferegovPipeline
@@ -112,6 +117,11 @@ PIPELINES: dict[str, type] = {
     "pncp_go": PncpGoPipeline,
     "querido_diario_go": QueridoDiarioGoPipeline,
     "camara_goiania": CamaraGoianiaPipeline,
+    "state_portal_go": StatePortalGoPipeline,
+    "tce_go": TceGoPipeline,
+    "alego": AlegoPipeline,
+    "tcmgo_sancoes": TcmgoSancoesPipeline,
+    "ssp_go": SspGoPipeline,
 }
 
 
