@@ -24,3 +24,11 @@ async def test_search_rejects_invalid_page(client: AsyncClient) -> None:
 async def test_search_rejects_oversized_page(client: AsyncClient) -> None:
     response = await client.get("/api/v1/search?q=test&size=200")
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_search_accepts_wildcard_list_all(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/search?q=*&size=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert "total" in body and "results" in body
