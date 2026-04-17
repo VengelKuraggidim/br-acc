@@ -1,0 +1,7 @@
+classe,numero,ano,relator,tipo_decisao,data_decisao,assunto,uf_origem
+HC,123456,2024,MIN. JOÃO DA SILVA,monocratica,2024-03-15,tributario,SP
+REsp,789012,2024,MIN. MARIA SANTOS,acordao,2024-04-22,processual civil,RJ
+HC,123456,2024,MIN. JOÃO DA SILVA,monocratica,2024-03-15,tributario,SP
+AgRg,555666,2024,,despacho,2024-02-10,administrativo,DF
+,0,2024,MIN. SEM CLASSE,despacho,2024-01-01,x,MG
+HC,,2024,MIN. SEM NUMERO,despacho,2024-01-01,x,GO
