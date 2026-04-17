@@ -1,5 +1,6 @@
 import sys
 from types import ModuleType
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,7 +11,7 @@ FAKE_PDF = b"%PDF-1.4 fake pdf content for testing"
 
 
 def _make_investigation(**overrides: object) -> InvestigationResponse:
-    defaults = {
+    defaults: dict[str, Any] = {
         "id": "inv-1",
         "title": "Test Investigation",
         "description": "Test description",
@@ -20,11 +21,11 @@ def _make_investigation(**overrides: object) -> InvestigationResponse:
         "share_token": None,
     }
     defaults.update(overrides)
-    return InvestigationResponse(**defaults)  # type: ignore[arg-type]
+    return InvestigationResponse(**defaults)
 
 
 def _make_annotation(**overrides: object) -> Annotation:
-    defaults = {
+    defaults: dict[str, Any] = {
         "id": "ann-1",
         "entity_id": "ent-1",
         "investigation_id": "inv-1",
@@ -32,22 +33,22 @@ def _make_annotation(**overrides: object) -> Annotation:
         "created_at": "2026-01-15T12:00:00Z",
     }
     defaults.update(overrides)
-    return Annotation(**defaults)  # type: ignore[arg-type]
+    return Annotation(**defaults)
 
 
 def _make_tag(**overrides: object) -> Tag:
-    defaults = {
+    defaults: dict[str, Any] = {
         "id": "tag-1",
         "investigation_id": "inv-1",
         "name": "reviewed",
         "color": "#3498db",
     }
     defaults.update(overrides)
-    return Tag(**defaults)  # type: ignore[arg-type]
+    return Tag(**defaults)
 
 
 @pytest.fixture(autouse=True)
-def _mock_weasyprint() -> object:  # type: ignore[misc]
+def _mock_weasyprint() -> object:
     """Install a fake weasyprint module so tests run without system libraries."""
     mock_html_cls = MagicMock()
     mock_html_cls.return_value.write_pdf.return_value = FAKE_PDF

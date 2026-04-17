@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -71,7 +72,7 @@ async def test_compute_exposure_returns_response() -> None:
         "role": None,
     }[key]
 
-    async def mock_run(cypher: str, params: dict, timeout: float = 15):  # type: ignore[no-untyped-def]
+    async def mock_run(cypher: str, params: dict[str, Any], timeout: float = 15):  # type: ignore[no-untyped-def]
         result = AsyncMock()
         result.single = AsyncMock(return_value=score_record)
         return result
@@ -91,7 +92,7 @@ async def test_compute_exposure_returns_response() -> None:
 async def test_compute_exposure_entity_not_found() -> None:
     session = AsyncMock()
 
-    async def mock_run(cypher: str, params: dict, timeout: float = 15):  # type: ignore[no-untyped-def]
+    async def mock_run(cypher: str, params: dict[str, Any], timeout: float = 15):  # type: ignore[no-untyped-def]
         result = AsyncMock()
         result.single = AsyncMock(return_value=None)
         return result
@@ -120,7 +121,7 @@ async def test_compute_exposure_person_peer_group() -> None:
         "role": "deputado",
     }[key]
 
-    async def mock_run(cypher: str, params: dict, timeout: float = 15):  # type: ignore[no-untyped-def]
+    async def mock_run(cypher: str, params: dict[str, Any], timeout: float = 15):  # type: ignore[no-untyped-def]
         result = AsyncMock()
         result.single = AsyncMock(return_value=score_record)
         return result
@@ -147,7 +148,7 @@ async def test_compute_exposure_source_attribution() -> None:
         "role": None,
     }[key]
 
-    async def mock_run(cypher: str, params: dict, timeout: float = 15):  # type: ignore[no-untyped-def]
+    async def mock_run(cypher: str, params: dict[str, Any], timeout: float = 15):  # type: ignore[no-untyped-def]
         result = AsyncMock()
         result.single = AsyncMock(return_value=score_record)
         return result
@@ -216,7 +217,7 @@ async def test_compute_exposure_aggregated_same_as_data() -> None:
         "role": "deputado",
     }[key]
 
-    async def mock_run(cypher: str, params: dict, timeout: float = 15):  # type: ignore[no-untyped-def]
+    async def mock_run(cypher: str, params: dict[str, Any], timeout: float = 15):  # type: ignore[no-untyped-def]
         result = AsyncMock()
         result.single = AsyncMock(return_value=score_record)
         return result

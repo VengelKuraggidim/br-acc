@@ -10,7 +10,7 @@ echo "[python-quality] lint"
 uv run ruff check src/ tests/ || fail=1
 
 echo "[python-quality] type-check"
-uv run mypy src/ || fail=1
+uv run mypy src/ tests/ || fail=1
 
 echo "[python-quality] tests"
 uv run pytest -q || fail=1

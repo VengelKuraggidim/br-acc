@@ -19,7 +19,7 @@ async def client() -> AsyncIterator[AsyncClient]:
     mock_driver.session.return_value.__aexit__ = AsyncMock(return_value=None)
     app.state.neo4j_driver = mock_driver
 
-    transport = ASGITransport(app=app)  # type: ignore[arg-type]
+    transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 

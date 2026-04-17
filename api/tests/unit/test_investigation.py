@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,7 +39,7 @@ def test_all_investigation_cypher_files_exist() -> None:
             CypherLoader.clear_cache()
 
 
-def _mock_record(data: dict[str, object]) -> MagicMock:
+def _mock_record(data: Mapping[str, object]) -> MagicMock:
     """Create a MagicMock that behaves like a neo4j.Record."""
     record = MagicMock()
     record.__getitem__ = lambda self, key: data[key]
@@ -105,7 +107,7 @@ def _setup_session_with_user_and_data(
 async def test_create_investigation(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    record_data = {
+    record_data: dict[str, Any] = {
         "id": "test-uuid",
         "title": "Test Investigation",
         "description": "",

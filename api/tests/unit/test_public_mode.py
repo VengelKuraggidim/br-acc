@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from httpx import AsyncClient
 
 
-class _FakeNode(dict):
+class _FakeNode(dict[str, object]):
     def __init__(self, element_id: str, labels: list[str], **props: object) -> None:
         super().__init__(props)
         self.element_id = element_id
@@ -25,7 +25,7 @@ class _FakeEndpoint:
         self.element_id = element_id
 
 
-class _FakeRel(dict):
+class _FakeRel(dict[str, object]):
     def __init__(
         self,
         element_id: str,

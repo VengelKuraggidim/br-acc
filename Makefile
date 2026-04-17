@@ -119,8 +119,8 @@ lint:
 	cd frontend && npm run lint
 
 type-check:
-	cd api && uv run mypy src/
-	cd etl && uv run mypy src/
+	cd api && uv run mypy src/ tests/
+	cd etl && uv run mypy src/ tests/
 	cd frontend && npm run type-check
 
 test-api:
