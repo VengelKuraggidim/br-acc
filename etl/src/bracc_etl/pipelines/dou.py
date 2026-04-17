@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,10 +25,9 @@ from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
     deduplicate_rows,
-    format_cnpj,
-    format_cpf,
+    extract_cnpjs,
+    extract_cpfs,
     parse_date,
-    strip_document,
 )
 
 if TYPE_CHECKING:
@@ -60,13 +58,6 @@ _PENALTY_KEYWORDS = (
     "inidoneidade", "advertencia", "advertência",
 )
 
-# Regex for document extraction
-_CPF_RE = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
-_CNPJ_RE = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
-# Also match raw 14-digit CNPJs
-_CNPJ_RAW_RE = re.compile(r"\d{14}")
-
-
 def _classify_act(title: str, abstract: str) -> str:
     """Classify a DOU act by type based on title and abstract text."""
     combined = f"{title} {abstract}".lower()
@@ -86,44 +77,6 @@ def _make_act_id(url_title: str, date: str) -> str:
     """Generate a stable act ID from URL title and date."""
     raw = f"dou_{url_title}_{date}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
-
-
-def _extract_cpfs(text: str) -> list[str]:
-    """Extract formatted CPFs from text."""
-    matches = _CPF_RE.findall(text)
-    cpfs: list[str] = []
-    for m in matches:
-        digits = strip_document(m)
-        if len(digits) == 11:
-            cpfs.append(format_cpf(m))
-    return cpfs
-
-
-def _extract_cnpjs(text: str) -> list[str]:
-    """Extract and format CNPJ numbers from text.
-
-    Matches both formatted (XX.XXX.XXX/XXXX-XX) and raw 14-digit CNPJs.
-    """
-    formatted = _CNPJ_RE.findall(text)
-    raw = _CNPJ_RAW_RE.findall(text)
-
-    seen: set[str] = set()
-    cnpjs: list[str] = []
-
-    for m in formatted:
-        digits = strip_document(m)
-        if len(digits) == 14 and digits not in seen:
-            seen.add(digits)
-            cnpjs.append(format_cnpj(m))
-
-    for m in raw:
-        # Skip if this raw match is part of an already-matched formatted CNPJ
-        if len(m) == 14 and m not in seen:
-            # Verify it's not a substring of CPF or other number
-            seen.add(m)
-            cnpjs.append(format_cnpj(m))
-
-    return cnpjs
 
 
 class DouPipeline(Pipeline):
@@ -351,7 +304,7 @@ class DouPipeline(Pipeline):
             })
 
             # Extract CPFs -> PUBLICOU relationships
-            cpfs = _extract_cpfs(abstract)
+            cpfs = extract_cpfs(abstract)
             for cpf in cpfs:
                 person_rels.append({
                     "source_key": cpf,
@@ -359,7 +312,7 @@ class DouPipeline(Pipeline):
                 })
 
             # Extract CNPJs -> MENCIONOU relationships
-            cnpjs = _extract_cnpjs(abstract)
+            cnpjs = extract_cnpjs(abstract)
             for cnpj in cnpjs:
                 company_rels.append({
                     "source_key": cnpj,

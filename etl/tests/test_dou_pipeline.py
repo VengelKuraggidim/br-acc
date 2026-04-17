@@ -16,10 +16,9 @@ import pytest
 from bracc_etl.pipelines.dou import (
     DouPipeline,
     _classify_act,
-    _extract_cnpjs,
-    _extract_cpfs,
     _make_act_id,
 )
+from bracc_etl.transforms import extract_cnpjs, extract_cpfs
 
 try:
     import pyarrow  # noqa: F401
@@ -213,19 +212,19 @@ class TestClassification:
 class TestCpfExtraction:
     def test_extracts_formatted_cpf(self) -> None:
         text = "NOMEAR FULANO, CPF 529.982.247-25, para o cargo"
-        result = _extract_cpfs(text)
+        result = extract_cpfs(text)
         assert result == ["529.982.247-25"]
 
     def test_multiple_cpfs(self) -> None:
         text = "CPF 529.982.247-25 e CPF 111.444.777-35 nomeados"
-        result = _extract_cpfs(text)
+        result = extract_cpfs(text)
         assert len(result) == 2
         assert "529.982.247-25" in result
         assert "111.444.777-35" in result
 
     def test_no_cpf_returns_empty(self) -> None:
         text = "Nenhum CPF neste texto"
-        result = _extract_cpfs(text)
+        result = extract_cpfs(text)
         assert result == []
 
 
@@ -235,29 +234,29 @@ class TestCpfExtraction:
 class TestCnpjExtraction:
     def test_extracts_formatted_cnpj(self) -> None:
         text = "Empresa CNPJ 11.222.333/0001-81 contratada"
-        result = _extract_cnpjs(text)
+        result = extract_cnpjs(text)
         assert result == ["11.222.333/0001-81"]
 
     def test_extracts_raw_cnpj(self) -> None:
         text = "Empresa com CNPJ 44555666000199 contratada"
-        result = _extract_cnpjs(text)
+        result = extract_cnpjs(text)
         assert len(result) == 1
         assert result[0] == "44.555.666/0001-99"
 
     def test_multiple_cnpjs(self) -> None:
         text = "CNPJ 11.222.333/0001-81 e CNPJ 99.888.777/0001-66"
-        result = _extract_cnpjs(text)
+        result = extract_cnpjs(text)
         assert len(result) == 2
 
     def test_no_cnpj_returns_empty(self) -> None:
         text = "Texto sem nenhum CNPJ"
-        result = _extract_cnpjs(text)
+        result = extract_cnpjs(text)
         assert result == []
 
     def test_deduplicates_formatted_and_raw(self) -> None:
         """Same CNPJ appearing as formatted and raw should only appear once."""
         text = "CNPJ 11.222.333/0001-81 (11222333000181)"
-        result = _extract_cnpjs(text)
+        result = extract_cnpjs(text)
         assert len(result) == 1
 
 

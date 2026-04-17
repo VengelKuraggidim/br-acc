@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +11,7 @@ from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
     deduplicate_rows,
+    extract_cnpjs,
     format_cnpj,
     format_cpf,
     normalize_name,
@@ -24,8 +24,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CNPJ_FMT_RE = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
-_CNPJ_RAW_RE = re.compile(r"\d{14}")
 _TEMPORAL_RULE = (
     "event_date>=inquiry.date_start and "
     "(inquiry.date_end is null or event_date<=inquiry.date_end)"
@@ -49,27 +47,6 @@ def _infer_kind(name: str, explicit_kind: str = "") -> str:
     if "CPMI" in name.upper():
         return "CPMI"
     return "CPI"
-
-
-def _extract_cnpjs(text: str) -> list[str]:
-    formatted = _CNPJ_FMT_RE.findall(text)
-    raw = _CNPJ_RAW_RE.findall(text)
-
-    seen: set[str] = set()
-    out: list[str] = []
-
-    for match in formatted:
-        digits = strip_document(match)
-        if len(digits) == 14 and digits not in seen:
-            seen.add(digits)
-            out.append(format_cnpj(match))
-
-    for match in raw:
-        if len(match) == 14 and match not in seen:
-            seen.add(match)
-            out.append(format_cnpj(match))
-
-    return out
 
 
 def _temporal_status(event_date: str, start_date: str, end_date: str) -> str:
@@ -402,7 +379,7 @@ class SenadoCpisPipeline(Pipeline):
                     "run_id": self.run_id,
                 })
 
-            for cnpj in _extract_cnpjs(text):
+            for cnpj in extract_cnpjs(text):
                 mentions.append({
                     "cnpj": cnpj,
                     "target_key": requirement_id,

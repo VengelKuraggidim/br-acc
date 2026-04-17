@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -13,18 +12,14 @@ from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
     deduplicate_rows,
-    format_cnpj,
+    extract_cnpjs_with_spans,
     parse_date,
-    strip_document,
 )
 
 if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
-
-_CNPJ_COMBINED_RE = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}|\d{14}")
-
 
 def _stable_id(*parts: str, length: int = 24) -> str:
     raw = "|".join(parts)
@@ -33,23 +28,6 @@ def _stable_id(*parts: str, length: int = 24) -> str:
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _extract_cnpjs_with_spans(text: str) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
-    seen: set[str] = set()
-
-    for match in _CNPJ_COMBINED_RE.finditer(text):
-        raw = match.group(0)
-        digits = strip_document(raw)
-        if len(digits) != 14 or digits in seen:
-            continue
-        seen.add(digits)
-        cnpj = format_cnpj(digits)
-        span = f"{match.start()}:{match.end()}"
-        out.append((cnpj, span))
-
-    return out
 
 
 class QueridoDiarioPipeline(Pipeline):
@@ -175,7 +153,7 @@ class QueridoDiarioPipeline(Pipeline):
 
             if text_status == "available":
                 mention_text = f"{title}\n{text}"
-                for cnpj, span in _extract_cnpjs_with_spans(mention_text):
+                for cnpj, span in extract_cnpjs_with_spans(mention_text):
                     mentions.append({
                         "cnpj": cnpj,
                         "target_key": act_id,
