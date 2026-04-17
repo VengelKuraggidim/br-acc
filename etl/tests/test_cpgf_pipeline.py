@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from bracc_etl.pipelines.cpgf import CpgfPipeline, _make_expense_id, _parse_brl_value
+from bracc_etl.pipelines.cpgf import CpgfPipeline, _make_expense_id
 from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -226,32 +226,6 @@ class TestExpenseIdHash:
         desc = "TEST"
         expected = hashlib.sha256(f"cpgf_{cpf}_{date}_{amount}_{desc}".encode()).hexdigest()[:16]
         assert _make_expense_id(cpf, date, amount, desc) == expected
-
-
-# ---------------------------------------------------------------------------
-# BRL Value Parsing
-# ---------------------------------------------------------------------------
-class TestParseBrlValue:
-    def test_normal_value(self) -> None:
-        assert _parse_brl_value("1.234,56") == 1234.56
-
-    def test_zero(self) -> None:
-        assert _parse_brl_value("0,00") == 0.0
-
-    def test_empty(self) -> None:
-        assert _parse_brl_value("") == 0.0
-
-    def test_whitespace(self) -> None:
-        assert _parse_brl_value("  ") == 0.0
-
-    def test_no_thousands(self) -> None:
-        assert _parse_brl_value("350,75") == 350.75
-
-    def test_large_value(self) -> None:
-        assert _parse_brl_value("1.000.000,00") == 1_000_000.0
-
-    def test_invalid_returns_zero(self) -> None:
-        assert _parse_brl_value("abc") == 0.0
 
 
 # ---------------------------------------------------------------------------

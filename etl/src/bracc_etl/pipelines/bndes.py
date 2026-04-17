@@ -15,6 +15,7 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cnpj,
     normalize_name,
+    parse_brl_amount,
     strip_document,
 )
 
@@ -39,16 +40,6 @@ class BndesPipeline(Pipeline):
         self._raw: pd.DataFrame = pd.DataFrame()
         self.finances: list[dict[str, Any]] = []
         self.relationships: list[dict[str, Any]] = []
-
-    def _parse_value(self, value: str) -> float:
-        """Parse Brazilian numeric format (1.234.567,89) to float."""
-        if not value or not value.strip():
-            return 0.0
-        cleaned = value.strip().replace(".", "").replace(",", ".")
-        try:
-            return float(cleaned)
-        except ValueError:
-            return 0.0
 
     def extract(self) -> None:
         bndes_dir = Path(self.data_dir) / "bndes"
@@ -84,8 +75,8 @@ class BndesPipeline(Pipeline):
                 continue
 
             finance_id = f"bndes_{contrato}"
-            valor_contratado = self._parse_value(str(row.get("valor_contratado_reais", "")))
-            valor_desembolsado = self._parse_value(str(row.get("valor_desembolsado_reais", "")))
+            valor_contratado = parse_brl_amount(row.get("valor_contratado_reais", ""))
+            valor_desembolsado = parse_brl_amount(row.get("valor_desembolsado_reais", ""))
             date = str(row.get("data_da_contratacao", "")).strip()
             description = str(row.get("descricao_do_projeto", "")).strip()
             cliente = normalize_name(str(row.get("cliente", "")))

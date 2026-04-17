@@ -25,6 +25,7 @@ from bracc_etl.transforms import (
     format_cnpj,
     format_cpf,
     normalize_name,
+    parse_brl_amount,
     parse_date,
     strip_document,
 )
@@ -33,17 +34,6 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_brl_value(value: str) -> float:
-    """Parse Brazilian numeric format (1.234,56) to float."""
-    if not value or not value.strip():
-        return 0.0
-    cleaned = value.strip().replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
 
 
 def _make_expense_id(senator_name: str, date: str, supplier_doc: str, value: str) -> str:
@@ -174,7 +164,7 @@ class SenadoPipeline(Pipeline):
                 continue
 
             date = parse_date(str(row.get("DATA", "")))
-            value = _parse_brl_value(str(row.get("VALOR_REEMBOLSADO", "")))
+            value = parse_brl_amount(row.get("VALOR_REEMBOLSADO", ""))
             documento = str(row.get("DOCUMENTO", "")).strip()
             detalhamento = str(row.get("DETALHAMENTO", "")).strip()
 

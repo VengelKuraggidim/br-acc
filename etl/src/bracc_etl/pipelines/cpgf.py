@@ -19,6 +19,7 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cpf,
     normalize_name,
+    parse_brl_amount,
     parse_date,
     strip_document,
 )
@@ -53,17 +54,6 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         elif stripped != col:
             rename_map[col] = stripped
     return df.rename(columns=rename_map) if rename_map else df
-
-
-def _parse_brl_value(value: str) -> float:
-    """Parse Brazilian numeric format (1.234,56) to float."""
-    if not value or not value.strip():
-        return 0.0
-    cleaned = value.strip().replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
 
 
 def _make_expense_id(cpf: str, date: str, amount: str, description: str) -> str:
@@ -138,7 +128,7 @@ class CpgfPipeline(Pipeline):
             # Use full CPF when available, otherwise keep masked format
             cpf_formatted = format_cpf(cpf_raw) if len(digits) == 11 else cpf_raw
 
-            amount = _parse_brl_value(str(row.get("VALOR TRANSACAO", "")))
+            amount = parse_brl_amount(row.get("VALOR TRANSACAO", ""))
             if amount == 0.0:
                 skipped += 1
                 continue

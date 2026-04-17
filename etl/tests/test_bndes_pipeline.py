@@ -102,25 +102,6 @@ def test_load_calls_batch_loader() -> None:
     assert session.run.call_count >= 2
 
 
-class TestParseValue:
-    def test_blank_returns_zero(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("") == 0.0
-        assert pipeline._parse_value("   ") == 0.0
-
-    def test_brazilian_thousands_and_decimal(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("1.234.567,89") == 1234567.89
-
-    def test_comma_only_decimal(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("500,00") == 500.0
-
-    def test_invalid_returns_zero(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("abc") == 0.0
-
-
 def test_extract_with_missing_data_dir(tmp_path: Path) -> None:
     """Missing `bndes/` data dir must warn and leave `_raw` empty."""
     pipeline = _make_pipeline(data_dir=str(tmp_path))

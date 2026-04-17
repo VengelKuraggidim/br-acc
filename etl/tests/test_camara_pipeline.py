@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from bracc_etl.pipelines.camara import CamaraPipeline, _make_expense_id, _parse_brl_value
+from bracc_etl.pipelines.camara import CamaraPipeline, _make_expense_id
 from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -33,20 +33,6 @@ class TestCamaraPipelineMetadata:
 
     def test_source_id(self) -> None:
         assert CamaraPipeline.source_id == "camara"
-
-
-class TestParseBrlValue:
-    def test_standard_format(self) -> None:
-        assert _parse_brl_value("1.234,56") == 1234.56
-
-    def test_simple_value(self) -> None:
-        assert _parse_brl_value("567,89") == 567.89
-
-    def test_empty_string(self) -> None:
-        assert _parse_brl_value("") == 0.0
-
-    def test_invalid_value(self) -> None:
-        assert _parse_brl_value("abc") == 0.0
 
 
 class TestMakeExpenseId:
