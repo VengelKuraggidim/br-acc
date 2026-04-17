@@ -1,6 +1,8 @@
-# Public Scope
+# Fiscal Cidadão — Public Scope
 
-This page defines the public boundary of `brunoclz/br-acc`.
+> Fork of [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3) re-scoped to Goiás. The public-boundary rules below are inherited from upstream and continue to apply to this fork.
+
+This page defines the public boundary of this repository (fork of `brunoclz/br-acc`).
 
 ## Included In Public Repo
 

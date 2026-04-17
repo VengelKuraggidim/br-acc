@@ -1,4 +1,6 @@
-# Reproducibility
+# Fiscal Cidadão — Reproducibility
+
+> Fork of [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3) re-scoped to Goiás. The reproducibility commands below are unchanged from upstream; the `bracc-etl` CLI name is preserved intentionally.
 
 ## Quick Local Demo (Deterministic)
 

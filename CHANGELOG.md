@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), version
 
 ---
 
+## [Unreleased] - Rebrand to "Fiscal Cidadão" (fork re-scope to Goiás)
+
+### Changed
+- **Rebrand**: user-facing name changed from "br/acc" / "BR-ACC" to **"Fiscal Cidadão"** across README (EN/pt-BR), top-level docs, frontend titles, headers, and i18n strings.
+- **Rescope**: this fork is being narrowed from the full federal-scope upstream (`brunoclz/br-acc`) to a **Goiás-only** focus. Federal datasets remain ingested where they add context to GO-based entities, but new pipeline work and product roadmap center on GO sources (`camara_goiania`, `folha_go`, `mides`, `siop` GO transfers, IBAMA embargoes in GO, etc.).
+- Frontend `<title>`, login screen title, app shell logo, mobile-block screen, error boundary, and footer brand strings updated to "Fiscal Cidadão".
+- `frontend/package.json` gained a `description` field reflecting the new name and scope.
+
+### Preserved (intentionally NOT renamed)
+- Internal Python package names (`bracc`, `bracc_etl`) and the `bracc-etl` CLI entry point remain unchanged to avoid breaking import paths, pyproject entry points, and downstream consumers.
+- Package names in `frontend/package.json` and any root `package.json` are unchanged to keep npm workflows working.
+- All copyright notices, the AGPL v3 `LICENSE`, and upstream attribution to `brunoclz/br-acc` are preserved in full.
+
+### Upstream
+- Derived from [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc), AGPL v3. Attribution added to README (EN and pt-BR).
+
+---
+
 ## [v0.4.0] - 2026-03-02
 
 ### Added

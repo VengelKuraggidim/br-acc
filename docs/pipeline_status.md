@@ -1,4 +1,6 @@
-# Pipeline Status
+# Fiscal Cidadão — Pipeline Status
+
+> Fork of [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3) re-scoped to Goiás. The table below is auto-generated and still lists all registered sources; Goiás-specific pipelines (`camara_goiania`, `folha_go`, `mides`, etc.) are the priority for this fork.
 
 Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T05:38:37Z).
 

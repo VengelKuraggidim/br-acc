@@ -1,8 +1,10 @@
-# Contributing to BR/ACC Open Graph
+# Contributing to Fiscal Cidadão
 
 Language: **English** | [Português (Brasil)](docs/pt-BR/CONTRIBUTING.md)
 
-Thanks for helping improve BR/ACC Open Graph.
+Thanks for helping improve Fiscal Cidadão — a fork of [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3) re-scoped to Goiás.
+
+> **Naming note.** User-facing contexts use the name "Fiscal Cidadão". Internal Python packages (`bracc`, `bracc_etl`), the `bracc-etl` CLI entry point, and upstream import paths remain unchanged. When adding code, keep using the `bracc` / `bracc_etl` identifiers; only adjust user-visible strings (UI copy, docs titles, page headers) to the new brand.
 
 ## Ground Rules
 
