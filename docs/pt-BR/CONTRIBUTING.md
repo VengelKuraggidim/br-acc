@@ -23,9 +23,17 @@ cd ../frontend && npm install
 Execute antes de abrir PR:
 
 ```bash
-make check
-make neutrality
+make pre-commit
 ```
+
+`pre-commit` agrupa tudo o que o CI cobra em cada PR — lint,
+type-check, testes unitários, auditoria de neutralidade e
+governança do registro/docs — pra evitar surpresa de verde-local /
+vermelho-CI.
+
+Alvos individuais também estão disponíveis: `make check` (lint +
+type + testes apenas), `make neutrality`, `make check-public-claims`,
+`make check-pipeline-contracts`, `make check-pipeline-inputs`.
 
 ## Expectativas para Pull Request
 
