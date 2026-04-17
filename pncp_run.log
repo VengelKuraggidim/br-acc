@@ -9,3 +9,12 @@
 2026-04-17 23:12:03,266 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20241014&dataFinal=20241112&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
 2026-04-17 23:12:25,504 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20241113&dataFinal=20241212&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
 2026-04-17 23:12:47,729 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20241213&dataFinal=20250111&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 204 "
+2026-04-17 23:13:29,930 WARNING PNCP API timeout after 2 retries (modalidade 1, window 20250112-20250210, page 1)
+2026-04-17 23:13:30,137 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250211&dataFinal=20250312&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:13:30,235 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250313&dataFinal=20250411&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:14:12,489 WARNING PNCP API timeout after 2 retries (modalidade 1, window 20250412-20250511, page 1)
+2026-04-17 23:14:12,685 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250512&dataFinal=20250610&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:14:35,153 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250611&dataFinal=20250710&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:15:17,302 WARNING PNCP API timeout after 2 retries (modalidade 1, window 20250711-20250809, page 1)
+2026-04-17 23:15:17,507 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250810&dataFinal=20250908&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:15:17,640 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250909&dataFinal=20251008&uf=GO&codigoModalidadeContratacao=1&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
