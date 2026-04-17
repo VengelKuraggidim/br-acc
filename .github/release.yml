@@ -30,3 +30,4 @@ changelog:
       - ci
       - refactor-internal
       - no-release-note
+      - dependencies
