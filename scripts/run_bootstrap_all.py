@@ -118,14 +118,14 @@ def compose_base(compose_file: Path) -> list[str]:
     return ["docker", "compose", "-f", str(compose_file)]
 
 
-def wait_for_neo4j(cwd: Path, password: str, timeout_sec: int = 300) -> bool:
+def wait_for_neo4j(cwd: Path, password: str, container: str = "bracc-neo4j", timeout_sec: int = 300) -> bool:
     start = time.time()
     while (time.time() - start) < timeout_sec:
         completed = run_cmd(
             [
                 "docker",
                 "exec",
-                "bracc-neo4j",
+                container,
                 "cypher-shell",
                 "-u",
                 "neo4j",
@@ -180,12 +180,12 @@ def determine_reset_policy(args: argparse.Namespace) -> bool:
         print("Please answer yes or no.")
 
 
-def reset_graph(cwd: Path, password: str) -> None:
+def reset_graph(cwd: Path, password: str, container: str = "bracc-neo4j") -> None:
     completed = run_cmd(
         [
             "docker",
             "exec",
-            "bracc-neo4j",
+            container,
             "cypher-shell",
             "-u",
             "neo4j",
@@ -260,6 +260,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contract-path", default="config/bootstrap_all_contract.yml")
     parser.add_argument("--registry-path", default="docs/source_registry_br_v1.csv")
     parser.add_argument("--compose-file", default="infra/docker-compose.yml")
+    parser.add_argument(
+        "--stack-services",
+        default="neo4j api",
+        help="Space-separated compose service names to bring up before ingestion",
+    )
+    parser.add_argument(
+        "--neo4j-container",
+        default="bracc-neo4j",
+        help="Container name used for docker exec cypher-shell calls",
+    )
     parser.add_argument("--sources", default="", help="Optional comma-separated pipeline subset")
     parser.add_argument("--yes-reset", action="store_true")
     parser.add_argument("--no-reset", action="store_true")
@@ -367,8 +377,9 @@ def main() -> int:
 
     compose = compose_base(compose_path)
 
+    stack_services = [svc for svc in args.stack_services.split() if svc]
     stack_up = run_cmd(
-        compose + ["up", "-d", "neo4j", "api", "frontend"],
+        compose + ["up", "-d", *stack_services],
         cwd=repo_root,
         env=compose_env,
     )
@@ -376,7 +387,7 @@ def main() -> int:
         print("Failed to start Docker stack", file=sys.stderr)
         return 1
 
-    if not wait_for_neo4j(repo_root, neo4j_password):
+    if not wait_for_neo4j(repo_root, neo4j_password, container=args.neo4j_container):
         print("Neo4j did not become healthy", file=sys.stderr)
         return 1
 
@@ -391,7 +402,7 @@ def main() -> int:
         return 1
 
     if db_reset:
-        reset_graph(repo_root, neo4j_password)
+        reset_graph(repo_root, neo4j_password, container=args.neo4j_container)
 
     def normalize_etl_shell_cmd(shell_cmd: str) -> str:
         return re.sub(r"(?<!\S)bracc-etl(?=\s)", "uv run bracc-etl", shell_cmd)

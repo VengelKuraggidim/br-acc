@@ -40,6 +40,88 @@ logger = logging.getLogger(__name__)
 _API_BASE = "https://www.goiania.go.leg.br"
 _TIMEOUT = 30
 
+# Canonical endpoint -> output filename mapping used by both the pipeline's
+# offline fallback (``extract``) and the ``fetch_to_disk`` helper below.
+_ENDPOINT_FILES: tuple[tuple[str, str], ...] = (
+    ("@@portalmodelo-json", "vereadores.json"),
+    ("@@transparency-json", "transparency.json"),
+    ("@@pl-json", "proposicoes.json"),
+)
+
+
+def _http_get_json(endpoint: str) -> Any:
+    """Fetch a JSON endpoint from the Camara Goiania portal.
+
+    Returns the raw decoded payload (list or dict) or ``None`` on failure.
+    This helper is shared by the pipeline's in-memory extract and the
+    ``fetch_to_disk`` CLI helper so both paths stay in sync on URLs/timeouts.
+    """
+    url = f"{_API_BASE}/{endpoint}"
+    try:
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            return resp.json()
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+        logger.warning("[camara_goiania] API request failed (%s): %s", endpoint, exc)
+        return None
+
+
+def _unwrap_records(payload: Any) -> list[dict[str, Any]]:
+    """Normalize a Camara Goiania JSON payload into a list of dict rows."""
+    if isinstance(payload, list):
+        return [r for r in payload if isinstance(r, dict)]
+    if isinstance(payload, dict):
+        for key in ("items", "results", "data", "records"):
+            if isinstance(payload.get(key), list):
+                return [r for r in payload[key] if isinstance(r, dict)]
+        return [payload]
+    return []
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    limit: int | None = None,
+) -> list[Path]:
+    """Download the Camara Municipal de Goiania JSON feeds to ``output_dir``.
+
+    Hits the three portal endpoints (vereadores, transparency, proposicoes),
+    optionally truncates each to ``limit`` records, and writes them as
+    ``vereadores.json`` / ``transparency.json`` / ``proposicoes.json`` — the
+    exact filenames the pipeline's ``extract`` step looks for locally.
+
+    Returns the list of files actually written. Endpoints that fail the
+    network fetch are logged and skipped (the pipeline's online fallback
+    will still retry them at run time if needed).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    written: list[Path] = []
+    for endpoint, filename in _ENDPOINT_FILES:
+        payload = _http_get_json(endpoint)
+        if payload is None:
+            logger.warning(
+                "[camara_goiania] skipping %s (no payload)", filename
+            )
+            continue
+
+        records = _unwrap_records(payload)
+        if limit is not None:
+            records = records[:limit]
+
+        target = output_dir / filename
+        target.write_text(
+            json.dumps(records, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        written.append(target)
+        logger.info(
+            "[camara_goiania] wrote %s (%d records)", target, len(records)
+        )
+
+    return written
+
 
 class CamaraGoianiaPipeline(Pipeline):
     """ETL pipeline for Camara Municipal de Goiania."""
@@ -91,24 +173,10 @@ class CamaraGoianiaPipeline(Pipeline):
 
     def _fetch_json(self, endpoint: str) -> list[dict[str, Any]]:
         """Fetch JSON from the Camara API."""
-        url = f"{_API_BASE}/{endpoint}"
-        try:
-            with httpx.Client(timeout=_TIMEOUT) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-                payload = resp.json()
-        except (httpx.HTTPError, json.JSONDecodeError) as exc:
-            logger.warning("[camara_goiania] API request failed (%s): %s", endpoint, exc)
+        payload = _http_get_json(endpoint)
+        if payload is None:
             return []
-
-        if isinstance(payload, list):
-            return [r for r in payload if isinstance(r, dict)]
-        if isinstance(payload, dict):
-            for key in ("items", "results", "data", "records"):
-                if isinstance(payload.get(key), list):
-                    return [r for r in payload[key] if isinstance(r, dict)]
-            return [payload]
-        return []
+        return _unwrap_records(payload)
 
     # ------------------------------------------------------------------
     # extract

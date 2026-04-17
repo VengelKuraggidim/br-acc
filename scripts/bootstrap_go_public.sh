@@ -10,5 +10,8 @@ echo "Contract: config/bootstrap_go_contract.yml (subset mode)."
 exec python3 "${REPO_ROOT}/scripts/run_bootstrap_all.py" \
   --repo-root "${REPO_ROOT}" \
   --contract-path "config/bootstrap_go_contract.yml" \
+  --compose-file "docker-compose.yml" \
+  --stack-services "neo4j bracc-api" \
+  --neo4j-container "fiscal-neo4j" \
   --output-label "bootstrap-go" \
   "$@"

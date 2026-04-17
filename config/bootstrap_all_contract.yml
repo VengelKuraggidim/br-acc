@@ -50,12 +50,15 @@
     },
     {
       "pipeline_id": "camara_goiania",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/camara_goiania/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_camara_goiania.py --output-dir ../data/camara_goiania"
+      ]
     },
     {
       "pipeline_id": "camara_inquiries",
@@ -93,7 +96,7 @@
       "blocking_reason_if_any": "-",
       "core": true,
       "download_commands": [
-        "cd /workspace/etl && bracc-etl download --output-dir ../data/cnpj --files 10 --skip-existing"
+        "cd /workspace/etl && bracc-etl download --output-dir ../data/cnpj --skip-existing"
       ]
     },
     {
@@ -105,7 +108,7 @@
       "blocking_reason_if_any": "-",
       "core": true,
       "download_commands": [
-        "python3 /workspace/scripts/download_comprasnet.py 2019 2020 2021 2022 2023 2024 2025 2026"
+        "cd /workspace/etl && uv run python ../scripts/download_comprasnet.py --output-dir ../data/comprasnet 2019 2020 2021 2022 2023 2024 2025 2026"
       ]
     },
     {
@@ -119,21 +122,27 @@
     },
     {
       "pipeline_id": "cvm",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/cvm/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_cvm.py --output-dir ../data/cvm"
+      ]
     },
     {
       "pipeline_id": "cvm_funds",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/cvm_funds/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_cvm_funds.py --output-dir ../data/cvm_funds"
+      ]
     },
     {
       "pipeline_id": "datajud",
@@ -179,12 +188,15 @@
     },
     {
       "pipeline_id": "folha_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/folha_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_folha_go.py --output-dir ../data/folha_go"
+      ]
     },
     {
       "pipeline_id": "holdings",
@@ -272,12 +284,15 @@
     },
     {
       "pipeline_id": "pgfn",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/pgfn/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_pgfn.py --output-dir ../data/pgfn"
+      ]
     },
     {
       "pipeline_id": "pncp",
@@ -290,12 +305,15 @@
     },
     {
       "pipeline_id": "pncp_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/pncp_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_pncp_go.py --output-dir ../data/pncp_go"
+      ]
     },
     {
       "pipeline_id": "querido_diario",
@@ -308,12 +326,15 @@
     },
     {
       "pipeline_id": "querido_diario_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/querido_diario_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_querido_diario_go.py --output-dir ../data/querido_diario_go"
+      ]
     },
     {
       "pipeline_id": "rais",
@@ -404,12 +425,15 @@
     },
     {
       "pipeline_id": "tcm_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tcm_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tcm_go.py --output-dir ../data/tcm_go"
+      ]
     },
     {
       "pipeline_id": "tcu",
@@ -440,39 +464,51 @@
     },
     {
       "pipeline_id": "transparencia",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/transparencia/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_transparencia.py --output-dir ../data/transparencia --datasets compras,servidores,emendas --year 2021 --year 2022 --year 2023 --year 2024 --year 2025"
+      ]
     },
     {
       "pipeline_id": "tse",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tse/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse.py --output-dir ../data/tse --uf GO --years 1998 2002 2006 2010 2014 2018 2022"
+      ]
     },
     {
       "pipeline_id": "tse_bens",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tse_bens/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse_bens.py --output-dir ../data/tse_bens --uf GO --years 2006 2010 2014 2018 2022"
+      ]
     },
     {
       "pipeline_id": "tse_filiados",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tse_filiados/*"
       ],
-      "blocking_reason_if_any": "-",
-      "core": false
+      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror); wrapper exits 0 and skips in public mode.",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse_filiados.py --output-dir ../data/tse_filiados --uf GO"
+      ]
     },
     {
       "pipeline_id": "un_sanctions",

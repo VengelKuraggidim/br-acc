@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import logging
 import time
@@ -26,6 +27,21 @@ REQUEST_DELAY = 0.3
 RREO_YEARS = range(2021, 2025)
 RREO_ANEXO = "RREO-Anexo 01"
 
+# Summary-account keywords kept when persisting RREO rows to disk. Mirrors the
+# filter applied by TcmGoPipeline._extract_finbra_api so that the CSVs written
+# by fetch_to_disk can be consumed verbatim by the ETL step without an extra
+# transform.
+RREO_SUMMARY_KEYWORDS = (
+    "RECEITAS (EXCETO INTRA",
+    "RECEITA CORRENTE",
+    "RECEITA TRIBUTÁRIA",
+    "RECEITA DE TRANSFERÊNCIA",
+    "DESPESAS (EXCETO INTRA",
+    "DESPESAS CORRENTES",
+    "DESPESAS DE CAPITAL",
+    "DESPESA TOTAL COM PESSOAL",
+)
+
 # Canonical cumulative-realized column names in SICONFI RREO Anexo 01.
 # The endpoint returns ~7 rows per (ente, ano, conta), one per "coluna"
 # (previsao inicial, previsao atualizada, no bimestre, ate o bimestre,
@@ -38,6 +54,166 @@ EXPENDITURE_COLUMNS = {
 }
 # FINBRA CSV fallback uses a single pre-aggregated "Valor" column.
 FINBRA_COLUMN = "valor"
+
+
+# ----------------------------------------------------------------------
+# Module-level HTTP helpers (shared by the pipeline and fetch_to_disk).
+# ----------------------------------------------------------------------
+
+def _fetch_entes_goias(client: httpx.Client) -> list[dict[str, Any]]:
+    """Return all Goias entities from the SICONFI entes endpoint."""
+    url = f"{API_BASE}entes"
+    resp = client.get(url)
+    resp.raise_for_status()
+    data = resp.json()
+    items = data.get("items", []) if isinstance(data, dict) else data
+    return [
+        r for r in items
+        if str(r.get("cod_ibge", "")).startswith(GOIAS_UF_CODE)
+    ]
+
+
+def _fetch_rreo_for_muni_year(
+    client: httpx.Client, cod_ibge: str, year: int
+) -> list[dict[str, Any]]:
+    """Fetch summary RREO Anexo 01 rows for a single municipality/year.
+
+    Returns only the top-level summary accounts (keeping the same filter
+    the ETL pipeline applies), annotated with ``an_exercicio``. Raises
+    ``httpx.HTTPError`` on transport/HTTP errors other than 404 (which
+    returns an empty list, matching the pipeline's graceful skip).
+    """
+    url = f"{API_BASE}rreo"
+    params = {
+        "an_exercicio": str(year),
+        "nr_periodo": "6",
+        "co_tipo_demonstrativo": "RREO",
+        "no_anexo": RREO_ANEXO,
+        "id_ente": cod_ibge,
+    }
+    resp = client.get(url, params=params)
+    if resp.status_code == 404:
+        return []
+    resp.raise_for_status()
+    data = resp.json()
+    items = data.get("items", []) if isinstance(data, dict) else data
+    kept: list[dict[str, Any]] = []
+    for item in items:
+        conta = str(item.get("conta", ""))
+        if any(kw in conta.upper() for kw in RREO_SUMMARY_KEYWORDS):
+            item["an_exercicio"] = str(year)
+            kept.append(item)
+    return kept
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    limit_municipios: int | None = None,
+    years: list[int] | None = None,
+) -> list[Path]:
+    """Download TCM-GO (SICONFI RREO) raw data to ``output_dir``.
+
+    Writes two kinds of CSV that the TcmGoPipeline already knows how to
+    ingest via its local-CSV fallback path:
+
+    * ``entes.csv`` — list of Goias municipalities (from the SICONFI
+      ``entes`` endpoint), filtered to UF code 52.
+    * ``finbra_rreo_<year>.csv`` — one file per requested year with the
+      summary RREO Anexo 01 rows for every fetched municipality.
+
+    Parameters
+    ----------
+    output_dir:
+        Destination directory. Created if missing.
+    limit_municipios:
+        If set, only the first N Goias municipalities are queried. Useful
+        for smoke tests.
+    years:
+        Explicit list of ``an_exercicio`` values. Defaults to the module
+        constant ``RREO_YEARS`` (2021..2024 inclusive).
+
+    Returns
+    -------
+    List of absolute paths to every CSV written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    years_list = list(years) if years else list(RREO_YEARS)
+    written: list[Path] = []
+
+    with httpx.Client(
+        timeout=REQUEST_TIMEOUT,
+        headers={"User-Agent": "BR-ACC-ETL/1.0 (tcm_go)"},
+    ) as client:
+        entes = _fetch_entes_goias(client)
+        logger.info("Fetched %d Goias entes from SICONFI", len(entes))
+        if limit_municipios is not None:
+            entes = entes[:limit_municipios]
+            logger.info("Limiting to first %d municipalities", len(entes))
+
+        entes_path = output_dir / "entes.csv"
+        _write_csv(entes_path, entes)
+        written.append(entes_path.resolve())
+        logger.info("Wrote %d entes -> %s", len(entes), entes_path)
+
+        for year in years_list:
+            year_rows: list[dict[str, Any]] = []
+            total = len(entes)
+            fetched = 0
+            failed = 0
+            for idx, muni in enumerate(entes, 1):
+                cod_ibge = str(muni.get("cod_ibge", ""))
+                if not cod_ibge:
+                    continue
+                try:
+                    rows = _fetch_rreo_for_muni_year(client, cod_ibge, year)
+                    year_rows.extend(rows)
+                    fetched += 1
+                except httpx.HTTPError as exc:
+                    failed += 1
+                    logger.debug(
+                        "RREO failure for %s/%d: %s", cod_ibge, year, exc
+                    )
+                time.sleep(REQUEST_DELAY)
+                if idx % 50 == 0:
+                    logger.info(
+                        "  Year %d: %d/%d fetched (%d failed, %d rows)",
+                        year, idx, total, failed, len(year_rows),
+                    )
+
+            year_path = output_dir / f"finbra_rreo_{year}.csv"
+            _write_csv(year_path, year_rows)
+            written.append(year_path.resolve())
+            logger.info(
+                "Year %d: wrote %d rows (%d munis fetched, %d failed) -> %s",
+                year, len(year_rows), fetched, failed, year_path,
+            )
+
+    return written
+
+
+def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Write ``rows`` as CSV to ``path``.
+
+    If ``rows`` is empty, writes an empty file (no header) so downstream
+    globbing and contract checks still see the artefact.
+    """
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
+    fieldnames: list[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        for k in r:
+            if k not in seen:
+                seen.add(k)
+                fieldnames.append(str(k))
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow({k: r.get(k, "") for k in fieldnames})
 
 
 class TcmGoPipeline(Pipeline):
@@ -129,17 +305,9 @@ class TcmGoPipeline(Pipeline):
 
     def _extract_entes_api(self) -> None:
         """Fetch list of Goias municipalities from SICONFI entes endpoint."""
-        url = f"{API_BASE}entes"
         try:
             with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-                data = resp.json()
-                items = data.get("items", []) if isinstance(data, dict) else data
-                self._municipalities = [
-                    r for r in items
-                    if str(r.get("cod_ibge", "")).startswith(GOIAS_UF_CODE)
-                ]
+                self._municipalities = _fetch_entes_goias(client)
                 logger.info(
                     "Fetched %d Goias municipalities from API", len(self._municipalities)
                 )
@@ -157,48 +325,19 @@ class TcmGoPipeline(Pipeline):
             logger.warning("No municipalities to fetch fiscal data for")
             return
 
-        url = f"{API_BASE}rreo"
         records: list[dict[str, Any]] = []
         total_munis = len(self._municipalities)
 
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
             for year in RREO_YEARS:
                 fetched_year = 0
-                for idx, muni in enumerate(self._municipalities):
+                for muni in self._municipalities:
                     cod_ibge = str(muni.get("cod_ibge", ""))
-                    params = {
-                        "an_exercicio": str(year),
-                        "nr_periodo": "6",
-                        "co_tipo_demonstrativo": "RREO",
-                        "no_anexo": RREO_ANEXO,
-                        "id_ente": cod_ibge,
-                    }
+                    if not cod_ibge:
+                        continue
                     try:
-                        resp = client.get(url, params=params)
-                        if resp.status_code == 404:
-                            continue
-                        resp.raise_for_status()
-                        data = resp.json()
-                        items = (
-                            data.get("items", [])
-                            if isinstance(data, dict)
-                            else data
-                        )
-                        # Keep only top-level summary accounts to reduce volume
-                        for item in items:
-                            conta = str(item.get("conta", ""))
-                            if any(kw in conta.upper() for kw in (
-                                "RECEITAS (EXCETO INTRA",
-                                "RECEITA CORRENTE",
-                                "RECEITA TRIBUTÁRIA",
-                                "RECEITA DE TRANSFERÊNCIA",
-                                "DESPESAS (EXCETO INTRA",
-                                "DESPESAS CORRENTES",
-                                "DESPESAS DE CAPITAL",
-                                "DESPESA TOTAL COM PESSOAL",
-                            )):
-                                item["an_exercicio"] = str(year)
-                                records.append(item)
+                        rows = _fetch_rreo_for_muni_year(client, cod_ibge, year)
+                        records.extend(rows)
                         fetched_year += 1
                     except httpx.HTTPError as exc:
                         logger.debug(

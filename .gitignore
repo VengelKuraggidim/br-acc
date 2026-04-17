@@ -64,6 +64,10 @@ data/cnpj/extracted/*
 data/cnpj/reference/*
 !data/cnpj/**/.gitkeep
 
+# PNCP GO downloads (reproducible via scripts/download_pncp_go.py)
+data/pncp_go/*.json
+!data/pncp_go/.gitkeep
+
 # Audit artifacts
 audit-results/
 scripts/audit-prompts/

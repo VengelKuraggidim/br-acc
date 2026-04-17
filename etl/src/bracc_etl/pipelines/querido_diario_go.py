@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,10 +25,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://queridodiario.ok.org.br/api/"
+# NOTE: ``queridodiario.ok.org.br/api/`` serves the SPA frontend (HTML), not
+# JSON. The canonical Querido Diário REST API is hosted on the ``api.``
+# subdomain, as already used by ``etl/scripts/download_querido_diario.py``.
+_API_BASE = "https://api.queridodiario.ok.org.br/"
 _GAZETTE_ENDPOINT = "gazettes"
+_CITIES_ENDPOINT = "cities"
 _PAGE_SIZE = 100
 _TIMEOUT = 30
+# Polite throttle between per-territory requests when we have to fall back to
+# looping (the public API is free and community-run).
+_REQUEST_SLEEP_SECONDS = 0.3
+# Goiás UF code — kept for reference / logging. Filtering is now done via
+# per-municipality IBGE codes fetched from the ``/cities`` endpoint.
+_GOIAS_STATE_CODE = "GO"
 
 _CNPJ_RE = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
 _CPF_RE = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
@@ -85,6 +96,205 @@ def _extract_appointments(text: str) -> list[dict[str, str]]:
     return results
 
 
+def _fetch_goias_territory_ids(
+    client: httpx.Client | None = None,
+) -> list[str]:
+    """Enumerate IBGE codes of Goiás municipalities from the Querido Diário API.
+
+    The ``/cities`` endpoint returns the full nationwide registry (≈5570
+    municipalities); ``state_code=GO`` is accepted as a query parameter but is
+    **not** applied server-side, so filtering is performed client-side on the
+    ``state_code`` field of each record.
+
+    Returns a list of 7-digit IBGE codes (as strings) for use in
+    ``territory_ids`` gazette queries. Raises ``httpx.HTTPError`` if the
+    endpoint is unreachable or returns a non-2xx status — there is no silent
+    fallback: callers must handle the exception explicitly.
+    """
+    owns_client = client is None
+    if client is None:
+        client = httpx.Client(timeout=_TIMEOUT)
+    try:
+        resp = client.get(
+            f"{_API_BASE}{_CITIES_ENDPOINT}",
+            params={"state_code": _GOIAS_STATE_CODE},
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    finally:
+        if owns_client:
+            client.close()
+
+    cities: list[dict[str, Any]]
+    if isinstance(payload, dict):
+        raw = payload.get("cities", [])
+        cities = [c for c in raw if isinstance(c, dict)]
+    elif isinstance(payload, list):
+        cities = [c for c in payload if isinstance(c, dict)]
+    else:
+        cities = []
+
+    ids: list[str] = []
+    seen: set[str] = set()
+    for city in cities:
+        if city.get("state_code") != _GOIAS_STATE_CODE:
+            continue
+        ibge = str(city.get("territory_id", "")).strip()
+        if not ibge or ibge in seen:
+            continue
+        seen.add(ibge)
+        ids.append(ibge)
+
+    if not ids:
+        raise RuntimeError(
+            "[querido_diario_go] /cities returned 0 Goiás municipalities — "
+            "API schema may have changed; refusing to proceed.",
+        )
+
+    logger.info(
+        "[querido_diario_go] discovered %d Goiás IBGE territory_ids via /cities",
+        len(ids),
+    )
+    return ids
+
+
+def _fetch_gazettes_for_territories(
+    client: httpx.Client,
+    territory_ids: list[str],
+    keyword: str,
+    remaining: int | None,
+) -> list[dict[str, Any]]:
+    """Page through gazettes for one keyword across the given territory_ids.
+
+    The Querido Diário API accepts ``territory_ids`` as a **repeated** query
+    parameter (CSV form returns 0 results — confirmed empirically). Results
+    are merged server-side across all supplied territories.
+    """
+    collected: list[dict[str, Any]] = []
+    offset = 0
+    while remaining is None or len(collected) < remaining:
+        # httpx serialises a list value as repeated ?k=v1&k=v2, which is what
+        # the API expects.
+        params: list[tuple[str, Any]] = [
+            ("querystring", keyword),
+            ("offset", offset),
+            ("size", _PAGE_SIZE),
+        ]
+        params.extend(("territory_ids", tid) for tid in territory_ids)
+
+        try:
+            resp = client.get(
+                f"{_API_BASE}{_GAZETTE_ENDPOINT}",
+                params=params,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "[querido_diario_go] API error for keyword=%s offset=%d: %s",
+                keyword,
+                offset,
+                exc,
+            )
+            break
+
+        data = resp.json()
+        gazettes = data.get("gazettes", [])
+        if not gazettes:
+            break
+
+        collected.extend(gazettes)
+        offset += len(gazettes)
+
+        if len(gazettes) < _PAGE_SIZE:
+            break
+
+        time.sleep(_REQUEST_SLEEP_SECONDS)
+
+    return collected
+
+
+def fetch_gazettes(limit: int | None = None) -> list[dict[str, Any]]:
+    """Fetch Goiás gazette entries from the Querido Diário public API.
+
+    First enumerates every Goiás IBGE municipality code via ``/cities``, then
+    issues one paginated query per appointment keyword passing **all** GO
+    territory IDs as repeated ``territory_ids`` params (the API merges the
+    results server-side). Results are capped by ``limit`` if provided and
+    de-duplicated on ``(territory_id, date, edition, url)``. Pure network
+    operation — no filesystem side-effects.
+    """
+    total_limit = limit
+    records: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str, str, str]] = set()
+
+    with httpx.Client(timeout=_TIMEOUT) as client:
+        territory_ids = _fetch_goias_territory_ids(client=client)
+
+        for keyword in _APPOINTMENT_KEYWORDS:
+            remaining = (
+                None if total_limit is None else max(0, total_limit - len(records))
+            )
+            if remaining == 0:
+                break
+
+            batch = _fetch_gazettes_for_territories(
+                client=client,
+                territory_ids=territory_ids,
+                keyword=keyword,
+                remaining=remaining,
+            )
+
+            for gazette in batch:
+                key = (
+                    str(gazette.get("territory_id", "")),
+                    str(gazette.get("date", "")),
+                    str(gazette.get("edition", "")),
+                    str(gazette.get("url", "")),
+                )
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                records.append(gazette)
+                if total_limit is not None and len(records) >= total_limit:
+                    break
+
+            time.sleep(_REQUEST_SLEEP_SECONDS)
+
+    return records[: int(total_limit)] if total_limit is not None else records
+
+
+def fetch_to_disk(output_dir: Path, limit: int | None = None) -> list[Path]:
+    """Fetch Goiás gazettes from Querido Diário and persist to ``output_dir``.
+
+    Writes one JSON file per keyword batch using the canonical envelope
+    ``{"gazettes": [...]}`` consumed by :meth:`QueridoDiarioGoPipeline._read_local_files`.
+    The resulting layout matches what the ``file_manifest`` acquisition mode
+    expects under ``data/querido_diario_go/``.
+
+    Returns the list of files written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    records = fetch_gazettes(limit=limit)
+    if not records:
+        logger.warning("[querido_diario_go] API returned no records")
+        return []
+
+    # Group by keyword heuristic: the API response does not echo the query, so
+    # we just write a single consolidated file. The loader accepts both list
+    # and {"gazettes": [...]} envelopes.
+    out_path = output_dir / "gazettes.json"
+    out_path.write_text(
+        json.dumps({"gazettes": records}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info(
+        "[querido_diario_go] wrote %d gazette records to %s", len(records), out_path,
+    )
+    return [out_path]
+
+
 class QueridoDiarioGoPipeline(Pipeline):
     """ETL pipeline for Goiás municipal gazette data from Querido Diário API."""
 
@@ -110,47 +320,12 @@ class QueridoDiarioGoPipeline(Pipeline):
     # ------------------------------------------------------------------
 
     def _fetch_from_api(self) -> list[dict[str, Any]]:
-        """Fetch gazette entries from Querido Diário API for Goiás municipalities."""
-        records: list[dict[str, Any]] = []
-        total_limit = self.limit
+        """Fetch gazette entries from Querido Diário API for Goiás municipalities.
 
-        with httpx.Client(timeout=_TIMEOUT) as client:
-            for keyword in _APPOINTMENT_KEYWORDS:
-                offset = 0
-                while total_limit is None or len(records) < total_limit:
-                    params: dict[str, Any] = {
-                        "territory_ids": "52",
-                        "querystring": keyword,
-                        "offset": offset,
-                        "size": _PAGE_SIZE,
-                    }
-                    try:
-                        resp = client.get(
-                            f"{_API_BASE}{_GAZETTE_ENDPOINT}",
-                            params=params,
-                        )
-                        resp.raise_for_status()
-                    except httpx.HTTPError as exc:
-                        logger.warning(
-                            "[querido_diario_go] API error for keyword=%s offset=%d: %s",
-                            keyword,
-                            offset,
-                            exc,
-                        )
-                        break
-
-                    data = resp.json()
-                    gazettes = data.get("gazettes", [])
-                    if not gazettes:
-                        break
-
-                    records.extend(gazettes)
-                    offset += len(gazettes)
-
-                    if len(gazettes) < _PAGE_SIZE:
-                        break
-
-        return records[: int(total_limit)] if total_limit is not None else records
+        Thin wrapper around :func:`fetch_gazettes` so the logic stays reusable
+        from ``scripts/download_querido_diario_go.py``.
+        """
+        return fetch_gazettes(limit=self.limit)
 
     def _read_local_files(self) -> list[dict[str, Any]]:
         """Read gazette data from local JSON files as fallback."""
