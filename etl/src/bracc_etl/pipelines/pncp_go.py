@@ -54,13 +54,19 @@ _MODALIDADE_MAP: dict[int, str] = {
 }
 
 _RATE_LIMIT_SLEEP = 0.5
-_HTTP_TIMEOUT = 30
+# PNCP frequently returns slow responses on modalidades with many records.
+# 90s tolerates the p99 we observed; anything less triggers timeouts.
+_HTTP_TIMEOUT = 90
 # API requires tamanhoPagina >= 10
 _DEFAULT_PAGE_SIZE = 50
 # API requires codigoModalidadeContratacao; iterate all modalidades.
 _MODALIDADE_CODES = tuple(_MODALIDADE_MAP.keys())
 # API rejects date ranges > 365 days with HTTP 422.
-_MAX_WINDOW_DAYS = 365
+# We use 30-day windows to keep response payloads small and avoid timeouts.
+_WINDOW_DAYS = 30
+# Retry a timed-out request a few times with backoff before giving up.
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = 2.0
 
 
 def _make_procurement_id(cnpj_digits: str, year: int | str, sequential: int | str) -> str:
@@ -95,16 +101,41 @@ class PncpGoPipeline(Pipeline):
     def _split_date_windows(
         date_start: str, date_end: str,
     ) -> list[tuple[str, str]]:
-        """Split a date range into API-compatible windows (<= 365 days each)."""
+        """Split a date range into API-compatible windows."""
         start = datetime.strptime(date_start, "%Y%m%d")  # noqa: DTZ007
         end = datetime.strptime(date_end, "%Y%m%d")  # noqa: DTZ007
         windows: list[tuple[str, str]] = []
         cursor = start
         while cursor <= end:
-            window_end = min(cursor + timedelta(days=_MAX_WINDOW_DAYS - 1), end)
+            window_end = min(cursor + timedelta(days=_WINDOW_DAYS - 1), end)
             windows.append((cursor.strftime("%Y%m%d"), window_end.strftime("%Y%m%d")))
             cursor = window_end + timedelta(days=1)
         return windows
+
+    @staticmethod
+    def _request_with_retry(
+        client: httpx.Client,
+        url: str,
+        params: dict[str, str | int],
+    ) -> httpx.Response | None:
+        """GET with retry + exponential backoff on timeouts and 5xx."""
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                resp = client.get(url, params=params)
+            except httpx.TimeoutException:
+                if attempt == _MAX_RETRIES:
+                    return None
+                time.sleep(_RETRY_BACKOFF ** attempt)
+                continue
+            except httpx.HTTPError:
+                return None
+            if resp.status_code >= 500:
+                if attempt == _MAX_RETRIES:
+                    return resp
+                time.sleep(_RETRY_BACKOFF ** attempt)
+                continue
+            return resp
+        return None
 
     def _fetch_from_api(
         self,
@@ -135,8 +166,15 @@ class PncpGoPipeline(Pipeline):
                             "pagina": page,
                             "tamanhoPagina": _DEFAULT_PAGE_SIZE,
                         }
+                        resp = self._request_with_retry(client, url, params)
+                        if resp is None:
+                            logger.warning(
+                                "PNCP API timeout after %d retries "
+                                "(modalidade %d, window %s-%s, page %d)",
+                                _MAX_RETRIES, modalidade_code, win_start, win_end, page,
+                            )
+                            break
                         try:
-                            resp = client.get(url, params=params)
                             resp.raise_for_status()
                         except httpx.HTTPError as exc:
                             logger.warning(

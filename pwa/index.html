@@ -703,8 +703,8 @@
 
     .crossing-badge {
       position: fixed;
-      top: 76px;
-      right: 12px;
+      top: 168px;
+      right: 16px;
       display: none;
       align-items: center;
       gap: 8px;
@@ -722,6 +722,7 @@
       opacity: 0;
       transform: translateY(-4px);
       transition: opacity 180ms ease-out, transform 180ms ease-out;
+      max-width: calc(100vw - 32px);
     }
     .crossing-badge.is-visible { display: inline-flex; opacity: 0.95; transform: translateY(0); }
     .crossing-badge .mini-spinner {
@@ -796,7 +797,7 @@
 <!-- Discrete cross-referencing indicator -->
 <div id="crossingBadge" class="crossing-badge" role="status" aria-live="polite">
   <span class="mini-spinner"></span>
-  <span>Cruzando dados...</span>
+  <span>Cruzando dados — isso pode levar alguns segundos...</span>
 </div>
 
 <!-- HEADER -->
