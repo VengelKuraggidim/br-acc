@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
-from testcontainers.neo4j import Neo4jContainer
+from testcontainers.neo4j import Neo4jContainer  # type: ignore[import-untyped]
 
 from bracc.main import app
 
@@ -21,17 +21,17 @@ def _iter_cypher_statements(path: Path) -> list[str]:
 
 
 @pytest.fixture(scope="session")
-def neo4j_container() -> Neo4jContainer:  # type: ignore[misc]
+def neo4j_container() -> Neo4jContainer:
     """Start a Neo4j container for integration tests."""
     container = Neo4jContainer("neo4j:5-community")
     container.start()
-    yield container  # type: ignore[misc]
+    yield container
     container.stop()
 
 
 @pytest.fixture(scope="session")
 def neo4j_uri(neo4j_container: Neo4jContainer) -> str:
-    return neo4j_container.get_connection_url()
+    return str(neo4j_container.get_connection_url())
 
 
 @pytest.fixture(scope="session")
