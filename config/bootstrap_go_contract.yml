@@ -3,13 +3,16 @@
   "contract_mode": "subset",
   "subset_scope": "goias_only",
   "full_historical_default": true,
-  "expected_implemented_count": 5,
+  "expected_implemented_count": 8,
   "core_sources": [
     "camara_goiania",
     "folha_go",
     "pncp_go",
     "querido_diario_go",
-    "tcm_go"
+    "tcm_go",
+    "tse",
+    "tse_bens",
+    "tse_filiados"
   ],
   "sources": [
     {
@@ -70,6 +73,42 @@
       "core": true,
       "download_commands": [
         "cd /workspace/etl && uv run python ../scripts/download_tcm_go.py --output-dir ../data/tcm_go"
+      ]
+    },
+    {
+      "pipeline_id": "tse",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/tse/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse.py --output-dir ../data/tse --uf GO --years 1998 2002 2006 2010 2014 2018 2022"
+      ]
+    },
+    {
+      "pipeline_id": "tse_bens",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/tse_bens/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse_bens.py --output-dir ../data/tse_bens --uf GO --years 2006 2010 2014 2018 2022"
+      ]
+    },
+    {
+      "pipeline_id": "tse_filiados",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/tse_filiados/*"
+      ],
+      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror); wrapper exits 0 and skips in public mode.",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse_filiados.py --output-dir ../data/tse_filiados --uf GO"
       ]
     }
   ],

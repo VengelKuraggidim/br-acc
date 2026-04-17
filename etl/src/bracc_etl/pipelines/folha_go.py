@@ -35,13 +35,58 @@ _PAGE_LIMIT = 5_000
 _DEFAULT_DATASET = "folha-de-pagamento"
 # The pipeline's offline fallback in ``extract`` reads this filename first;
 # keeping the downloader aligned avoids drift between ``fetch_to_disk`` and
-# the data_dir layout expected by the ETL runner.
+# the data_dir layout expected by the ETL runner. This name is used when a
+# single ``resource_id`` is pinned via CLI; the historical multi-resource
+# mode writes ``servidores_<period>.csv`` per snapshot (see
+# ``fetch_to_disk`` and ``_period_slug_from_name``).
 _DEFAULT_OUTPUT_FILENAME = "servidores.csv"
+
+# Portuguese month names (as they appear in CKAN resource names like
+# "Folha de Pagamento - Dezembro/2025") mapped to zero-padded numeric
+# month for deterministic ``servidores_<period>.csv`` output filenames.
+_PT_MONTHS = {
+    "janeiro": "01",
+    "fevereiro": "02",
+    "marco": "03",
+    "março": "03",
+    "abril": "04",
+    "maio": "05",
+    "junho": "06",
+    "julho": "07",
+    "agosto": "08",
+    "setembro": "09",
+    "outubro": "10",
+    "novembro": "11",
+    "dezembro": "12",
+}
+_PERIOD_RE = re.compile(
+    r"(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|"
+    r"setembro|outubro|novembro|dezembro)\s*/\s*(\d{4})",
+    re.IGNORECASE,
+)
 
 
 def _is_commissioned(role: str) -> bool:
     """Check if a role/position is a commissioned position."""
     return bool(_COMMISSIONED_KEYWORDS.search(role))
+
+
+def _period_slug_from_name(name: str) -> str | None:
+    """Extract a ``YYYY-MM`` slug from a CKAN resource name if possible.
+
+    Example: ``"Folha de Pagamento - Dezembro/2025"`` -> ``"2025-12"``.
+    Returns ``None`` when the name does not contain a recognizable
+    ``<month>/<year>`` token; callers should fall back to the short
+    resource id for disambiguation.
+    """
+    match = _PERIOD_RE.search(name or "")
+    if not match:
+        return None
+    month_key = match.group(1).lower().replace("ç", "c")
+    month = _PT_MONTHS.get(month_key)
+    if not month:
+        return None
+    return f"{match.group(2)}-{month}"
 
 
 def _discover_resource_id(dataset_name: str = _DEFAULT_DATASET) -> str | None:
@@ -52,7 +97,31 @@ def _discover_resource_id(dataset_name: str = _DEFAULT_DATASET) -> str | None:
     active — that is the latest monthly payroll snapshot.
 
     Module-level so both the pipeline and the ``download_folha_go`` CLI
-    wrapper share one discovery path.
+    wrapper share one discovery path. Kept for the single-snapshot /
+    offline fallback path; use ``_discover_all_resources`` to enumerate
+    every monthly CSV resource available in the datastore.
+    """
+    resources = _discover_all_resources(dataset_name)
+    if not resources:
+        return None
+    return resources[0][0]
+
+
+def _discover_all_resources(
+    dataset_name: str = _DEFAULT_DATASET,
+) -> list[tuple[str, str | None]]:
+    """Return every datastore-active CSV resource as ``(id, period_slug)``.
+
+    The CKAN ``folha-de-pagamento`` dataset exposes one resource per
+    monthly payroll snapshot (plus yearly ZIP archives that we skip —
+    their ``datastore_active`` is ``False`` so they cannot be paged via
+    ``datastore_search``). This helper returns every resource eligible
+    for ``datastore_search`` pagination, ordered as the CKAN API lists
+    them (most recent first).
+
+    Period slug is extracted from the resource name (``YYYY-MM``); it is
+    ``None`` when the name has no recognizable month/year, in which case
+    ``fetch_to_disk`` falls back to the short resource id.
     """
     try:
         with httpx.Client(timeout=30) as client:
@@ -62,15 +131,21 @@ def _discover_resource_id(dataset_name: str = _DEFAULT_DATASET) -> str | None:
             )
             resp.raise_for_status()
             resources = resp.json().get("result", {}).get("resources", [])
-            for r in resources:
-                if (
-                    r.get("datastore_active")
-                    and str(r.get("format", "")).upper() == "CSV"
-                ):
-                    return str(r["id"])
     except (httpx.HTTPError, KeyError, IndexError):
-        logger.warning("[folha_go] Could not discover resource for %s", dataset_name)
-    return None
+        logger.warning(
+            "[folha_go] Could not discover resources for %s", dataset_name,
+        )
+        return []
+
+    out: list[tuple[str, str | None]] = []
+    for r in resources:
+        if (
+            r.get("datastore_active")
+            and str(r.get("format", "")).upper() == "CSV"
+        ):
+            period = _period_slug_from_name(str(r.get("name") or ""))
+            out.append((str(r["id"]), period))
+    return out
 
 
 def _fetch_ckan_records(
@@ -131,69 +206,135 @@ def _records_to_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
-def fetch_to_disk(
-    output_dir: Path,
-    limit: int | None = None,
-    resource_id: str | None = None,
-) -> list[Path]:
-    """Download Goias state payroll (``folha-de-pagamento``) CKAN data to disk.
+def _write_resource_to_disk(
+    resource_id: str,
+    output_path: Path,
+    limit: int | None,
+) -> Path | None:
+    """Paginate a single CKAN resource and write it to ``output_path``.
 
-    Discovers the latest datastore-active CSV resource via
-    ``package_show`` (unless ``resource_id`` is supplied), paginates the
-    datastore, normalizes CKAN column names, and writes the result as
-    ``servidores.csv`` inside ``output_dir`` — the exact filename the
-    pipeline's offline fallback in ``extract`` looks for.
-
-    Args:
-        output_dir: Directory to write into. Created if missing.
-        limit: Optional row cap (applied during pagination, for smoke tests).
-        resource_id: Optional CKAN resource id override. If ``None``,
-            discovers the latest active CSV for the
-            ``folha-de-pagamento`` dataset.
-
-    Returns:
-        List of files written (one entry on success, empty if the CKAN
-        API returned no records or the resource could not be discovered).
+    Returns the written path on success, or ``None`` if the resource
+    returned no records or pagination failed (logged, not raised, so the
+    multi-resource loop in ``fetch_to_disk`` can keep going).
     """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if resource_id is None:
-        resource_id = _discover_resource_id()
-        if resource_id is None:
-            logger.error(
-                "[folha_go] could not discover CKAN resource id for %s",
-                _DEFAULT_DATASET,
-            )
-            return []
-
     logger.info(
-        "[folha_go] fetching CKAN resource_id=%s limit=%s",
+        "[folha_go] fetching CKAN resource_id=%s -> %s (limit=%s)",
         resource_id,
+        output_path.name,
         limit,
     )
     try:
         records = _fetch_ckan_records(resource_id, limit=limit)
     except httpx.HTTPError as exc:
-        logger.error("[folha_go] CKAN datastore_search failed: %s", exc)
-        return []
+        logger.error(
+            "[folha_go] CKAN datastore_search failed for %s: %s",
+            resource_id,
+            exc,
+        )
+        return None
 
     if not records:
         logger.warning(
-            "[folha_go] CKAN returned no records for resource %s", resource_id
+            "[folha_go] CKAN returned no records for resource %s", resource_id,
         )
-        return []
+        return None
 
     df = _records_to_dataframe(records)
-    target = output_dir / _DEFAULT_OUTPUT_FILENAME
-    df.to_csv(target, index=False)
+    df.to_csv(output_path, index=False)
     logger.info(
         "[folha_go] wrote %s (%d records, %d columns)",
-        target,
+        output_path,
         len(df),
         len(df.columns),
     )
-    return [target]
+    return output_path
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    limit: int | None = None,
+    resource_id: str | None = None,
+    resource_limit: int | None = None,
+) -> list[Path]:
+    """Download Goias state payroll (``folha-de-pagamento``) CKAN data to disk.
+
+    When ``resource_id`` is supplied, paginates that single resource and
+    writes ``servidores.csv`` (the legacy single-snapshot layout kept for
+    fixtures and offline fallbacks).
+
+    When ``resource_id`` is ``None``, enumerates **every** datastore-active
+    CSV resource exposed by the dataset and writes one file per snapshot
+    named ``servidores_<YYYY-MM>.csv`` (or ``servidores_<short-id>.csv``
+    when the resource name has no recognizable month/year). This lets
+    the ETL ingest the full historical payroll, not just the latest
+    monthly file. The pipeline's ``extract`` globs ``servidores*.csv``
+    under ``data_dir/folha_go`` and concatenates, so both layouts coexist.
+
+    Args:
+        output_dir: Directory to write into. Created if missing.
+        limit: Optional row cap **per resource** (applied during pagination,
+            for smoke tests — not a global cap across all snapshots).
+        resource_id: Optional CKAN resource id override. If ``None``,
+            downloads all datastore-active CSV resources for the
+            ``folha-de-pagamento`` dataset.
+        resource_limit: Optional cap on the number of resources to fetch
+            when iterating the full dataset. Defaults to ``None`` (fetch
+            all). Useful for smoke tests and CI.
+
+    Returns:
+        List of files written (one per successfully downloaded resource).
+        Empty when discovery found nothing or every request failed.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Single-resource mode: preserves the legacy ``servidores.csv``
+    # filename so test fixtures and pinned historical downloads keep
+    # working unchanged.
+    if resource_id is not None:
+        target = output_dir / _DEFAULT_OUTPUT_FILENAME
+        written = _write_resource_to_disk(resource_id, target, limit)
+        return [written] if written else []
+
+    # Multi-resource mode: iterate every datastore-active CSV snapshot.
+    resources = _discover_all_resources()
+    if not resources:
+        logger.error(
+            "[folha_go] could not discover any CKAN resources for %s",
+            _DEFAULT_DATASET,
+        )
+        return []
+
+    if resource_limit is not None and resource_limit >= 0:
+        resources = resources[:resource_limit]
+
+    logger.info(
+        "[folha_go] discovered %d datastore-active CSV resource(s); "
+        "downloading (per-resource row limit=%s)",
+        len(resources),
+        limit,
+    )
+
+    written_paths: list[Path] = []
+    seen_names: set[str] = set()
+    for rid, period in resources:
+        if period:
+            filename = f"servidores_{period}.csv"
+        else:
+            filename = f"servidores_{rid[:8]}.csv"
+        # Defensive: two resources could theoretically map to the same
+        # slug (e.g. corrected re-uploads). Disambiguate by appending
+        # the short id so we never silently overwrite another snapshot.
+        if filename in seen_names:
+            filename = f"servidores_{period or 'x'}_{rid[:8]}.csv"
+        seen_names.add(filename)
+
+        target = output_dir / filename
+        written = _write_resource_to_disk(rid, target, limit)
+        if written:
+            written_paths.append(written)
+
+    return written_paths
 
 
 class FolhaGoPipeline(Pipeline):
@@ -242,12 +383,34 @@ class FolhaGoPipeline(Pipeline):
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "folha_go"
 
-        # Try local files first (fallback / offline mode)
-        self._raw_servidores = self._read_df_optional(src_dir / "servidores.csv")
-        if self._raw_servidores.empty:
-            self._raw_servidores = self._read_df_optional(src_dir / "servidores.parquet")
+        # Try local files first (fallback / offline mode). Glob every
+        # ``servidores*.csv`` under the source directory so the new
+        # multi-snapshot layout (``servidores_2025-12.csv``, ...) and
+        # the legacy single ``servidores.csv`` both work without any
+        # config change. Sorted for deterministic concatenation order.
+        frames: list[pd.DataFrame] = []
+        if src_dir.exists():
+            csv_paths = sorted(src_dir.glob("servidores*.csv"))
+            for path in csv_paths:
+                df = self._read_df_optional(path)
+                if not df.empty:
+                    frames.append(df)
+            # Legacy parquet fallback — only consulted if no CSV was found.
+            if not frames:
+                parquet_df = self._read_df_optional(src_dir / "servidores.parquet")
+                if not parquet_df.empty:
+                    frames.append(parquet_df)
 
-        # If no local files, try CKAN API
+        if frames:
+            self._raw_servidores = pd.concat(frames, ignore_index=True)
+        else:
+            self._raw_servidores = pd.DataFrame()
+
+        # If no local files, try CKAN API (single latest snapshot —
+        # online full-history downloads should go through ``fetch_to_disk``
+        # so the on-disk layout under ``data_dir/folha_go`` is reused
+        # for incremental runs instead of re-paging every resource each
+        # time ``extract`` is called).
         if self._raw_servidores.empty:
             logger.info("[folha_go] No local files found, trying CKAN API...")
             resource_id = _discover_resource_id(_DEFAULT_DATASET)

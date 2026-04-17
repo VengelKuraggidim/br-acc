@@ -80,6 +80,7 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
       PYTHONUNBUFFERED: "1"
+      UV_PROJECT_ENVIRONMENT: /opt/venv
     volumes:
       - .:/workspace
     depends_on:
@@ -97,6 +98,7 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
       PYTHONUNBUFFERED: "1"
+      UV_PROJECT_ENVIRONMENT: /opt/venv
     volumes:
       - .:/workspace
     depends_on:
@@ -107,9 +109,7 @@ services:
       - |
         set -e
         cd /workspace/etl
-        echo "=== Sincronizando dependencias ETL ==="
-        uv sync --no-dev
-        echo "=== Carregando dados de Goias ==="
+        echo "=== Carregando dados de Goias (venv em /opt/venv, ja instalada na imagem) ==="
         echo "[1/5] Folha de pagamento GO..."
         uv run python -m bracc_etl.runner run --source folha_go --neo4j-password $$NEO4J_PASSWORD --data-dir /workspace/data || echo "WARN: folha_go falhou"
         echo "[2/5] Financas municipais GO..."

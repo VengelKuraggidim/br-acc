@@ -37,9 +37,16 @@ logger = logging.getLogger(__name__)
 
 _API_BASE = "https://pncp.gov.br/api/consulta/v1/"
 
-# PNCP modalidade IDs to human-readable labels
+# PNCP modalidade IDs to human-readable labels.
+# Codes 2 and 14 added 2026-04 after confirming via curl that the PNCP API
+# accepts them (HTTP 204 for GO/2024-Q1, while e.g. 20 returns HTTP 422
+# "Código da modalidade de contratação inválido"). Codes 15-19 are silently
+# accepted too but are undocumented in the PNCP Manual de Dados Abertos and
+# returned no GO data in probes, so they are intentionally omitted to avoid
+# multiplying empty API calls.
 _MODALIDADE_MAP: dict[int, str] = {
     1: "leilao_eletronico",
+    2: "dialogo_competitivo",
     3: "concurso",
     4: "dialogo_competitivo",
     5: "concorrencia",
@@ -51,6 +58,7 @@ _MODALIDADE_MAP: dict[int, str] = {
     11: "pre_qualificacao",
     12: "credenciamento",
     13: "ata_pre_existente",
+    14: "inaplicabilidade_licitacao",
 }
 
 _RATE_LIMIT_SLEEP = 0.5
@@ -62,8 +70,10 @@ _MODALIDADE_CODES = tuple(_MODALIDADE_MAP.keys())
 # API rejects date ranges > 365 days with HTTP 422.
 _MAX_WINDOW_DAYS = 365
 # Default historical window when caller does not pass an explicit range.
-# Kept in sync with ``PncpGoPipeline.extract`` (two years back from today).
-_DEFAULT_HISTORICAL_DAYS = 730
+# PNCP went live in 2021 so ~5 years (1826 days) is the realistic upper
+# bound: older ranges are silently accepted by the API (HTTP 204) but hold
+# no data. Kept in sync with ``PncpGoPipeline.extract`` below.
+_DEFAULT_HISTORICAL_DAYS = 1826
 
 
 def _make_procurement_id(cnpj_digits: str, year: int | str, sequential: int | str) -> str:
@@ -184,7 +194,8 @@ def fetch_to_disk(
             combo that returned at least one record.
         date_start: Inclusive start date in ``YYYY-MM-DD`` or ``YYYYMMDD``
             format. Defaults to the same historical window used by
-            ``PncpGoPipeline.extract`` (~2 years back from today).
+            ``PncpGoPipeline.extract`` (``_DEFAULT_HISTORICAL_DAYS``, ~5
+            years back from today, capped at the PNCP launch in 2021).
         date_end: Inclusive end date in ``YYYY-MM-DD`` or ``YYYYMMDD`` format.
             Defaults to today.
         limit: Optional cap on the total number of records fetched. Useful
@@ -370,8 +381,8 @@ class PncpGoPipeline(Pipeline):
         if not records:
             logger.info("No local files found; fetching from PNCP API...")
             today = datetime.now()  # noqa: DTZ005
-            two_years_ago = today - timedelta(days=730)
-            date_start = two_years_ago.strftime("%Y%m%d")
+            history_start = today - timedelta(days=_DEFAULT_HISTORICAL_DAYS)
+            date_start = history_start.strftime("%Y%m%d")
             date_end = today.strftime("%Y%m%d")
             records = self._fetch_from_api(date_start, date_end)
 

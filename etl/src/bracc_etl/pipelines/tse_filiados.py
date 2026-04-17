@@ -218,3 +218,92 @@ class TseFiliadosPipeline(Pipeline):
         )
         loaded = loader.run_query_with_retry(query, all_rels)
         logger.info("[tse_filiados] Low-confidence FILIADO_A: %d", loaded)
+
+
+# ────────────────────────────────────────────────────────────────────
+# Acquisition helper — UF-scoped BigQuery download for Fiscal Cidadao
+# ────────────────────────────────────────────────────────────────────
+#
+# Unlike candidatos/bens, TSE filiacao partidaria is NOT published on the
+# public CDN (``divulgacandcontas.tse.jus.br/filiados`` requires auth). The
+# only open, machine-readable source is Base dos Dados' mirror on BigQuery
+# (``basedosdados.br_tse_filiacao_partidaria.microdados``), which requires
+# an authenticated GCP billing project. This helper:
+#
+#   * Delegates to BigQuery when ``billing_project`` is provided.
+#   * Filters to a single UF (default GO) to keep volume manageable.
+#   * Returns an empty list (and logs a clear message) when no billing project
+#     is available — this is a hard external requirement, not a bypassable
+#     paywall, so we fail open rather than improvise.
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    *,
+    uf: str = "GO",
+    billing_project: str | None = None,
+    all_statuses: bool = False,
+    skip_existing: bool = True,
+) -> list[Path]:
+    """Download TSE filiados (party membership) filtered to one UF.
+
+    Requires ``billing_project`` — the only open source for filiados is
+    Base dos Dados on BigQuery (TSE's own endpoint is auth-gated). If no
+    project is provided we log and return ``[]`` without raising, so the
+    bootstrap contract can skip this step gracefully in public-mode runs.
+    """
+    uf_upper = uf.upper()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / "filiados.csv"
+
+    if skip_existing and dest.exists() and dest.stat().st_size > 0:
+        logger.info("[tse_filiados] skipping (exists): %s", dest)
+        return [dest]
+
+    if not billing_project:
+        logger.warning(
+            "[tse_filiados] no --billing-project provided; TSE filiados is not "
+            "on the public CDN (requires Base dos Dados / BigQuery). Skipping. "
+            "To ingest, rerun with --billing-project <gcp-project-id>.",
+        )
+        return []
+
+    try:
+        from google.cloud import bigquery
+    except ImportError:
+        logger.warning(
+            "[tse_filiados] google-cloud-bigquery not installed; "
+            "install it and pass --billing-project to ingest filiados.",
+        )
+        return []
+
+    columns = [
+        "cpf", "nome", "nome_social", "sigla_uf", "id_municipio_tse",
+        "sigla_partido", "data_filiacao", "situacao_registro",
+        "data_desfiliacao", "data_cancelamento",
+        "motivo_cancelamento", "motivo_desfiliacao", "titulo_eleitor",
+    ]
+    where = [f"sigla_uf = '{uf_upper}'"]
+    if not all_statuses:
+        where.append("situacao_registro = 'Regular'")
+    where_clause = " AND ".join(where)
+
+    client = bigquery.Client(project=billing_project)
+    query = (
+        f"SELECT {', '.join(columns)} "  # noqa: S608
+        f"FROM `basedosdados.br_tse_filiacao_partidaria.microdados` "
+        f"WHERE {where_clause}"
+    )
+    logger.info("[tse_filiados] BQ query (uf=%s): %s", uf_upper, query[:200])
+
+    job = client.query(query)
+    rows_written = 0
+    # Rewrite the CSV from scratch (skip_existing check already ran above).
+    if dest.exists():
+        dest.unlink()
+    for i, chunk_df in enumerate(job.result().to_dataframe_iterable()):
+        chunk_df.to_csv(dest, mode="a", header=(i == 0), index=False)
+        rows_written += len(chunk_df)
+
+    logger.info("[tse_filiados] wrote %d rows → %s", rows_written, dest)
+    return [dest] if rows_written > 0 else []

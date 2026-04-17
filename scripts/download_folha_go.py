@@ -7,14 +7,15 @@ bootstrap contract can drop the old "pre-place files under
 data/folha_go/ manually" workflow in favour of automated ingestion.
 
 Usage:
+    # Download every monthly CSV snapshot the dataset exposes (default).
     uv run --project etl python scripts/download_folha_go.py \
         --output-dir data/folha_go
 
-    # Smoke test with a tiny row cap:
+    # Smoke test with tiny row cap per resource and only the 2 latest snapshots:
     uv run --project etl python scripts/download_folha_go.py \
-        --limit 50 --output-dir /tmp/smoke_folha_go
+        --limit 50 --resource-limit 2 --output-dir /tmp/smoke_folha_go
 
-    # Pin a specific CKAN resource id (advanced / historical snapshots):
+    # Pin a specific CKAN resource id (advanced / single snapshot):
     uv run --project etl python scripts/download_folha_go.py \
         --resource-id <ckan-resource-uuid> --output-dir data/folha_go
 """
@@ -41,8 +42,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=Path("data/folha_go"),
         help=(
-            "Directory to write servidores.csv into. Created if missing. "
-            "Defaults to data/folha_go (the pipeline's expected path)."
+            "Directory to write servidores_<period>.csv into (one file per "
+            "monthly snapshot). Created if missing. Defaults to data/folha_go "
+            "(the pipeline's expected path)."
         ),
     )
     parser.add_argument(
@@ -50,17 +52,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "Optional row cap for smoke tests. Omit to download the full "
-            "CKAN datastore for the latest active monthly resource."
+            "Optional row cap per resource (applied during CKAN pagination, "
+            "for smoke tests). Omit to download all rows of each snapshot."
         ),
     )
     parser.add_argument(
         "--resource-id",
         default=None,
         help=(
-            "Optional CKAN datastore resource id override. If omitted, the "
-            "latest datastore-active CSV resource of the "
-            "'folha-de-pagamento' dataset is auto-discovered."
+            "Optional CKAN datastore resource id override. If supplied, only "
+            "that single resource is downloaded as servidores.csv. If omitted, "
+            "every datastore-active CSV resource of the "
+            "'folha-de-pagamento' dataset is downloaded as "
+            "servidores_<period>.csv."
+        ),
+    )
+    parser.add_argument(
+        "--resource-limit",
+        type=int,
+        default=None,
+        help=(
+            "Optional cap on how many resources (monthly snapshots) to "
+            "download when iterating the full dataset. Defaults to no "
+            "limit. Ignored when --resource-id is set."
         ),
     )
     parser.add_argument(
@@ -83,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.output_dir,
         limit=args.limit,
         resource_id=args.resource_id,
+        resource_limit=args.resource_limit,
     )
 
     if not written:

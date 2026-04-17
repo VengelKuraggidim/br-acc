@@ -464,30 +464,39 @@
     },
     {
       "pipeline_id": "tse",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tse/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse.py --output-dir ../data/tse --uf GO --years 1998 2002 2006 2010 2014 2018 2022"
+      ]
     },
     {
       "pipeline_id": "tse_bens",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tse_bens/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse_bens.py --output-dir ../data/tse_bens --uf GO --years 2006 2010 2014 2018 2022"
+      ]
     },
     {
       "pipeline_id": "tse_filiados",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tse_filiados/*"
       ],
-      "blocking_reason_if_any": "-",
-      "core": false
+      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror); wrapper exits 0 and skips in public mode.",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tse_filiados.py --output-dir ../data/tse_filiados --uf GO"
+      ]
     },
     {
       "pipeline_id": "un_sanctions",

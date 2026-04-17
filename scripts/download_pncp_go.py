@@ -9,7 +9,7 @@ data/pncp_go/ manually" workflow.
 Source: https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao
 
 Usage:
-    # Full historical fetch (default ~2 years back, all 13 modalidades):
+    # Full historical fetch (default ~5 years back, all 14 modalidades):
     uv run --project etl python scripts/download_pncp_go.py \\
         --output-dir data/pncp_go
 
@@ -66,7 +66,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Inclusive start date (YYYY-MM-DD or YYYYMMDD). Defaults to the "
-            "pipeline's built-in historical window (~2 years back)."
+            "pipeline's built-in historical window (~5 years back, capped "
+            "at the PNCP launch in 2021)."
         ),
     )
     parser.add_argument(
@@ -91,7 +92,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Comma-separated PNCP modalidade codes (e.g. '6,8,9'). "
-            "Omit to iterate all 13 codes defined by the pipeline."
+            "Omit to iterate all 14 codes defined by the pipeline "
+            "(1-14, matching PNCP's Manual de Dados Abertos catalog)."
         ),
     )
     parser.add_argument(
