@@ -139,24 +139,6 @@ def test_load_calls_batch_loader() -> None:
     assert session.run.call_count >= 4
 
 
-class TestParseArea:
-    def test_comma_decimal(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_area("150,5") == 150.5
-
-    def test_integer_string(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_area("30") == 30.0
-
-    def test_empty_string_returns_zero(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_area("") == 0.0
-
-    def test_invalid_returns_zero(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_area("not a number") == 0.0
-
-
 class TestPrimaryBiome:
     def test_single_biome(self) -> None:
         pipeline = _make_pipeline()

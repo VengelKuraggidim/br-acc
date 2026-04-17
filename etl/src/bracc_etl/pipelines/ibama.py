@@ -17,6 +17,7 @@ from bracc_etl.transforms import (
     format_cpf,
     normalize_name,
     parse_date,
+    parse_numeric_comma,
     strip_document,
 )
 
@@ -48,14 +49,6 @@ class IbamaPipeline(Pipeline):
         self.companies: list[dict[str, Any]] = []
         self.persons: list[dict[str, Any]] = []
         self.embargo_rels: list[dict[str, Any]] = []
-
-    def _parse_area(self, value: str) -> float:
-        """Parse area in hectares (Brazilian decimal format: comma separator)."""
-        value = value.strip().replace(",", ".")
-        try:
-            return float(value)
-        except ValueError:
-            return 0.0
 
     def _primary_biome(self, value: str) -> str:
         """Extract the primary biome from a comma-separated list."""
@@ -111,7 +104,7 @@ class IbamaPipeline(Pipeline):
 
             embargo_id = f"ibama_embargo_{seq}"
             date_embargo = parse_date(str(row["DAT_EMBARGO"]))
-            area_ha = self._parse_area(str(row["QTD_AREA_EMBARGADA"]))
+            area_ha = parse_numeric_comma(row["QTD_AREA_EMBARGADA"])
             biome = self._primary_biome(str(row["DES_TIPO_BIOMA"]))
             uf = str(row["SIG_UF_TAD"]).strip()
             municipio = str(row["NOM_MUNICIPIO_TAD"]).strip()

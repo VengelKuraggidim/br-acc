@@ -9,7 +9,6 @@ from bracc_etl.pipelines.mides import (
     MidesPipeline,
     _pick,
     _stable_id,
-    _to_float,
     _valid_cnpj,
 )
 
@@ -30,32 +29,6 @@ class TestMidesMetadata:
 
     def test_source_id(self) -> None:
         assert MidesPipeline.source_id == "mides"
-
-
-class TestToFloat:
-    def test_none_returns_none(self) -> None:
-        assert _to_float(None) is None
-
-    def test_empty_string_returns_none(self) -> None:
-        assert _to_float("") is None
-        assert _to_float("   ") is None
-
-    def test_brazilian_format_with_thousands(self) -> None:
-        # "1.234.567,89" — dots as thousands, comma as decimal
-        assert _to_float("1.234.567,89") == 1234567.89
-
-    def test_brazilian_format_without_thousands(self) -> None:
-        # "123,45" — comma only, acts as decimal
-        assert _to_float("123,45") == 123.45
-
-    def test_plain_dot_decimal(self) -> None:
-        assert _to_float("123.45") == 123.45
-
-    def test_strips_currency_symbols(self) -> None:
-        assert _to_float("R$ 1.234,56") == 1234.56
-
-    def test_invalid_returns_none(self) -> None:
-        assert _to_float("not a number") is None
 
 
 class TestValidCnpj:

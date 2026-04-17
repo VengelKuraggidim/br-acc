@@ -29,6 +29,7 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     normalize_name,
     parse_date,
+    parse_number_smart,
 )
 
 if TYPE_CHECKING:
@@ -43,24 +44,6 @@ _TIMEOUT = 30
 def _stable_id(*parts: str, length: int = 24) -> str:
     raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
-
-def _to_float(value: Any) -> float:
-    """Parse a numeric value that may use Brazilian formatting."""
-    if value is None:
-        return 0.0
-    text = str(value).strip()
-    if not text:
-        return 0.0
-    # Brazilian format: 1.234,56
-    if "," in text and "." in text and text.rfind(",") > text.rfind("."):
-        text = text.replace(".", "").replace(",", ".")
-    elif "," in text and "." not in text:
-        text = text.replace(",", ".")
-    try:
-        return float(text)
-    except ValueError:
-        return 0.0
 
 
 class CamaraGoianiaPipeline(Pipeline):
@@ -209,7 +192,7 @@ class CamaraGoianiaPipeline(Pipeline):
             )
             exp_type = str(row.get("tipo") or row.get("type") or "").strip()
             description = str(row.get("descricao") or row.get("description") or "").strip()
-            amount = _to_float(row.get("valor") or row.get("amount"))
+            amount = parse_number_smart(row.get("valor") or row.get("amount"))
             date = parse_date(str(row.get("data") or row.get("date") or ""))
             year = str(row.get("ano") or row.get("year") or "").strip()
             if not year and date:

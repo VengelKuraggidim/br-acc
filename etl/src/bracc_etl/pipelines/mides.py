@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +15,7 @@ from bracc_etl.transforms import (
     format_cnpj,
     normalize_name,
     parse_date,
+    parse_number_smart,
     strip_document,
 )
 
@@ -28,23 +28,6 @@ logger = logging.getLogger(__name__)
 def _stable_id(*parts: str, length: int = 24) -> str:
     raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
-
-def _to_float(value: str | None) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    text = re.sub(r"[^0-9,.-]", "", text)
-    if "," in text and "." in text and text.rfind(",") > text.rfind("."):
-        text = text.replace(".", "").replace(",", ".")
-    elif "," in text and "." not in text:
-        text = text.replace(",", ".")
-    try:
-        return float(text)
-    except ValueError:
-        return None
 
 
 def _pick(row: pd.Series, *keys: str) -> str:
@@ -150,7 +133,10 @@ class MidesPipeline(Pipeline):
             pub_date = parse_date(_pick(row, "published_at", "data_publicacao", "data"))
             year = _pick(row, "year", "ano")
             amount_estimated = cap_contract_value(
-                _to_float(_pick(row, "amount_estimated", "valor_estimado", "valor")),
+                parse_number_smart(
+                    _pick(row, "amount_estimated", "valor_estimado", "valor"),
+                    default=None,
+                ),
             )
             source_url = _pick(row, "source_url", "url")
 
@@ -206,7 +192,12 @@ class MidesPipeline(Pipeline):
             uf = _pick(row, "uf", "estado")
             signed_at = parse_date(_pick(row, "signed_at", "data_assinatura", "data"))
             obj = normalize_name(_pick(row, "object", "objeto", "descricao"))
-            amount = cap_contract_value(_to_float(_pick(row, "amount", "valor", "valor_contrato")))
+            amount = cap_contract_value(
+                parse_number_smart(
+                    _pick(row, "amount", "valor", "valor_contrato"),
+                    default=None,
+                ),
+            )
             source_url = _pick(row, "source_url", "url")
 
             if not contract_id:
@@ -259,10 +250,15 @@ class MidesPipeline(Pipeline):
             item_id = _pick(row, "municipal_item_id", "item_id", "id_item")
             item_number = _pick(row, "item_number", "numero_item")
             description = normalize_name(_pick(row, "description", "descricao", "objeto_item"))
-            quantity = _to_float(_pick(row, "quantity", "quantidade"))
-            unit_price = cap_contract_value(_to_float(_pick(row, "unit_price", "valor_unitario")))
+            quantity = parse_number_smart(_pick(row, "quantity", "quantidade"), default=None)
+            unit_price = cap_contract_value(
+                parse_number_smart(
+                    _pick(row, "unit_price", "valor_unitario"),
+                    default=None,
+                ),
+            )
             total_price = cap_contract_value(
-                _to_float(_pick(row, "total_price", "valor_total", "valor")),
+                parse_number_smart(_pick(row, "total_price", "valor_total", "valor"), default=None),
             )
 
             if not item_id:

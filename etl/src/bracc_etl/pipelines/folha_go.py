@@ -15,6 +15,7 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     mask_cpf,
     normalize_name,
+    parse_number_smart,
     strip_document,
 )
 
@@ -35,23 +36,6 @@ _PAGE_LIMIT = 5_000
 def _stable_id(*parts: str, length: int = 24) -> str:
     raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
-
-
-def _to_float(value: str | None) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    text = re.sub(r"[^0-9,.-]", "", text)
-    if "," in text and "." in text and text.rfind(",") > text.rfind("."):
-        text = text.replace(".", "").replace(",", ".")
-    elif "," in text and "." not in text:
-        text = text.replace(",", ".")
-    try:
-        return float(text)
-    except ValueError:
-        return None
 
 
 def _pick(row: pd.Series, *keys: str) -> str:
@@ -200,7 +184,7 @@ class FolhaGoPipeline(Pipeline):
             agency_name = normalize_name(
                 _pick(row, "orgao", "orgao_lotacao", "lotacao", "agency", "unidade"),
             )
-            salary_gross = _to_float(
+            salary_gross = parse_number_smart(
                 _pick(
                     row,
                     "remuneracao_bruta",
@@ -208,8 +192,9 @@ class FolhaGoPipeline(Pipeline):
                     "vencimento_bruto",
                     "salary_gross",
                 ),
+                default=None,
             )
-            salary_net = _to_float(
+            salary_net = parse_number_smart(
                 _pick(
                     row,
                     "remuneracao_liquida",
@@ -217,6 +202,7 @@ class FolhaGoPipeline(Pipeline):
                     "vencimento_liquido",
                     "salary_net",
                 ),
+                default=None,
             )
             municipality = _pick(row, "municipio", "cidade", "municipality")
             is_commissioned = _is_commissioned(role)
