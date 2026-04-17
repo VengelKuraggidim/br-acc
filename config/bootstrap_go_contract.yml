@@ -1,0 +1,71 @@
+{
+  "contract_version": "2026-04-17",
+  "contract_mode": "subset",
+  "subset_scope": "goias_only",
+  "full_historical_default": true,
+  "expected_implemented_count": 5,
+  "core_sources": [
+    "camara_goiania",
+    "folha_go",
+    "pncp_go",
+    "querido_diario_go",
+    "tcm_go"
+  ],
+  "sources": [
+    {
+      "pipeline_id": "camara_goiania",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/camara_goiania/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true
+    },
+    {
+      "pipeline_id": "folha_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/folha_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true
+    },
+    {
+      "pipeline_id": "pncp_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/pncp_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true
+    },
+    {
+      "pipeline_id": "querido_diario_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/querido_diario_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true
+    },
+    {
+      "pipeline_id": "tcm_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/tcm_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true
+    }
+  ],
+  "excluded_from_contract": [
+    {
+      "pipeline_id": "tce_go",
+      "reason": "not_built in registry; no pipeline module exists in etl/src"
+    },
+    {
+      "pipeline_id": "state_portal_go",
+      "reason": "not_built in registry; no pipeline module exists in etl/src"
+    }
+  ]
+}
