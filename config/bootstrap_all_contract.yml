@@ -50,12 +50,15 @@
     },
     {
       "pipeline_id": "camara_goiania",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/camara_goiania/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_camara_goiania.py --output-dir ../data/camara_goiania"
+      ]
     },
     {
       "pipeline_id": "camara_inquiries",
@@ -179,12 +182,15 @@
     },
     {
       "pipeline_id": "folha_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/folha_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_folha_go.py --output-dir ../data/folha_go"
+      ]
     },
     {
       "pipeline_id": "holdings",
@@ -290,12 +296,15 @@
     },
     {
       "pipeline_id": "pncp_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/pncp_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_pncp_go.py --output-dir ../data/pncp_go"
+      ]
     },
     {
       "pipeline_id": "querido_diario",
@@ -308,12 +317,15 @@
     },
     {
       "pipeline_id": "querido_diario_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/querido_diario_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_querido_diario_go.py --output-dir ../data/querido_diario_go"
+      ]
     },
     {
       "pipeline_id": "rais",
@@ -404,12 +416,15 @@
     },
     {
       "pipeline_id": "tcm_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tcm_go/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tcm_go.py --output-dir ../data/tcm_go"
+      ]
     },
     {
       "pipeline_id": "tcu",

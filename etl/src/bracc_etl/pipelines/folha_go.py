@@ -32,11 +32,168 @@ _COMMISSIONED_KEYWORDS = re.compile(
 
 _CKAN_BASE = "https://dadosabertos.go.gov.br/api/3/action"
 _PAGE_LIMIT = 5_000
+_DEFAULT_DATASET = "folha-de-pagamento"
+# The pipeline's offline fallback in ``extract`` reads this filename first;
+# keeping the downloader aligned avoids drift between ``fetch_to_disk`` and
+# the data_dir layout expected by the ETL runner.
+_DEFAULT_OUTPUT_FILENAME = "servidores.csv"
 
 
 def _is_commissioned(role: str) -> bool:
     """Check if a role/position is a commissioned position."""
     return bool(_COMMISSIONED_KEYWORDS.search(role))
+
+
+def _discover_resource_id(dataset_name: str = _DEFAULT_DATASET) -> str | None:
+    """Return the most recent datastore-active CSV resource id for a dataset.
+
+    CKAN lists the PDF data dictionary as the first resource, which has
+    ``datastore_active=False``. Pick the first CSV whose datastore is
+    active — that is the latest monthly payroll snapshot.
+
+    Module-level so both the pipeline and the ``download_folha_go`` CLI
+    wrapper share one discovery path.
+    """
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(
+                f"{_CKAN_BASE}/package_show",
+                params={"id": dataset_name},
+            )
+            resp.raise_for_status()
+            resources = resp.json().get("result", {}).get("resources", [])
+            for r in resources:
+                if (
+                    r.get("datastore_active")
+                    and str(r.get("format", "")).upper() == "CSV"
+                ):
+                    return str(r["id"])
+    except (httpx.HTTPError, KeyError, IndexError):
+        logger.warning("[folha_go] Could not discover resource for %s", dataset_name)
+    return None
+
+
+def _fetch_ckan_records(
+    resource_id: str,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch all records from a CKAN datastore resource with pagination.
+
+    Stops early when ``limit`` records are accumulated, when a page returns
+    no records, or when a page is shorter than requested (end-of-dataset).
+    """
+    records: list[dict[str, Any]] = []
+    offset = 0
+
+    with httpx.Client(timeout=60) as client:
+        while limit is None or len(records) < limit:
+            remaining = (
+                _PAGE_LIMIT
+                if limit is None
+                else min(_PAGE_LIMIT, limit - len(records))
+            )
+            resp = client.get(
+                f"{_CKAN_BASE}/datastore_search",
+                params={
+                    "resource_id": resource_id,
+                    "limit": remaining,
+                    "offset": offset,
+                },
+            )
+            resp.raise_for_status()
+            result = resp.json().get("result", {})
+            page_records = result.get("records", [])
+            if not page_records:
+                break
+            records.extend(page_records)
+            offset += len(page_records)
+            if len(page_records) < remaining:
+                break
+
+    return records
+
+
+def _records_to_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
+    """Convert CKAN datastore records into a DataFrame matching row_pick keys."""
+    if not records:
+        return pd.DataFrame()
+    df = pd.DataFrame(records).astype(str)
+    # Normalize CKAN column names to match transform's row_pick keys.
+    df.columns = df.columns.str.lower()
+    df = df.rename(columns={
+        "nomeservidor": "nome",
+        "nomecargo": "cargo",
+        "valorprovento": "remuneracao_bruta",
+        "valorliquido": "salario_liquido",
+        "codorgao": "orgao_codigo",
+        "anomes": "periodo",
+    })
+    return df
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    limit: int | None = None,
+    resource_id: str | None = None,
+) -> list[Path]:
+    """Download Goias state payroll (``folha-de-pagamento``) CKAN data to disk.
+
+    Discovers the latest datastore-active CSV resource via
+    ``package_show`` (unless ``resource_id`` is supplied), paginates the
+    datastore, normalizes CKAN column names, and writes the result as
+    ``servidores.csv`` inside ``output_dir`` — the exact filename the
+    pipeline's offline fallback in ``extract`` looks for.
+
+    Args:
+        output_dir: Directory to write into. Created if missing.
+        limit: Optional row cap (applied during pagination, for smoke tests).
+        resource_id: Optional CKAN resource id override. If ``None``,
+            discovers the latest active CSV for the
+            ``folha-de-pagamento`` dataset.
+
+    Returns:
+        List of files written (one entry on success, empty if the CKAN
+        API returned no records or the resource could not be discovered).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if resource_id is None:
+        resource_id = _discover_resource_id()
+        if resource_id is None:
+            logger.error(
+                "[folha_go] could not discover CKAN resource id for %s",
+                _DEFAULT_DATASET,
+            )
+            return []
+
+    logger.info(
+        "[folha_go] fetching CKAN resource_id=%s limit=%s",
+        resource_id,
+        limit,
+    )
+    try:
+        records = _fetch_ckan_records(resource_id, limit=limit)
+    except httpx.HTTPError as exc:
+        logger.error("[folha_go] CKAN datastore_search failed: %s", exc)
+        return []
+
+    if not records:
+        logger.warning(
+            "[folha_go] CKAN returned no records for resource %s", resource_id
+        )
+        return []
+
+    df = _records_to_dataframe(records)
+    target = output_dir / _DEFAULT_OUTPUT_FILENAME
+    df.to_csv(target, index=False)
+    logger.info(
+        "[folha_go] wrote %s (%d records, %d columns)",
+        target,
+        len(df),
+        len(df.columns),
+    )
+    return [target]
 
 
 class FolhaGoPipeline(Pipeline):
@@ -69,72 +226,18 @@ class FolhaGoPipeline(Pipeline):
         return pd.read_csv(path, dtype=str, keep_default_na=False)
 
     def _fetch_ckan_resource(self, resource_id: str) -> pd.DataFrame:
-        """Fetch all records from a CKAN datastore resource using pagination."""
-        records: list[dict[str, Any]] = []
-        offset = 0
-        total_limit = self.limit
+        """Fetch all records from a CKAN datastore resource using pagination.
 
-        with httpx.Client(timeout=60) as client:
-            while total_limit is None or len(records) < total_limit:
-                remaining = (
-                    _PAGE_LIMIT
-                    if total_limit is None
-                    else min(_PAGE_LIMIT, total_limit - len(records))
-                )
-                resp = client.get(
-                    f"{_CKAN_BASE}/datastore_search",
-                    params={
-                        "resource_id": resource_id,
-                        "limit": remaining,
-                        "offset": offset,
-                    },
-                )
-                resp.raise_for_status()
-                result = resp.json().get("result", {})
-                page_records = result.get("records", [])
-                if not page_records:
-                    break
-                records.extend(page_records)
-                offset += len(page_records)
-                if len(page_records) < remaining:
-                    break
-
-        if not records:
-            return pd.DataFrame()
-        df = pd.DataFrame(records).astype(str)
-        # Normalize CKAN column names to match transform's row_pick keys.
-        df.columns = df.columns.str.lower()
-        df = df.rename(columns={
-            "nomeservidor": "nome",
-            "nomecargo": "cargo",
-            "valorprovento": "remuneracao_bruta",
-            "valorliquido": "salario_liquido",
-            "codorgao": "orgao_codigo",
-            "anomes": "periodo",
-        })
-        return df
+        Thin delegator around the module-level helpers so the online
+        fallback in ``extract`` and the ``fetch_to_disk`` CLI wrapper share
+        one HTTP/pagination implementation.
+        """
+        records = _fetch_ckan_records(resource_id, limit=self.limit)
+        return _records_to_dataframe(records)
 
     def _discover_resource_id(self, dataset_name: str) -> str | None:
-        """Return the most recent datastore-active CSV resource id.
-
-        CKAN lists the PDF data dictionary as the first resource, which has
-        ``datastore_active=False``. Pick the first CSV whose datastore is
-        active — that is the latest monthly payroll snapshot.
-        """
-        try:
-            with httpx.Client(timeout=30) as client:
-                resp = client.get(
-                    f"{_CKAN_BASE}/package_show",
-                    params={"id": dataset_name},
-                )
-                resp.raise_for_status()
-                resources = resp.json().get("result", {}).get("resources", [])
-                for r in resources:
-                    if r.get("datastore_active") and str(r.get("format", "")).upper() == "CSV":
-                        return str(r["id"])
-        except (httpx.HTTPError, KeyError, IndexError):
-            logger.warning("[folha_go] Could not discover resource for %s", dataset_name)
-        return None
+        """Instance delegator kept for backwards compatibility."""
+        return _discover_resource_id(dataset_name)
 
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "folha_go"
@@ -147,7 +250,7 @@ class FolhaGoPipeline(Pipeline):
         # If no local files, try CKAN API
         if self._raw_servidores.empty:
             logger.info("[folha_go] No local files found, trying CKAN API...")
-            resource_id = self._discover_resource_id("folha-de-pagamento")
+            resource_id = _discover_resource_id(_DEFAULT_DATASET)
             if resource_id:
                 try:
                     self._raw_servidores = self._fetch_ckan_resource(resource_id)

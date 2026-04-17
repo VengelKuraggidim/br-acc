@@ -1,0 +1,42 @@
+[
+  {
+    "legislatures": [
+      {
+        "description": "",
+        "end_date": "2016-12-02",
+        "members": [
+          null
+        ],
+        "start_date": "2013-02-01",
+        "title": "17",
+        "uri": "https://www.goiania.go.leg.br/processo-legislativo/legislaturas/17"
+      }
+    ],
+    "parliamentarians": [
+      {
+        "address": "11111",
+        "birthday": "1968-02-01",
+        "description": "<p class=\" \"><span>Ele nasceu em Riachão, no Maranhão, e veio para Goiânia aos 15 anos, acompanhando o pai, que era farmacêutico e transferiu os negócios da família para a capital. Iniciou a vida pública aos 20 anos, como presidente da Associação de Moradores do Setor Universitário, onde reside até hoje.</span><br /><span class=\"Apple-tab-span\"></span><span>Formado em Direito, trabalhou na Secretaria de Ação Urbana da Prefeitura e foi candidato em 1983 pelo PDS, sendo eleito para a suplência. Assumiu a vaga por dois anos. Ainda no PDS se candidatou novamente, sendo um dos vereadores mais bem votados na época. Depois se filiou ao PMD e foi eleito para o segundo e terceiro mandatos. Após a eleição de Marconi Perillo para o governo do Estado, Anselmo deixou o PMDB e se filiou ao PSDB, sendo eleito vereador em 2000, 2004 e 2008, quinto, sexto e sétimo mandatos. Em 2012 foi reeleito para seu oitavo mandato, com 7.294 votos, com a missão de representar o povo goianiense na luta por seus direitos e pela melhoria da qualidade de vida para a coletividade.</span><br /><span class=\"Apple-tab-span\"></span><span>É Presidente da Comissão dos Direitos dos Idosos e membro das seguintes comissões dessa Casa de Leis: Comissão Mista, Comissão de Lazer, Esporte e Turismo, Comissão do Desenvolvimento Econômico e Social e Vice Presidente da Comissão de Ética.</span><br /><span class=\"Apple-tab-span\"></span><span>O lema de Anselmo Pereira é servir a população, atuando no parlamento com seriedade, dignidade e capacidade. Ação e Trabalho em prol de todos.</span></p>",
+        "email": "",
+        "full_name": "Anselmo Pereira da Silva Sobrinho",
+        "image": {
+          "filename": "Sem título.png",
+          "size": 1434099,
+          "uri": "https://www.goiania.go.leg.br/processo-legislativo/Vereadores/anselmo-pereira/@@downloads/Sem título.png"
+        },
+        "party_affiliation": [
+          {
+            "date_affiliation": "2006-02-01",
+            "date_disaffiliation": "",
+            "party": "PMDB"
+          }
+        ],
+        "postal_code": "111111",
+        "site": "",
+        "telephone": "(62) 3524-4320",
+        "title": "Anselmo Pereira",
+        "uri": "https://www.goiania.go.leg.br/processo-legislativo/Vereadores/anselmo-pereira"
+      }
+    ]
+  }
+]

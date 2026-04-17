@@ -61,12 +61,210 @@ _DEFAULT_PAGE_SIZE = 50
 _MODALIDADE_CODES = tuple(_MODALIDADE_MAP.keys())
 # API rejects date ranges > 365 days with HTTP 422.
 _MAX_WINDOW_DAYS = 365
+# Default historical window when caller does not pass an explicit range.
+# Kept in sync with ``PncpGoPipeline.extract`` (two years back from today).
+_DEFAULT_HISTORICAL_DAYS = 730
 
 
 def _make_procurement_id(cnpj_digits: str, year: int | str, sequential: int | str) -> str:
     """Create a stable procurement ID by hashing CNPJ + year + sequential."""
     raw = f"{cnpj_digits}:{year}:{sequential}"
     return hashlib.sha256(raw.encode()).hexdigest()[:24]
+
+
+def _split_date_windows(date_start: str, date_end: str) -> list[tuple[str, str]]:
+    """Split a date range into API-compatible windows (<= 365 days each).
+
+    Dates are YYYYMMDD strings (same format the PNCP API expects).
+    """
+    start = datetime.strptime(date_start, "%Y%m%d")  # noqa: DTZ007
+    end = datetime.strptime(date_end, "%Y%m%d")  # noqa: DTZ007
+    windows: list[tuple[str, str]] = []
+    cursor = start
+    while cursor <= end:
+        window_end = min(cursor + timedelta(days=_MAX_WINDOW_DAYS - 1), end)
+        windows.append((cursor.strftime("%Y%m%d"), window_end.strftime("%Y%m%d")))
+        cursor = window_end + timedelta(days=1)
+    return windows
+
+
+def _iter_api_combo(
+    client: httpx.Client,
+    modalidade_code: int,
+    win_start: str,
+    win_end: str,
+) -> list[dict[str, Any]]:
+    """Fetch all pages for a single (modalidade, window) combo from PNCP.
+
+    Returns the aggregated list of raw records (may be empty).  Network/JSON
+    errors are logged and treated as early termination for this combo — the
+    caller keeps iterating other combos.
+    """
+    url = f"{_API_BASE}contratacoes/publicacao"
+    records: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        params: dict[str, str | int] = {
+            "dataInicial": win_start,
+            "dataFinal": win_end,
+            "uf": "GO",
+            "codigoModalidadeContratacao": modalidade_code,
+            "pagina": page,
+            "tamanhoPagina": _DEFAULT_PAGE_SIZE,
+        }
+        try:
+            resp = client.get(url, params=params)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "PNCP API request failed "
+                "(modalidade %d, window %s-%s, page %d): %s",
+                modalidade_code, win_start, win_end, page, exc,
+            )
+            break
+
+        if not resp.content:
+            break
+
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "PNCP API returned non-JSON "
+                "(modalidade %d, window %s-%s, page %d): %s",
+                modalidade_code, win_start, win_end, page, exc,
+            )
+            break
+
+        if isinstance(payload, dict) and "data" in payload:
+            page_records = payload["data"]
+        elif isinstance(payload, list):
+            page_records = payload
+        else:
+            logger.warning(
+                "Unexpected API response "
+                "(modalidade %d, window %s-%s, page %d)",
+                modalidade_code, win_start, win_end, page,
+            )
+            break
+
+        if not page_records:
+            break
+
+        records.extend(page_records)
+
+        pages_remaining = 0
+        if isinstance(payload, dict):
+            pages_remaining = payload.get("paginasRestantes", 0)
+        if pages_remaining <= 0:
+            break
+
+        page += 1
+        time.sleep(_RATE_LIMIT_SLEEP)
+
+    return records
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    date_start: str | None = None,
+    date_end: str | None = None,
+    limit: int | None = None,
+    modalidades: list[int] | None = None,
+) -> list[Path]:
+    """Download PNCP GO procurement records and persist them as JSON on disk.
+
+    Mirrors the fetch loop used by ``PncpGoPipeline.extract`` so the ETL can
+    be fed from local files (the preferred ``script_download`` acquisition
+    mode) instead of hitting the API inline during bootstrap.
+
+    Args:
+        output_dir: Directory where per-combo JSON files are written. Created
+            if missing. One JSON file is produced per (modalidade, window)
+            combo that returned at least one record.
+        date_start: Inclusive start date in ``YYYY-MM-DD`` or ``YYYYMMDD``
+            format. Defaults to the same historical window used by
+            ``PncpGoPipeline.extract`` (~2 years back from today).
+        date_end: Inclusive end date in ``YYYY-MM-DD`` or ``YYYYMMDD`` format.
+            Defaults to today.
+        limit: Optional cap on the total number of records fetched. Useful
+            for smoke tests; ``None`` means no cap (full historical).
+        modalidades: PNCP modalidade codes to iterate. ``None`` defaults to
+            the full set hard-coded in the pipeline
+            (``_MODALIDADE_CODES``).
+
+    Returns:
+        List of JSON file paths written to disk (sorted).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _normalize(d: str) -> str:
+        return d.replace("-", "")
+
+    today = datetime.now()  # noqa: DTZ005
+    date_end_norm = (
+        today.strftime("%Y%m%d") if date_end is None else _normalize(date_end)
+    )
+    date_start_norm = (
+        (today - timedelta(days=_DEFAULT_HISTORICAL_DAYS)).strftime("%Y%m%d")
+        if date_start is None
+        else _normalize(date_start)
+    )
+
+    mod_codes: tuple[int, ...] = tuple(modalidades) if modalidades else _MODALIDADE_CODES
+    windows = _split_date_windows(date_start_norm, date_end_norm)
+
+    logger.info(
+        "Fetching PNCP GO records: %s to %s, modalidades=%s, limit=%s",
+        date_start_norm, date_end_norm, list(mod_codes), limit,
+    )
+    logger.info("Date windows: %d, modalidades: %d", len(windows), len(mod_codes))
+
+    written: list[Path] = []
+    total_records = 0
+
+    with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
+        for modalidade_code in mod_codes:
+            if limit is not None and total_records >= limit:
+                break
+            for win_start, win_end in windows:
+                if limit is not None and total_records >= limit:
+                    break
+
+                records = _iter_api_combo(client, modalidade_code, win_start, win_end)
+                if not records:
+                    continue
+
+                if limit is not None:
+                    remaining = limit - total_records
+                    if remaining <= 0:
+                        break
+                    if len(records) > remaining:
+                        records = records[:remaining]
+
+                filename = f"pncp_go_mod{modalidade_code:02d}_{win_start}_{win_end}.json"
+                out_path = output_dir / filename
+                out_path.write_text(
+                    json.dumps({"data": records}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                written.append(out_path)
+                total_records += len(records)
+                logger.info(
+                    "  wrote %s (%d records, modalidade %d/%s)",
+                    out_path.name,
+                    len(records),
+                    modalidade_code,
+                    _MODALIDADE_MAP.get(modalidade_code, "?"),
+                )
+
+    logger.info(
+        "PNCP GO fetch complete: %d records across %d file(s)",
+        total_records,
+        len(written),
+    )
+    return sorted(written)
 
 
 class PncpGoPipeline(Pipeline):
@@ -96,15 +294,7 @@ class PncpGoPipeline(Pipeline):
         date_start: str, date_end: str,
     ) -> list[tuple[str, str]]:
         """Split a date range into API-compatible windows (<= 365 days each)."""
-        start = datetime.strptime(date_start, "%Y%m%d")  # noqa: DTZ007
-        end = datetime.strptime(date_end, "%Y%m%d")  # noqa: DTZ007
-        windows: list[tuple[str, str]] = []
-        cursor = start
-        while cursor <= end:
-            window_end = min(cursor + timedelta(days=_MAX_WINDOW_DAYS - 1), end)
-            windows.append((cursor.strftime("%Y%m%d"), window_end.strftime("%Y%m%d")))
-            cursor = window_end + timedelta(days=1)
-        return windows
+        return _split_date_windows(date_start, date_end)
 
     def _fetch_from_api(
         self,
@@ -117,76 +307,19 @@ class PncpGoPipeline(Pipeline):
         windows > 365 days. We iterate all modalidades and chunk the
         requested range into yearly windows.
         """
-        url = f"{_API_BASE}contratacoes/publicacao"
         all_records: list[dict[str, Any]] = []
-        windows = self._split_date_windows(date_start, date_end)
+        windows = _split_date_windows(date_start, date_end)
 
         with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
             for modalidade_code in _MODALIDADE_CODES:
                 mod_count = 0
                 for win_start, win_end in windows:
-                    page = 1
-                    while True:
-                        params: dict[str, str | int] = {
-                            "dataInicial": win_start,
-                            "dataFinal": win_end,
-                            "uf": "GO",
-                            "codigoModalidadeContratacao": modalidade_code,
-                            "pagina": page,
-                            "tamanhoPagina": _DEFAULT_PAGE_SIZE,
-                        }
-                        try:
-                            resp = client.get(url, params=params)
-                            resp.raise_for_status()
-                        except httpx.HTTPError as exc:
-                            logger.warning(
-                                "PNCP API request failed "
-                                "(modalidade %d, window %s-%s, page %d): %s",
-                                modalidade_code, win_start, win_end, page, exc,
-                            )
-                            break
-
-                        if not resp.content:
-                            # PNCP sometimes replies 200 with empty body for
-                            # modalidades without records in the window.
-                            break
-
-                        try:
-                            payload = resp.json()
-                        except json.JSONDecodeError as exc:
-                            logger.warning(
-                                "PNCP API returned non-JSON "
-                                "(modalidade %d, window %s-%s, page %d): %s",
-                                modalidade_code, win_start, win_end, page, exc,
-                            )
-                            break
-
-                        if isinstance(payload, dict) and "data" in payload:
-                            records = payload["data"]
-                        elif isinstance(payload, list):
-                            records = payload
-                        else:
-                            logger.warning(
-                                "Unexpected API response "
-                                "(modalidade %d, window %s-%s, page %d)",
-                                modalidade_code, win_start, win_end, page,
-                            )
-                            break
-
-                        if not records:
-                            break
-
+                    records = _iter_api_combo(
+                        client, modalidade_code, win_start, win_end,
+                    )
+                    if records:
                         all_records.extend(records)
                         mod_count += len(records)
-
-                        pages_remaining = 0
-                        if isinstance(payload, dict):
-                            pages_remaining = payload.get("paginasRestantes", 0)
-                        if pages_remaining <= 0:
-                            break
-
-                        page += 1
-                        time.sleep(_RATE_LIMIT_SLEEP)
 
                 if mod_count:
                     logger.info(
