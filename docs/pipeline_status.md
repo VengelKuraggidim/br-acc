@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T05:38:37Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T20:14:55Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -10,6 +10,7 @@ Status buckets:
 
 | Source ID | Pipeline ID | Status Bucket | Load State | Source Format | Required Input | Known Blockers |
 |---|---|---|---|---|---|---|
+| alego | alego | implemented_partial | not_loaded | web_portal | Portal export/scrape output under data/alego/ | State deputies and cota parlamentar pending public API discovery |
 | ana_water_grants | ana_water_grants | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/ana | Water use rights |
 | anac_aviation_concessions | anac_aviation_concessions | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anac | Aviation contracts |
 | anatel_telecom_licenses | anatel_telecom_licenses | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anatel | Telecom operators |
@@ -74,9 +75,10 @@ Status buckets:
 | siconfi | siconfi | implemented_partial | partial | api_json | API payload from https://apidatalake.tesouro.gov.br/docs/siconfi/ | No CNPJ direct links |
 | siga_brasil | siga_brasil | not_built | not_loaded | file_batch | data/siga_brasil/* | Federal budget traces |
 | siop | siop | implemented_partial | partial | api_json | API payload from https://www.siop.planejamento.gov.br/ | Author linkage limited |
+| ssp_go | ssp_go | implemented_partial | not_loaded | web_portal | Portal export/scrape output under data/ssp_go/ | Aggregate crime statistics scaffolded pending machine-readable export |
 | state_portal_ba | state_portal_ba | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_ba/ | State expenses and contracts |
 | state_portal_ce | state_portal_ce | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_ce/ | State expenses and contracts |
-| state_portal_go | state_portal_go | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_go/ | State expenses and contracts |
+| state_portal_go | state_portal_go | implemented_partial | not_loaded | api_json | API payload from https://dadosabertos.go.gov.br/ | State contracts suppliers and administrative sanctions via CKAN API |
 | state_portal_mg | state_portal_mg | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_mg/ | State expenses and contracts |
 | state_portal_pe | state_portal_pe | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_pe/ | State expenses and contracts |
 | state_portal_pr | state_portal_pr | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_pr/ | State expenses and contracts |
@@ -93,7 +95,7 @@ Status buckets:
 | tce_ba | tce_ba | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_ba/ | State audit procurement |
 | tce_ce | tce_ce | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_ce/ | State audit procurement |
 | tce_es | tce_es | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_es/ | State audit procurement |
-| tce_go | tce_go | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_go/ | State audit procurement |
+| tce_go | tce_go | implemented_partial | not_loaded | web_portal | Portal export/scrape output under data/tce_go/ | State audit procurement scaffolded pending CSV export schema |
 | tce_ma | tce_ma | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_ma/ | State audit procurement |
 | tce_mg | tce_mg | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_mg/ | State audit procurement |
 | tce_ms | tce_ms | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_ms/ | State audit procurement |
@@ -113,6 +115,7 @@ Status buckets:
 | tce_sp | tce_sp | not_built | not_loaded | api_json | API payload from https://transparencia.tce.sp.gov.br/ | State audit procurement |
 | tce_to | tce_to | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_to/ | State audit procurement |
 | tcm_go | tcm_go | implemented_loaded | loaded | api_json | API payload from https://apidatalake.tesouro.gov.br/ords/siconfi/tt/ | - |
+| tcmgo_sancoes | tcmgo_sancoes | implemented_partial | not_loaded | web_portal | Portal export/scrape output under data/tcmgo_sancoes/ | Municipal audit tribunal sanctions scaffolded pending CSV export |
 | tcu | tcu | implemented_loaded | loaded | file_batch | data/tcu/* | - |
 | tesouro_emendas | tesouro_emendas | implemented_partial | not_loaded | file_batch | data/tesouro_emendas/* | Budget execution |
 | transferegov | transferegov | implemented_loaded | loaded | file_batch | data/transferegov/* | - |
