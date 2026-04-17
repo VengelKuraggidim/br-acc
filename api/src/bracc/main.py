@@ -18,6 +18,7 @@ from bracc.routers import (
     baseline,
     emendas,
     entity,
+    go,
     graph,
     investigation,
     meta,
@@ -89,6 +90,7 @@ app.include_router(baseline.router)
 app.include_router(investigation.router)
 app.include_router(investigation.shared_router)
 app.include_router(emendas.router)
+app.include_router(go.router)
 
 
 @app.get("/health")

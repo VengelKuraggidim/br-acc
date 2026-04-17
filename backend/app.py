@@ -338,11 +338,8 @@ class BraccClient:
         return []
 
     async def buscar_municipios_go(self) -> list[dict]:
-        """Get GO municipalities (up to bracc-api's per-page ceiling of 100)."""
-        resp = await self.client.get(
-            "/api/v1/search",
-            params={"q": "*", "type": "go_municipality", "size": 100},
-        )
+        """Get all GO municipalities via the dedicated /go/ router."""
+        resp = await self.client.get("/api/v1/go/municipalities")
         if resp.status_code == 200:
             return resp.json().get("results", [])
         return []
@@ -653,8 +650,9 @@ async def perfil_politico(entity_id: str):
     nome_politico = props.get("name", "")
     cpf_politico = props.get("cpf")
 
-    # Buscar deputado na Camara
-    deputado = await buscar_deputado_camara(nome_politico, cpf_politico)
+    # Buscar deputado na Camara (UF ajuda a desambiguar homonimos)
+    uf_politico = props.get("uf") or politico.uf
+    deputado = await buscar_deputado_camara(nome_politico, cpf_politico, uf_politico)
     if deputado:
         foto = deputado.get("ultimoStatus", {}).get("urlFoto") or deputado.get("urlFoto")
         if foto:
