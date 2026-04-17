@@ -34,6 +34,41 @@ def _normalizar_nome(nome: str) -> str:
     return " ".join(sem_acento.lower().split())
 
 
+_PARTICULAS_NOME = {"de", "da", "do", "das", "dos", "e", "di", "del"}
+
+
+def _tokens_significativos(nome: str) -> set[str]:
+    return {
+        t for t in _normalizar_nome(nome).split()
+        if t and t not in _PARTICULAS_NOME
+    }
+
+
+def _nome_compativel(nome_buscado: str, dados_deputado: dict[str, Any]) -> bool:
+    """Confere se o deputado retornado casa razoavelmente com o nome
+    buscado. Compara tokens contra nome civil, nome parlamentar atual e
+    o nome curto da lista. Evita que um fallback por sobrenome sirva a
+    foto de outra pessoa (ex.: buscar 'Clecio Antonio Alves' e cair em
+    'Silvye Alves', que e a unica 'Alves' de GO na Camara).
+    """
+    tokens_buscado = _tokens_significativos(nome_buscado)
+    if not tokens_buscado:
+        return False
+    necessarios = min(2, len(tokens_buscado))
+    candidatos = [
+        dados_deputado.get("nomeCivil"),
+        dados_deputado.get("ultimoStatus", {}).get("nome"),
+        dados_deputado.get("nome"),
+    ]
+    for cand in candidatos:
+        if not cand:
+            continue
+        comum = tokens_buscado & _tokens_significativos(cand)
+        if len(comum) >= necessarios:
+            return True
+    return False
+
+
 async def buscar_deputado_camara(
     nome: str,
     cpf: str | None = None,
@@ -43,9 +78,10 @@ async def buscar_deputado_camara(
 
     Regras para evitar foto/perfil errado quando ha homonimos:
     - Se CPF for informado e nenhum candidato bater com ele, retorna None.
-    - Sem CPF: so retorna quando ha candidato unico ou match exato de nome
-      (normalizado). Caso contrario retorna None para nao servir a foto
-      de outra pessoa.
+    - Sem CPF: so retorna quando ha candidato unico ou match exato de
+      nome (normalizado) E os tokens do nome buscado aparecem no nome
+      civil/parlamentar do candidato. Caso contrario retorna None para
+      nao servir a foto de outra pessoa.
     """
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         dados = await _buscar_deputados(client, nome, uf)
@@ -74,20 +110,26 @@ async def buscar_deputado_camara(
             # evitar foto errada.
             return None
 
+        candidato: dict[str, Any] | None = None
         if len(dados) == 1:
-            detalhe = await _detalhe_deputado(client, dados[0]["id"])
-            return detalhe or dados[0]
+            candidato = dados[0]
+        else:
+            nome_norm = _normalizar_nome(nome)
+            candidatos_exatos = [
+                d for d in dados
+                if _normalizar_nome(d.get("nome", "")) == nome_norm
+            ]
+            if len(candidatos_exatos) == 1:
+                candidato = candidatos_exatos[0]
 
-        nome_norm = _normalizar_nome(nome)
-        candidatos_exatos = [
-            d for d in dados if _normalizar_nome(d.get("nome", "")) == nome_norm
-        ]
-        if len(candidatos_exatos) == 1:
-            detalhe = await _detalhe_deputado(client, candidatos_exatos[0]["id"])
-            return detalhe or candidatos_exatos[0]
+        if candidato is None:
+            return None
 
-        # Multiplos homonimos sem criterio de desempate: nao arrisca.
-        return None
+        detalhe = await _detalhe_deputado(client, candidato["id"])
+        dados_completos = detalhe or candidato
+        if not _nome_compativel(nome, dados_completos):
+            return None
+        return dados_completos
 
 
 async def _buscar_deputados(

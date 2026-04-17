@@ -115,6 +115,42 @@ class TestBuscarDeputadoCamara:
         result = await buscar_deputado_camara("FULANO")
         assert result is None
 
+    @respx.mock
+    async def test_fallback_sobrenome_nao_confunde_homonimo(self):
+        # Nome completo nao encontra: cai no fallback por sobrenome.
+        respx.get(
+            f"{CAMARA_API}/deputados",
+            params={"nome": "Clecio Antonio Alves", "siglaUf": "GO"},
+        ).mock(return_value=Response(200, json={"dados": []}))
+        # Sobrenome retorna UM unico deputado, mas nao e a pessoa buscada.
+        respx.get(
+            f"{CAMARA_API}/deputados",
+            params={"nome": "Alves", "siglaUf": "GO"},
+        ).mock(
+            return_value=Response(200, json={
+                "dados": [{"id": 999, "nome": "Silvye Alves"}],
+            }),
+        )
+        respx.get(f"{CAMARA_API}/deputados/999").mock(
+            return_value=Response(200, json={
+                "dados": {
+                    "id": 999,
+                    "nomeCivil": "Silvye Maria Alves dos Santos",
+                    "ultimoStatus": {
+                        "nome": "Silvye Alves",
+                        "urlFoto": "https://foto-silvye.jpg",
+                    },
+                },
+            }),
+        )
+
+        result = await buscar_deputado_camara(
+            "Clecio Antonio Alves", uf="GO",
+        )
+        # Nao pode devolver a Silvye so porque foi o unico resultado
+        # do fallback por sobrenome.
+        assert result is None
+
 
 # === buscar_despesas_deputado ===
 
