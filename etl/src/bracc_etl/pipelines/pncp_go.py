@@ -48,7 +48,7 @@ _MODALIDADE_MAP: dict[int, str] = {
     1: "leilao_eletronico",
     2: "dialogo_competitivo",
     3: "concurso",
-    4: "dialogo_competitivo",
+    4: "concorrencia_eletronica",
     5: "concorrencia",
     6: "pregao_eletronico",
     7: "cotacao_eletronica",

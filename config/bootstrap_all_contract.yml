@@ -96,7 +96,7 @@
       "blocking_reason_if_any": "-",
       "core": true,
       "download_commands": [
-        "cd /workspace/etl && bracc-etl download --output-dir ../data/cnpj --files 10 --skip-existing"
+        "cd /workspace/etl && bracc-etl download --output-dir ../data/cnpj --skip-existing"
       ]
     },
     {
@@ -108,7 +108,7 @@
       "blocking_reason_if_any": "-",
       "core": true,
       "download_commands": [
-        "python3 /workspace/scripts/download_comprasnet.py 2019 2020 2021 2022 2023 2024 2025 2026"
+        "cd /workspace/etl && uv run python ../scripts/download_comprasnet.py --output-dir ../data/comprasnet 2019 2020 2021 2022 2023 2024 2025 2026"
       ]
     },
     {
@@ -122,21 +122,27 @@
     },
     {
       "pipeline_id": "cvm",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/cvm/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_cvm.py --output-dir ../data/cvm"
+      ]
     },
     {
       "pipeline_id": "cvm_funds",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/cvm_funds/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_cvm_funds.py --output-dir ../data/cvm_funds"
+      ]
     },
     {
       "pipeline_id": "datajud",
@@ -278,12 +284,15 @@
     },
     {
       "pipeline_id": "pgfn",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/pgfn/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_pgfn.py --output-dir ../data/pgfn"
+      ]
     },
     {
       "pipeline_id": "pncp",
@@ -455,12 +464,15 @@
     },
     {
       "pipeline_id": "transparencia",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/transparencia/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_transparencia.py --output-dir ../data/transparencia --datasets compras,servidores,emendas --year 2021 --year 2022 --year 2023 --year 2024 --year 2025"
+      ]
     },
     {
       "pipeline_id": "tse",
