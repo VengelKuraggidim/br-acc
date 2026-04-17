@@ -16,6 +16,7 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cnpj,
     normalize_name,
+    parse_brl_amount,
     strip_document,
 )
 
@@ -26,17 +27,6 @@ def _generate_penalty_id(cnpj_digits: str, process_number: str, penalty_type: st
     """Deterministic ID from CNPJ digits + process number + penalty type."""
     raw = f"{cnpj_digits}:{process_number}:{penalty_type}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
-
-
-def _parse_brl_value(raw: str) -> float | None:
-    """Parse Brazilian currency string (e.g. '1.500.000,50') to float."""
-    cleaned = raw.strip().replace(".", "").replace(",", ".")
-    if not cleaned:
-        return None
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
 
 
 class BcbPipeline(Pipeline):
@@ -86,7 +76,7 @@ class BcbPipeline(Pipeline):
             process_number = str(row.get("Número Processo", "")).strip()
             decision_date = str(row.get("Data Decisão", "")).strip()
 
-            penalty_value = _parse_brl_value(penalty_value_raw)
+            penalty_value = parse_brl_amount(penalty_value_raw, default=None)
 
             penalty_id = _generate_penalty_id(digits, process_number, penalty_type)
 

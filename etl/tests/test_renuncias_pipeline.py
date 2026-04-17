@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bracc_etl.pipelines.renuncias import RenunciasPipeline, _parse_brl
+from bracc_etl.pipelines.renuncias import RenunciasPipeline
 from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -15,26 +15,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def pipeline() -> RenunciasPipeline:
     driver = MagicMock()
     return RenunciasPipeline(driver=driver, data_dir=str(FIXTURES))
-
-
-class TestParseBrl:
-    def test_simple(self) -> None:
-        assert _parse_brl("1.234,56") == 1234.56
-
-    def test_large(self) -> None:
-        assert _parse_brl("1.234.567,89") == 1234567.89
-
-    def test_no_thousands(self) -> None:
-        assert _parse_brl("567,89") == 567.89
-
-    def test_zero(self) -> None:
-        assert _parse_brl("0,00") == 0.0
-
-    def test_invalid(self) -> None:
-        assert _parse_brl("abc") is None
-
-    def test_empty(self) -> None:
-        assert _parse_brl("") is None
 
 
 class TestExtract:

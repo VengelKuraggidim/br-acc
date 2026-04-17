@@ -16,19 +16,11 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cnpj,
     normalize_name,
+    parse_brl_amount,
     strip_document,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_brl(value: str) -> float | None:
-    """Parse Brazilian currency format: 1.234.567,89 -> 1234567.89."""
-    clean = value.strip().replace(".", "").replace(",", ".")
-    try:
-        return float(clean)
-    except (ValueError, TypeError):
-        return None
 
 
 class RenunciasPipeline(Pipeline):
@@ -112,7 +104,7 @@ class RenunciasPipeline(Pipeline):
                 row.get("Valor Renúncia Fiscal (R$)",
                          row.get("Valor Ren\xfancia Fiscal (R$)", "0"))
             )
-            amount = _parse_brl(valor_raw)
+            amount = parse_brl_amount(valor_raw, default=None)
             if amount is None or amount <= 0:
                 continue
 
