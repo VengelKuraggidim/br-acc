@@ -5,7 +5,3 @@ services:
   api:
     image: ${REGISTRY_IMAGE_PREFIX}_api:${REGISTRY_IMAGE_TAG:-latest}
     build: ~
-
-  frontend:
-    image: ${REGISTRY_IMAGE_PREFIX}_frontend:${REGISTRY_IMAGE_TAG:-latest}
-    build: ~

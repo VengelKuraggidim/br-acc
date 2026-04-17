@@ -41,16 +41,6 @@ services:
       retries: 5
       start_period: 15s
 
-  frontend:
-    build: ../frontend
-    ports:
-      - "3000:3000"
-    environment:
-      VITE_API_URL: http://localhost:8000
-    depends_on:
-      api:
-        condition: service_healthy
-
   etl:
     build: ../etl
     profiles: ["etl"]
