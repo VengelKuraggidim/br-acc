@@ -98,7 +98,7 @@ class PncpGoPipeline(Pipeline):
 
         with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
             while True:
-                params = {
+                params: dict[str, str | int] = {
                     "dataInicial": date_start,
                     "dataFinal": date_end,
                     "uf": "GO",

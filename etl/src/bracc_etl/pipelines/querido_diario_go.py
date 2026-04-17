@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
-import pandas as pd
 
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
@@ -164,7 +163,7 @@ class QueridoDiarioGoPipeline(Pipeline):
                     if len(gazettes) < _PAGE_SIZE:
                         break
 
-        return records[: int(total_limit)] if self.limit else records
+        return records[: int(total_limit)] if total_limit is not None else records
 
     def _read_local_files(self) -> list[dict[str, Any]]:
         """Read gazette data from local JSON files as fallback."""

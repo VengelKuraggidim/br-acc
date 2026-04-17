@@ -84,7 +84,9 @@ class TcmGoPipeline(Pipeline):
         if not csv_path.exists():
             return False
         df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
-        records = df.to_dict("records")
+        records: list[dict[str, Any]] = [
+            {str(k): v for k, v in r.items()} for r in df.to_dict("records")
+        ]
         # Filter to Goias
         self._municipalities = [
             r for r in records if str(r.get("cod_ibge", "")).startswith(GOIAS_UF_CODE)
@@ -99,7 +101,9 @@ class TcmGoPipeline(Pipeline):
         records: list[dict[str, Any]] = []
         for csv_file in csv_files:
             df = pd.read_csv(csv_file, dtype=str, keep_default_na=False)
-            records.extend(df.to_dict("records"))
+            records.extend(
+                {str(k): v for k, v in r.items()} for r in df.to_dict("records")
+            )
             logger.info("  Loaded %d records from %s", len(df), csv_file.name)
         # Filter to Goias municipalities
         self._raw_fiscal = [

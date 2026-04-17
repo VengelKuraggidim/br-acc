@@ -100,7 +100,11 @@ class TestTransform:
         _load_fixture(pipeline)
         pipeline.transform()
 
-        values = sorted(p["amount_estimated"] for p in pipeline.procurements if p["amount_estimated"] is not None)
+        values = sorted(
+            p["amount_estimated"]
+            for p in pipeline.procurements
+            if p["amount_estimated"] is not None
+        )
         assert 750000.00 in values
         assert 2500000.00 in values
 

@@ -111,7 +111,11 @@ class FolhaGoPipeline(Pipeline):
 
         with httpx.Client(timeout=60) as client:
             while total_limit is None or len(records) < total_limit:
-                remaining = _PAGE_LIMIT if total_limit is None else min(_PAGE_LIMIT, total_limit - len(records))
+                remaining = (
+                    _PAGE_LIMIT
+                    if total_limit is None
+                    else min(_PAGE_LIMIT, total_limit - len(records))
+                )
                 resp = client.get(
                     f"{_CKAN_BASE}/datastore_search",
                     params={
@@ -127,7 +131,7 @@ class FolhaGoPipeline(Pipeline):
                     break
                 records.extend(page_records)
                 offset += len(page_records)
-                if len(page_records) < page_size:
+                if len(page_records) < remaining:
                     break
 
         if not records:
@@ -145,7 +149,7 @@ class FolhaGoPipeline(Pipeline):
                 resp.raise_for_status()
                 resources = resp.json().get("result", {}).get("resources", [])
                 if resources:
-                    return resources[0]["id"]
+                    return str(resources[0]["id"])
         except (httpx.HTTPError, KeyError, IndexError):
             logger.warning("[folha_go] Could not discover resource for %s", dataset_name)
         return None
@@ -204,10 +208,22 @@ class FolhaGoPipeline(Pipeline):
                 _pick(row, "orgao", "orgao_lotacao", "lotacao", "agency", "unidade"),
             )
             salary_gross = _to_float(
-                _pick(row, "remuneracao_bruta", "salario_bruto", "vencimento_bruto", "salary_gross"),
+                _pick(
+                    row,
+                    "remuneracao_bruta",
+                    "salario_bruto",
+                    "vencimento_bruto",
+                    "salary_gross",
+                ),
             )
             salary_net = _to_float(
-                _pick(row, "remuneracao_liquida", "salario_liquido", "vencimento_liquido", "salary_net"),
+                _pick(
+                    row,
+                    "remuneracao_liquida",
+                    "salario_liquido",
+                    "vencimento_liquido",
+                    "salary_net",
+                ),
             )
             municipality = _pick(row, "municipio", "cidade", "municipality")
             is_commissioned = _is_commissioned(role)

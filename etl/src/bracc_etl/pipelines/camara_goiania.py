@@ -215,7 +215,13 @@ class CamaraGoianiaPipeline(Pipeline):
             if not year and date:
                 year = date[:4]
 
-            eid = _stable_id("camara_goiania_expense", vereador_name, date, description, str(amount))
+            eid = _stable_id(
+                "camara_goiania_expense",
+                vereador_name,
+                date,
+                description,
+                str(amount),
+            )
             expenses.append({
                 "expense_id": eid,
                 "vereador_name": vereador_name,
