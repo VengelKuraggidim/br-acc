@@ -123,6 +123,9 @@ jobs:
       - name: Check pipeline inputs (registry ⇆ pipeline_status doc)
         run: make check-pipeline-inputs
 
+      - name: Check bootstrap-all contract (registry ⇆ contract yml)
+        run: make check-bootstrap-contract
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest

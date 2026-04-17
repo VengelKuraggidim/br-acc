@@ -1,4 +1,4 @@
-.PHONY: help setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: help setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract generate-pipeline-status generate-source-summary generate-reference-metrics
 
 # Default target when running `make` with no arguments.
 .DEFAULT_GOAL := help
@@ -148,7 +148,7 @@ check: lint type-check test
 # Mirror of what CI runs on every PR: lint + type + tests + neutrality +
 # registry/docs governance. Use this before opening a PR to avoid green-
 # local / red-CI surprises.
-pre-commit: check neutrality check-public-claims check-pipeline-contracts check-pipeline-inputs
+pre-commit: check neutrality check-public-claims check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract
 	@echo "Pre-commit bundle passed (lint/type/test + neutrality + governance)."
 
 # ── Neutrality audit ───────────────────────────────────
@@ -188,6 +188,9 @@ check-pipeline-contracts:
 
 check-pipeline-inputs:
 	python3 scripts/check_pipeline_inputs.py
+
+check-bootstrap-contract:
+	python3 scripts/check_bootstrap_contract.py
 
 # ── Generators ────────────────────────────────────────────
 generate-pipeline-status:
