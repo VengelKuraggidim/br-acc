@@ -267,9 +267,12 @@ CREATE INDEX socio_snapshot_date IF NOT EXISTS
   FOR ()-[r:SOCIO_DE_SNAPSHOT]-() ON (r.snapshot_date);
 
 // ── Fulltext Search Index ───────────────────────────────
+// standard-folding analyzer makes search accent-insensitive ("João" ~ "joao").
+// Analyzer changes on an existing index are handled by ensure_schema().
 CREATE FULLTEXT INDEX entity_search IF NOT EXISTS
   FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|Inquiry|InquiryRequirement|MunicipalContract|MunicipalBid|MunicipalGazetteAct|JudicialCase|SourceDocument)
-  ON EACH [n.name, n.razao_social, n.cpf, n.cnpj, n.doc_partial, n.doc_raw, n.cnes_code, n.object, n.contracting_org, n.convenente, n.infraction, n.org, n.function, n.subject, n.text, n.topic, n.case_number, n.url];
+  ON EACH [n.name, n.razao_social, n.cpf, n.cnpj, n.doc_partial, n.doc_raw, n.cnes_code, n.object, n.contracting_org, n.convenente, n.infraction, n.org, n.function, n.subject, n.text, n.topic, n.case_number, n.url]
+  OPTIONS { indexConfig: { `fulltext.analyzer`: 'standard-folding' } };
 
 // ── User Constraints ────────────────────────────────────
 CREATE CONSTRAINT user_email_unique IF NOT EXISTS

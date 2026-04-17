@@ -76,11 +76,42 @@ def sanitize_props(
     return clean
 
 
+_ENTITY_SEARCH_ANALYZER = "standard-folding"
+
+
+async def _migrate_entity_search_analyzer(session: AsyncSession) -> None:
+    """Drop entity_search if its analyzer diverges from the expected one.
+
+    CREATE FULLTEXT INDEX ... IF NOT EXISTS skips when the index already
+    exists, even if the analyzer config is outdated. Dropping first lets the
+    schema_init CREATE recreate it with the current analyzer. Neo4j rebuilds
+    fulltext indexes from existing nodes, so no data is lost.
+    """
+    result = await session.run(
+        "SHOW FULLTEXT INDEXES YIELD name, options "
+        "WHERE name = 'entity_search' RETURN options AS options"
+    )
+    record = await result.single()
+    if record is None:
+        return
+    options = record["options"] or {}
+    index_config = options.get("indexConfig", {}) if isinstance(options, dict) else {}
+    current = index_config.get("fulltext.analyzer")
+    if current == _ENTITY_SEARCH_ANALYZER:
+        return
+    logger.info(
+        "Rebuilding entity_search fulltext index: analyzer %r -> %r",
+        current, _ENTITY_SEARCH_ANALYZER,
+    )
+    await session.run("DROP INDEX entity_search")
+
+
 async def ensure_schema(driver: AsyncDriver) -> None:
     """Run schema_init.cypher statements on startup. All use IF NOT EXISTS so idempotent."""
     raw = CypherLoader.load("schema_init")
     statements = [s.strip() for s in raw.split(";") if s.strip()]
     async with driver.session(database=settings.neo4j_database) as session:
+        await _migrate_entity_search_analyzer(session)
         for stmt in statements:
             # Skip comment-only lines
             lines = [ln for ln in stmt.splitlines() if not ln.strip().startswith("//")]
