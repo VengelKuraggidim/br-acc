@@ -476,9 +476,16 @@ CREATE INDEX bcb_penalty_date IF NOT EXISTS
   FOR (b:BCBPenalty) ON (b.decision_date);
 
 // ── Fulltext Search Index ───────────────────────────────
+// Goias-scoped labels (StateEmployee, StateAgency, GoMunicipality, GoProcurement,
+// GoAppointment, GoGazetteAct, GoVereador, GoCouncilExpense, GoLegislativeProposal,
+// StateLegislator, LegislativeExpense, LegislativeProposition, GoSecurityStat,
+// TceGoDecision, TceGoIrregularAccount, TceGoAudit, TcmGoImpedido, TcmGoRejectedAccount)
+// are included so the Fiscal Cidadao wrapper can filter search by type.
+// agency_name, person_name, territory_name cover GoProcurement / GoAppointment
+// searchable fields; role is used by StateEmployee; party by GoVereador.
 CREATE FULLTEXT INDEX entity_search IF NOT EXISTS
-  FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|OffshoreEntity|OffshoreOfficer|GlobalPEP|CVMProceeding|Expense|PEPRecord|Expulsion|LeniencyAgreement|GovCardExpense|GovTravel|TaxWaiver|LegalCase|DeclaredAsset|InternationalSanction|Bid|Fund|DOUAct|MunicipalFinance|PartyMembership|BarredNGO|BCBPenalty|LaborMovement|CPI|Inquiry|InquiryRequirement|InquirySession|MunicipalBid|MunicipalContract|MunicipalGazetteAct|JudicialCase|SourceDocument)
-  ON EACH [n.name, n.razao_social, n.cpf, n.cnpj, n.doc_partial, n.doc_raw, n.cnes_code, n.object, n.contracting_org, n.convenente, n.infraction, n.org, n.function, n.jurisdiction, n.penalty_type, n.description, n.institution_name, n.subject, n.text, n.topic, n.case_number, n.url];
+  FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|OffshoreEntity|OffshoreOfficer|GlobalPEP|CVMProceeding|Expense|PEPRecord|Expulsion|LeniencyAgreement|GovCardExpense|GovTravel|TaxWaiver|LegalCase|DeclaredAsset|InternationalSanction|Bid|Fund|DOUAct|MunicipalFinance|PartyMembership|BarredNGO|BCBPenalty|LaborMovement|CPI|Inquiry|InquiryRequirement|InquirySession|MunicipalBid|MunicipalContract|MunicipalGazetteAct|JudicialCase|SourceDocument|StateEmployee|StateAgency|GoMunicipality|GoProcurement|GoAppointment|GoGazetteAct|GoVereador|GoCouncilExpense|GoLegislativeProposal|StateLegislator|LegislativeExpense|LegislativeProposition|GoSecurityStat|TceGoDecision|TceGoIrregularAccount|TceGoAudit|TcmGoImpedido|TcmGoRejectedAccount)
+  ON EACH [n.name, n.razao_social, n.cpf, n.cnpj, n.doc_partial, n.doc_raw, n.cnes_code, n.object, n.contracting_org, n.convenente, n.infraction, n.org, n.function, n.jurisdiction, n.penalty_type, n.description, n.institution_name, n.subject, n.text, n.topic, n.case_number, n.url, n.agency_name, n.agency, n.person_name, n.territory_name, n.role, n.party, n.municipality, n.motivo, n.ementa, n.titulo];
 
 // ── User Constraints ────────────────────────────────────
 CREATE CONSTRAINT user_email_unique IF NOT EXISTS
