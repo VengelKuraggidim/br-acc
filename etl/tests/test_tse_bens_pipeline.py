@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from bracc_etl.pipelines.tse_bens import TseBensPipeline, _make_asset_id, _parse_value
+from bracc_etl.pipelines.tse_bens import TseBensPipeline, _make_asset_id
 from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -43,23 +43,6 @@ class TestTseBensPipelineMetadata:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-class TestParseValue:
-    def test_valid_float(self) -> None:
-        assert _parse_value("150000.50") == 150000.50
-
-    def test_comma_decimal(self) -> None:
-        assert _parse_value("150000,50") == 150000.50
-
-    def test_empty_string(self) -> None:
-        assert _parse_value("") == 0.0
-
-    def test_garbage(self) -> None:
-        assert _parse_value("abc") == 0.0
-
-    def test_whitespace(self) -> None:
-        assert _parse_value("  95000.75  ") == 95000.75
 
 
 class TestMakeAssetId:

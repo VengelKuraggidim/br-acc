@@ -16,21 +16,11 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     format_cpf,
     normalize_name,
+    parse_numeric_comma,
     strip_document,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_value(raw: str) -> float:
-    """Parse a monetary value string to float. Returns 0.0 on failure."""
-    if not raw:
-        return 0.0
-    cleaned = raw.strip().replace(",", ".")
-    try:
-        return float(cleaned)
-    except (ValueError, TypeError):
-        return 0.0
 
 
 def _make_asset_id(cpf: str, year: str, asset_type: str, value: str, description: str) -> str:
@@ -91,7 +81,7 @@ class TseBensPipeline(Pipeline):
             asset_type = str(row.get("tipo_bem", "")).strip()
             description = str(row.get("descricao_bem", "")).strip()
             value_raw = str(row.get("valor_bem", ""))
-            value = _parse_value(value_raw)
+            value = parse_numeric_comma(value_raw)
             uf = str(row.get("sigla_uf", "")).strip()
             partido = str(row.get("sigla_partido", "")).strip()
 

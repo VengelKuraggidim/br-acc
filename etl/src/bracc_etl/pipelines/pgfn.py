@@ -15,6 +15,7 @@ from bracc_etl.transforms import (
     format_cnpj,
     normalize_name,
     parse_date,
+    parse_numeric_comma,
     strip_document,
 )
 
@@ -44,16 +45,6 @@ class PgfnPipeline(Pipeline):
         self._csv_files: list[Path] = []
         self.finances: list[dict[str, Any]] = []
         self.relationships: list[dict[str, Any]] = []
-
-    def _parse_value(self, value: str) -> float:
-        """Parse numeric value (may use comma as decimal sep)."""
-        if not value or not value.strip():
-            return 0.0
-        cleaned = value.strip().replace(",", ".")
-        try:
-            return float(cleaned)
-        except ValueError:
-            return 0.0
 
     def extract(self) -> None:
         pgfn_dir = Path(self.data_dir) / "pgfn"
@@ -107,7 +98,7 @@ class PgfnPipeline(Pipeline):
 
                     cnpj_formatted = format_cnpj(cnpj_raw)
                     finance_id = f"pgfn_{inscricao}"
-                    valor = self._parse_value(str(row["VALOR_CONSOLIDADO"]))
+                    valor = parse_numeric_comma(row["VALOR_CONSOLIDADO"])
                     date = parse_date(str(row["DATA_INSCRICAO"]))
                     nome = normalize_name(str(row["NOME_DEVEDOR"]))
                     situacao = str(row["SITUACAO_INSCRICAO"]).strip()

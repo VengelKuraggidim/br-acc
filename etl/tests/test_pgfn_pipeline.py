@@ -120,25 +120,6 @@ def test_load_calls_session_run() -> None:
     assert session.run.call_count >= 2
 
 
-class TestParseValue:
-    def test_blank_returns_zero(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("") == 0.0
-        assert pipeline._parse_value("   ") == 0.0
-
-    def test_comma_decimal(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("1234,56") == 1234.56
-
-    def test_dot_decimal(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("1234.56") == 1234.56
-
-    def test_invalid_returns_zero(self) -> None:
-        pipeline = _make_pipeline()
-        assert pipeline._parse_value("abc") == 0.0
-
-
 def test_extract_missing_data_dir(tmp_path: Path) -> None:
     """Missing `pgfn/` dir leaves _csv_files empty without raising."""
     pipeline = _make_pipeline(data_dir=str(tmp_path))

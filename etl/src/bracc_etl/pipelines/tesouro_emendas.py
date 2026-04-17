@@ -9,7 +9,7 @@ import pandas as pd
 
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
-from bracc_etl.transforms import deduplicate_rows, normalize_name
+from bracc_etl.transforms import deduplicate_rows, normalize_name, parse_numeric_comma
 
 if TYPE_CHECKING:
     from neo4j import Driver
@@ -40,14 +40,6 @@ def _parse_excel_date(date_val: str) -> str:
             )
             return dt.strftime("%Y-%m-%d")
     return date_val
-
-
-def _parse_brl_value(raw: str) -> float:
-    """Parse a Brazilian-formatted value string to float."""
-    try:
-        return float(raw.replace(",", "."))
-    except ValueError:
-        return 0.0
 
 
 class TesouroEmendasPipeline(Pipeline):
@@ -123,9 +115,7 @@ class TesouroEmendasPipeline(Pipeline):
                 "economic_category": str(
                     getattr(row, "categoria_economica", "")
                 ).strip(),
-                "value": _parse_brl_value(
-                    str(getattr(row, "valor", "")).strip()
-                ),
+                "value": parse_numeric_comma(getattr(row, "valor", "")),
                 "source": self.source_id,
             })
 

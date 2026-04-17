@@ -7,7 +7,6 @@ import pytest
 
 from bracc_etl.pipelines.tesouro_emendas import (
     TesouroEmendasPipeline,
-    _parse_brl_value,
     _parse_excel_date,
 )
 
@@ -40,22 +39,6 @@ class TestHelpers:
 
     def test_parse_excel_date_passthrough_for_empty(self) -> None:
         assert _parse_excel_date("") == ""
-
-    def test_parse_brl_value_comma_decimal(self) -> None:
-        assert _parse_brl_value("1000,50") == 1000.50
-
-    def test_parse_brl_value_plain_float(self) -> None:
-        assert _parse_brl_value("1234.56") == 1234.56
-
-    def test_parse_brl_value_zero(self) -> None:
-        assert _parse_brl_value("0,00") == 0.0
-
-    def test_parse_brl_value_invalid_returns_zero(self) -> None:
-        assert _parse_brl_value("not-a-number") == 0.0
-
-    def test_parse_brl_value_empty_returns_zero(self) -> None:
-        assert _parse_brl_value("") == 0.0
-
 
 class TestExtract:
     def test_raises_when_csv_missing(self, tmp_path: Path) -> None:
