@@ -66,7 +66,10 @@ async def search_entities(
         )
 
     skip = (page - 1) * size
-    type_filter = entity_type.lower() if entity_type else None
+    # Neo4j labels are PascalCase (GoMunicipality) but callers pass snake_case
+    # (go_municipality) to match the Fiscal Cidadao wrapper contract; strip
+    # underscores before comparing so both forms collapse to the same token.
+    type_filter = entity_type.lower().replace("_", "") if entity_type else None
     hide_person_entities = should_hide_person_entities()
     lucene_query = _to_lucene_query(q)
 

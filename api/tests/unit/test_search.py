@@ -32,3 +32,11 @@ async def test_search_accepts_wildcard_list_all(client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "total" in body and "results" in body
+
+
+@pytest.mark.anyio
+async def test_search_accepts_snake_case_type(client: AsyncClient) -> None:
+    # snake_case type names like `go_municipality` must map to PascalCase
+    # labels (`GoMunicipality`) by stripping underscores before comparison.
+    response = await client.get("/api/v1/search?q=*&type=go_municipality&size=1")
+    assert response.status_code == 200
