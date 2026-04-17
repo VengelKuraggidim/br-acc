@@ -3,15 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pandas as pd
+
 from bracc_etl.pipelines.bndes import BndesPipeline
-from tests._mock_helpers import mock_session
+from tests._mock_helpers import mock_driver, mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _make_pipeline() -> BndesPipeline:
+def _make_pipeline(data_dir: str | None = None) -> BndesPipeline:
     driver = MagicMock()
-    return BndesPipeline(driver, data_dir=str(FIXTURES))
+    return BndesPipeline(driver, data_dir=data_dir or str(FIXTURES))
 
 
 def _extract_and_transform(pipeline: BndesPipeline) -> None:
@@ -98,3 +100,93 @@ def test_load_calls_batch_loader() -> None:
     session = mock_session(driver)
     # load_nodes for Finance + _run_with_retry for relationships
     assert session.run.call_count >= 2
+
+
+class TestParseValue:
+    def test_blank_returns_zero(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_value("") == 0.0
+        assert pipeline._parse_value("   ") == 0.0
+
+    def test_brazilian_thousands_and_decimal(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_value("1.234.567,89") == 1234567.89
+
+    def test_comma_only_decimal(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_value("500,00") == 500.0
+
+    def test_invalid_returns_zero(self) -> None:
+        pipeline = _make_pipeline()
+        assert pipeline._parse_value("abc") == 0.0
+
+
+def test_extract_with_missing_data_dir(tmp_path: Path) -> None:
+    """Missing `bndes/` data dir must warn and leave `_raw` empty."""
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    pipeline.extract()
+    assert pipeline._raw.empty
+
+
+def test_extract_with_missing_csv(tmp_path: Path) -> None:
+    """Dir exists but CSV doesn't → `_raw` empty, no raise."""
+    (tmp_path / "bndes").mkdir()
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    pipeline.extract()
+    assert pipeline._raw.empty
+
+
+def test_finance_value_falls_back_to_contracted_when_disbursed_zero() -> None:
+    """Finance `value` should be disbursed OR contracted — prefers disbursed."""
+    pipeline = _make_pipeline()
+    pipeline._raw = pd.DataFrame(
+        [
+            {
+                "cnpj": "11222333000181",
+                "numero_do_contrato": "ABC-999",
+                "valor_contratado_reais": "1.000,00",
+                "valor_desembolsado_reais": "",  # zero disbursed
+                "data_da_contratacao": "",
+                "descricao_do_projeto": "",
+                "cliente": "",
+                "produto": "",
+                "juros": "",
+                "uf": "",
+                "municipio": "",
+                "setor_bndes": "",
+                "porte_do_cliente": "",
+                "situacao_do_contrato": "",
+            },
+            {
+                "cnpj": "11222333000181",
+                "numero_do_contrato": "DEF-999",
+                "valor_contratado_reais": "1.000,00",
+                "valor_desembolsado_reais": "500,00",
+                "data_da_contratacao": "",
+                "descricao_do_projeto": "",
+                "cliente": "",
+                "produto": "",
+                "juros": "",
+                "uf": "",
+                "municipio": "",
+                "setor_bndes": "",
+                "porte_do_cliente": "",
+                "situacao_do_contrato": "",
+            },
+        ]
+    )
+    pipeline.transform()
+    by_id = {f["finance_id"]: f for f in pipeline.finances}
+    # Disbursed == 0 → falls back to contracted (1000)
+    assert by_id["bndes_ABC-999"]["value"] == 1000.0
+    # Disbursed > 0 → wins over contracted
+    assert by_id["bndes_DEF-999"]["value"] == 500.0
+
+
+def test_load_short_circuits_when_empty(tmp_path: Path) -> None:
+    """No finances/relationships → loader should not open a session."""
+    pipeline = _make_pipeline(data_dir=str(tmp_path))
+    pipeline.extract()  # empty
+    pipeline.transform()
+    pipeline.load()
+    assert not mock_driver(pipeline).session.called
