@@ -1,3 +1,9 @@
+from bracc_etl.transforms.brazilian_numbers import (
+    parse_brl_amount,
+    parse_brl_flexible,
+    parse_number_smart,
+    parse_numeric_comma,
+)
 from bracc_etl.transforms.date_formatting import parse_date
 from bracc_etl.transforms.deduplication import deduplicate_rows
 from bracc_etl.transforms.document_extraction import (
@@ -32,7 +38,11 @@ __all__ = [
     "format_cpf",
     "mask_cpf",
     "normalize_name",
+    "parse_brl_amount",
+    "parse_brl_flexible",
     "parse_date",
+    "parse_number_smart",
+    "parse_numeric_comma",
     "strip_document",
     "validate_cnpj",
     "validate_cpf",
