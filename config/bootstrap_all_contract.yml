@@ -1,7 +1,7 @@
 {
-  "contract_version": "2026-03-01",
+  "contract_version": "2026-04-17",
   "full_historical_default": true,
-  "expected_implemented_count": 45,
+  "expected_implemented_count": 52,
   "core_sources": [
     "camara",
     "cnpj",
@@ -47,6 +47,15 @@
       ],
       "blocking_reason_if_any": "-",
       "core": true
+    },
+    {
+      "pipeline_id": "camara_goiania",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/camara_goiania/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
     },
     {
       "pipeline_id": "camara_inquiries",
@@ -169,6 +178,15 @@
       "core": false
     },
     {
+      "pipeline_id": "folha_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/folha_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
       "pipeline_id": "holdings",
       "acquisition_mode": "file_manifest",
       "required_inputs": [
@@ -271,12 +289,30 @@
       "core": false
     },
     {
+      "pipeline_id": "pncp_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/pncp_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
       "pipeline_id": "querido_diario",
       "acquisition_mode": "file_manifest",
       "required_inputs": [
         "data/querido_diario/*"
       ],
       "blocking_reason_if_any": "Text availability gap",
+      "core": false
+    },
+    {
+      "pipeline_id": "querido_diario_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/querido_diario_go/*"
+      ],
+      "blocking_reason_if_any": "-",
       "core": false
     },
     {
@@ -358,10 +394,37 @@
       ]
     },
     {
+      "pipeline_id": "stj_dados_abertos",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/stj_dados_abertos/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "tcm_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/tcm_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
       "pipeline_id": "tcu",
       "acquisition_mode": "file_manifest",
       "required_inputs": [
         "data/tcu/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "tesouro_emendas",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/tesouro_emendas/*"
       ],
       "blocking_reason_if_any": "-",
       "core": false
