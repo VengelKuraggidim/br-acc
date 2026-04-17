@@ -112,3 +112,85 @@ async def test_render_pdf_lang_en() -> None:
 
     assert isinstance(result, bytes)
     assert result[:5] == b"%PDF-"
+
+
+def test_get_labels_returns_pt_by_default() -> None:
+    from bracc.services.pdf_service import _get_labels
+
+    labels = _get_labels("pt")
+    assert labels["label_created"] == "Criado em"
+    assert "Dados compilados" in labels["disclaimer"]
+
+
+def test_get_labels_returns_en_when_requested() -> None:
+    from bracc.services.pdf_service import _get_labels
+
+    labels = _get_labels("en")
+    assert labels["label_created"] == "Created at"
+    assert "Data compiled" in labels["disclaimer"]
+
+
+def test_get_labels_unknown_lang_falls_back_to_pt() -> None:
+    """Unrecognised language codes must fall back to pt (not crash or return en)."""
+    from bracc.services.pdf_service import _get_labels
+
+    labels = _get_labels("es")
+    assert labels["label_created"] == "Criado em"  # pt value
+
+
+@pytest.mark.anyio
+async def test_render_pdf_passes_structured_data_to_template() -> None:
+    """Regression guard: template.render receives annotations/tags/entities shaped
+    as dicts derived from the domain objects (not raw models)."""
+    from bracc.services import pdf_service
+
+    captured: dict[str, object] = {}
+
+    def _capture(**ctx: object) -> str:
+        captured.update(ctx)
+        return "<html></html>"
+
+    mock_template = MagicMock()
+    mock_template.render.side_effect = _capture
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(pdf_service._env, "get_template", lambda *_: mock_template)
+        await pdf_service.render_investigation_pdf(
+            _make_investigation(description="desc"),
+            [_make_annotation(text="note")],
+            [_make_tag(name="reviewed", color="#123456")],
+            [{"name": "Entity X", "type": "Company", "document": "11.222.333/0001-81"}],
+            lang="pt",
+        )
+
+    assert captured["title"] == "Test Investigation"
+    assert captured["description"] == "desc"
+    assert captured["tags"] == [{"name": "reviewed", "color": "#123456"}]
+    # Annotations are converted to {created_at, text} dicts (no id, no entity_id).
+    annotations_passed = captured["annotations"]
+    assert isinstance(annotations_passed, list)
+    assert annotations_passed == [
+        {"created_at": "2026-01-15T12:00:00Z", "text": "note"}
+    ]
+    # pt labels merged into context
+    assert captured["label_created"] == "Criado em"
+
+
+@pytest.mark.anyio
+async def test_render_pdf_coerces_none_description_to_empty() -> None:
+    from bracc.services import pdf_service
+
+    captured: dict[str, object] = {}
+
+    def _capture(**ctx: object) -> str:
+        captured.update(ctx)
+        return "<html></html>"
+
+    mock_template = MagicMock()
+    mock_template.render.side_effect = _capture
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(pdf_service._env, "get_template", lambda *_: mock_template)
+        await pdf_service.render_investigation_pdf(
+            _make_investigation(description=None), [], [], [], lang="pt",
+        )
+
+    assert captured["description"] == ""
