@@ -338,10 +338,10 @@ class BraccClient:
         return []
 
     async def buscar_municipios_go(self) -> list[dict]:
-        """Get all GO municipalities."""
+        """Get GO municipalities (up to bracc-api's per-page ceiling of 100)."""
         resp = await self.client.get(
             "/api/v1/search",
-            params={"q": "*", "type": "go_municipality", "size": 250},
+            params={"q": "*", "type": "go_municipality", "size": 100},
         )
         if resp.status_code == 200:
             return resp.json().get("results", [])
