@@ -1,4 +1,36 @@
-.PHONY: setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: help setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs generate-pipeline-status generate-source-summary generate-reference-metrics
+
+# Default target when running `make` with no arguments.
+.DEFAULT_GOAL := help
+
+help:
+	@echo "Common targets (run 'grep -E \"^[a-z_-]+:\" Makefile' for full list):"
+	@echo ""
+	@echo "  Setup & run"
+	@echo "    setup-env        Generate .env from .env.example + secure secrets"
+	@echo "    dev              docker compose up -d (core stack)"
+	@echo "    stop             docker compose down"
+	@echo "    seed             Seed Neo4j with dev fixtures"
+	@echo ""
+	@echo "  Per-module dev servers"
+	@echo "    api              Run API with --reload on :8000"
+	@echo "    etl              Show bracc-etl CLI help"
+	@echo "    frontend         Run frontend dev server"
+	@echo ""
+	@echo "  Quality gates (what CI runs)"
+	@echo "    check            lint + type-check + tests (python + frontend)"
+	@echo "    pre-commit       check + neutrality + registry/docs governance"
+	@echo "    neutrality       Ban-list check on source text"
+	@echo "    check-public-claims / -pipeline-contracts / -pipeline-inputs"
+	@echo "                     Registry / docs governance scripts"
+	@echo ""
+	@echo "  Data loading"
+	@echo "    bootstrap-demo   Small deterministic synthetic graph"
+	@echo "    bootstrap-all    Heavy real-ingest orchestration (hours)"
+	@echo "    download-<src>   Fetch raw files for one source"
+	@echo "    etl-<src>        Run one ETL pipeline against Neo4j"
+	@echo ""
+	@echo "See CONTRIBUTING.md for the pre-PR workflow."
 
 # ── Development ─────────────────────────────────────────
 setup-env:
