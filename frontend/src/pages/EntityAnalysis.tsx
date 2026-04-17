@@ -250,11 +250,20 @@ export function EntityAnalysis() {
   const handleExportJson = useCallback(() => {}, []);
   const handleExportScreenshot = useCallback(() => {}, []);
 
+  const isCrossing =
+    entityLoading || exposureLoading || graphLoading || timelineLoading;
+
   if (entityLoading) {
     return (
-      <div className={styles.loading}>
-        <Spinner variant="scan" size="lg" />
-      </div>
+      <>
+        <div className={styles.crossingBadge} role="status" aria-live="polite">
+          <Spinner size="sm" />
+          <span>{t("search.crossing")}</span>
+        </div>
+        <div className={styles.loading}>
+          <Spinner variant="scan" size="lg" />
+        </div>
+      </>
     );
   }
 
@@ -268,6 +277,12 @@ export function EntityAnalysis() {
 
   return (
     <div className={styles.page}>
+      {isCrossing && (
+        <div className={styles.crossingBadge} role="status" aria-live="polite">
+          <Spinner size="sm" />
+          <span>{t("search.crossing")}</span>
+        </div>
+      )}
       <EntityHeader
         entity={entity}
         exposure={exposure}

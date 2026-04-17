@@ -52,6 +52,38 @@
   height: 100%;
 }
 
+.crossingBadge {
+  position: fixed;
+  top: calc(var(--space-lg) + 56px);
+  right: var(--space-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-tertiary, rgba(20, 24, 32, 0.85));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #c8d0dc);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(6px);
+  opacity: 0.92;
+  z-index: 50;
+  pointer-events: none;
+  animation: crossingFadeIn 180ms ease-out;
+}
+
+@keyframes crossingFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 0.92;
+    transform: translateY(0);
+  }
+}
+
 .notFound {
   display: flex;
   align-items: center;

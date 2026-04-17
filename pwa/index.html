@@ -947,9 +947,25 @@ async function carregarInicio() {
       </div>
       <div class="stat">
         <div class="stat-value">${d.vereadores_goiania}</div>
-        <div class="stat-label">Vereadores</div>
+        <div class="stat-label">Vereadores${d.vereadores_goiania === 0 ? ' <span title="A Câmara Municipal de Goiânia não publica API de dados abertos legíveis por máquina; aguardando publicação oficial para habilitar esta fonte." style="color:var(--warning,#f59e0b);cursor:help;">&#9432;</span>' : ''}</div>
       </div>
     </div>
+
+    ${d.vereadores_goiania === 0 || d.nomeacoes_go === 0 ? `
+    <div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:var(--warning-bg,rgba(245,158,11,0.15));">&#9888;</span>
+          Fontes externas indisponíveis
+        </div>
+      </div>
+      <div class="card">
+        <p style="font-size:12px; line-height:1.6; color:var(--text-secondary); margin:0;">
+          ${d.vereadores_goiania === 0 ? '<strong>Vereadores de Goiânia:</strong> a Câmara Municipal não expõe dados abertos em formato consultável. Enquanto a Câmara não publicar, esse campo fica zerado — não é falha do app.<br>' : ''}
+          ${d.nomeacoes_go === 0 ? '<strong>Nomeações em diários oficiais GO:</strong> o projeto Querido Diário ainda não indexa municípios de Goiás. Estamos aguardando a cobertura ser ampliada.' : ''}
+        </p>
+      </div>
+    </div>` : ''}
 
     <div class="section fade-in">
       <div class="section-header">
