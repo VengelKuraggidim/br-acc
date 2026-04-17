@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 from datetime import UTC, datetime
 from pathlib import Path
+
+_STAMP_RE = re.compile(r"as-of UTC:\s*([0-9T:\-]+Z)")
 
 
 def parse_bool(value: str) -> bool:
@@ -64,18 +67,7 @@ def escape_md(text: str) -> str:
     return text.replace("|", "\\|")
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate pipeline status markdown")
-    parser.add_argument("--registry-path", default="docs/source_registry_br_v1.csv")
-    parser.add_argument("--output", default="docs/pipeline_status.md")
-    args = parser.parse_args()
-
-    rows = list(csv.DictReader(Path(args.registry_path).open(encoding="utf-8", newline="")))
-    rows = [row for row in rows if parse_bool(row.get("in_universe_v1", ""))]
-    rows.sort(key=lambda row: (row.get("source_id") or ""))
-
-    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
+def _render(rows: list[dict[str, str]], stamp: str) -> str:
     lines = [
         "# Pipeline Status",
         "",
@@ -112,7 +104,44 @@ def main() -> int:
             )
         )
 
-    Path(args.output).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return "\n".join(lines) + "\n"
+
+
+def _preserve_stamp_if_unchanged(new_text: str, old_text: str, new_stamp: str) -> str:
+    """Return new_text, but reuse old file's timestamp if nothing else changed.
+
+    Keeps the generator idempotent across runs — repeated invocations with no
+    registry changes produce byte-identical output instead of churning the
+    "as-of UTC" line on every run.
+    """
+    match = _STAMP_RE.search(old_text)
+    if not match:
+        return new_text
+    old_stamp = match.group(1)
+    candidate = new_text.replace(new_stamp, old_stamp, 1)
+    return candidate if candidate == old_text else new_text
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate pipeline status markdown")
+    parser.add_argument("--registry-path", default="docs/source_registry_br_v1.csv")
+    parser.add_argument("--output", default="docs/pipeline_status.md")
+    args = parser.parse_args()
+
+    rows = list(csv.DictReader(Path(args.registry_path).open(encoding="utf-8", newline="")))
+    rows = [row for row in rows if parse_bool(row.get("in_universe_v1", ""))]
+    rows.sort(key=lambda row: (row.get("source_id") or ""))
+
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    new_text = _render(rows, stamp)
+
+    output_path = Path(args.output)
+    if output_path.exists():
+        new_text = _preserve_stamp_if_unchanged(
+            new_text, output_path.read_text(encoding="utf-8"), stamp,
+        )
+
+    output_path.write_text(new_text, encoding="utf-8")
     print("UPDATED")
     return 0
 

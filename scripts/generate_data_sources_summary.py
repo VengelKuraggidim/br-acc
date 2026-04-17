@@ -89,13 +89,12 @@ def main() -> int:
     doc_text = docs_path.read_text(encoding="utf-8")
     existing_stamp_match = re.search(r"as-of UTC:\s*([0-9T:\-]+Z)", doc_text)
     existing_stamp = existing_stamp_match.group(1) if existing_stamp_match else ""
-    stamp = args.stamp_utc or (existing_stamp if args.check else datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
     counts = compute_counts(registry_path)
-    expected_block = render_block(counts, stamp)
-    rendered = replace_block(doc_text, expected_block)
 
     if args.check:
+        stamp = args.stamp_utc or existing_stamp
+        rendered = replace_block(doc_text, render_block(counts, stamp))
         if rendered != doc_text:
             print("FAIL")
             print("- docs/data-sources.md summary block is out of date")
@@ -103,6 +102,19 @@ def main() -> int:
         print("PASS")
         return 0
 
+    # Idempotent write: if the block matches when we reuse the existing stamp,
+    # keep it; otherwise stamp with now() so the timestamp tracks real change.
+    stamp = args.stamp_utc or existing_stamp or datetime.now(UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ",
+    )
+    rendered = replace_block(doc_text, render_block(counts, stamp))
+    if rendered == doc_text:
+        docs_path.write_text(rendered, encoding="utf-8")
+        print("UPDATED")
+        return 0
+
+    fresh_stamp = args.stamp_utc or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rendered = replace_block(doc_text, render_block(counts, fresh_stamp))
     docs_path.write_text(rendered, encoding="utf-8")
     print("UPDATED")
     return 0
