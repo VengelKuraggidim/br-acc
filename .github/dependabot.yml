@@ -1,0 +1,105 @@
+version: 2
+
+updates:
+  # GitHub Actions — keep action pins fresh so security advisories land
+  # without manual intervention.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+      - github-actions
+
+  # Frontend npm deps
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "frontend"
+    labels:
+      - dependencies
+      - frontend
+    # Group non-breaking updates into one PR to reduce churn
+    groups:
+      frontend-minor:
+        update-types:
+          - minor
+          - patch
+
+  # API backend (FastAPI + neo4j driver) deps tracked via uv
+  - package-ecosystem: uv
+    directory: /api
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "api"
+    labels:
+      - dependencies
+      - api
+    groups:
+      api-minor:
+        update-types:
+          - minor
+          - patch
+
+  # ETL pipelines (pandas, httpx, pandera, etc.) deps tracked via uv
+  - package-ecosystem: uv
+    directory: /etl
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "etl"
+    labels:
+      - dependencies
+      - etl
+    groups:
+      etl-minor:
+        update-types:
+          - minor
+          - patch
+
+  # Docker images — api, etl, frontend, and the root multi-stage
+  - package-ecosystem: docker
+    directory: /api
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "api"
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /etl
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "etl"
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "frontend"
+    labels:
+      - dependencies
+      - docker
