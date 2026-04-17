@@ -52,7 +52,7 @@ mypy_path = "src"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-m 'not integration'"
+addopts = "-m 'not integration' --strict-markers --strict-config"
 markers = [
     "integration: requires running Neo4j instance",
 ]
