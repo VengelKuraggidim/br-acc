@@ -1,7 +1,7 @@
 import re
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from neo4j import AsyncSession
 from starlette.requests import Request
 
@@ -22,8 +22,15 @@ router = APIRouter(prefix="/api/v1", tags=["search"])
 _LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}[\]^"~*?:\\/])')
 
 
-def _escape_lucene(query: str) -> str:
-    """Escape Lucene special characters so user input is treated as literals."""
+def _to_lucene_query(query: str) -> str:
+    """Translate the incoming search string into a Lucene-safe query.
+
+    `*` alone is the documented wildcard for "list every indexed node"; map
+    it to Lucene's `*:*` match-all so callers can page through a label.
+    Everything else is escaped verbatim so user input is treated as literals.
+    """
+    if query.strip() == "*":
+        return "*:*"
     return _LUCENE_SPECIAL.sub(r"\\\1", query)
 
 
@@ -46,20 +53,31 @@ def _extract_name(node: Any, labels: list[str]) -> str:
 async def search_entities(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    q: Annotated[str, Query(min_length=2, max_length=200)],
+    q: Annotated[str, Query(min_length=1, max_length=200)],
     entity_type: Annotated[str | None, Query(alias="type")] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> SearchResponse:
+    stripped = q.strip()
+    if stripped != "*" and len(stripped) < 2:
+        raise HTTPException(
+            status_code=422,
+            detail="q must be at least 2 characters, or '*' to list every entity",
+        )
+
     skip = (page - 1) * size
-    type_filter = entity_type.lower() if entity_type else None
+    # Neo4j labels are PascalCase (GoMunicipality) but callers pass snake_case
+    # (go_municipality) to match the Fiscal Cidadao wrapper contract; strip
+    # underscores before comparing so both forms collapse to the same token.
+    type_filter = entity_type.lower().replace("_", "") if entity_type else None
     hide_person_entities = should_hide_person_entities()
+    lucene_query = _to_lucene_query(q)
 
     records = await execute_query(
         session,
         "search",
         {
-            "query": _escape_lucene(q),
+            "query": lucene_query,
             "entity_type": type_filter,
             "skip": skip,
             "limit": size,
@@ -70,7 +88,7 @@ async def search_entities(
         session,
         "search_count",
         {
-            "query": _escape_lucene(q),
+            "query": lucene_query,
             "entity_type": type_filter,
             "hide_person_entities": hide_person_entities,
         },

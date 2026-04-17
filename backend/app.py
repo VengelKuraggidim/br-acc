@@ -8,6 +8,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from analise import (
@@ -338,7 +339,7 @@ class BraccClient:
         return []
 
     async def buscar_municipios_go(self) -> list[dict]:
-        """Get all GO municipalities."""
+        """Get all GO municipalities via the dedicated /go/ router."""
         resp = await self.client.get("/api/v1/go/municipalities")
         if resp.status_code == 200:
             return resp.json().get("results", [])
@@ -992,3 +993,13 @@ async def listar_vereadores():
             proposicoes=props.get("proposals_count", 0),
         ))
     return vereadores
+
+
+# --- Static PWA ---
+# Mount last so API routes above take precedence over static paths.
+_PWA_DIR = os.getenv(
+    "PWA_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pwa"),
+)
+if os.path.isdir(_PWA_DIR):
+    app.mount("/", StaticFiles(directory=_PWA_DIR, html=True), name="pwa")
