@@ -54,20 +54,22 @@ _MODALIDADE_MAP: dict[int, str] = {
 }
 
 _RATE_LIMIT_SLEEP = 0.3
-# Shorter timeout + fewer retries: a dead modalidade+window should fail
-# fast (~45s worst case) rather than blocking the whole extract for
-# minutes. p95 healthy responses are well under 15s.
-_HTTP_TIMEOUT = 20
+_HTTP_TIMEOUT = 45
 # API requires tamanhoPagina >= 10
 _DEFAULT_PAGE_SIZE = 50
 # API requires codigoModalidadeContratacao; iterate all modalidades.
 _MODALIDADE_CODES = tuple(_MODALIDADE_MAP.keys())
-# API rejects date ranges > 365 days with HTTP 422.
-# 30-day windows keep response payloads small.
-_WINDOW_DAYS = 30
-# Worst-case: 2 timeouts * 20s + 2s + 4s backoff = ~46s per dead request.
+# API rejects date ranges > 365 days with HTTP 422. Use 365-day windows:
+# more requests don't help (PNCP paginates internally), and shorter
+# windows only multiply request count without reducing per-request size.
+_WINDOW_DAYS = 365
+# One retry is enough — if a window times out twice, the modalidade
+# likely has no GO data and the server is stalling instead of returning 0.
 _MAX_RETRIES = 2
 _RETRY_BACKOFF = 2.0
+# Skip to the next modalidade if a window times out after retries,
+# rather than hammering subsequent windows that are likely to also fail.
+_SKIP_MODALIDADE_AFTER_TIMEOUT = True
 
 
 def _make_procurement_id(cnpj_digits: str, year: int | str, sequential: int | str) -> str:
@@ -156,7 +158,10 @@ class PncpGoPipeline(Pipeline):
         with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
             for modalidade_code in _MODALIDADE_CODES:
                 mod_count = 0
+                skip_modalidade = False
                 for win_start, win_end in windows:
+                    if skip_modalidade:
+                        break
                     page = 1
                     while True:
                         params: dict[str, str | int] = {
@@ -171,9 +176,13 @@ class PncpGoPipeline(Pipeline):
                         if resp is None:
                             logger.warning(
                                 "PNCP API timeout after %d retries "
-                                "(modalidade %d, window %s-%s, page %d)",
+                                "(modalidade %d, window %s-%s, page %d)"
+                                "%s",
                                 _MAX_RETRIES, modalidade_code, win_start, win_end, page,
+                                " — skipping rest of modalidade" if _SKIP_MODALIDADE_AFTER_TIMEOUT else "",
                             )
+                            if _SKIP_MODALIDADE_AFTER_TIMEOUT:
+                                skip_modalidade = True
                             break
                         try:
                             resp.raise_for_status()
