@@ -65,3 +65,26 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 2026-04-17 23:46:06,894 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=4&tamanhoPagina=50 "HTTP/1.1 200 "
 2026-04-17 23:46:07,569 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=5&tamanhoPagina=50 "HTTP/1.1 200 "
 2026-04-17 23:46:37,993 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=6&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:47:10,036 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=6&tamanhoPagina=50 "HTTP/1.1 500 "
+2026-04-17 23:47:10,037 WARNING PNCP API request failed (modalidade 12, window 20240417-20250416, page 6): Server error '500 ' for url 'https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=12&pagina=6&tamanhoPagina=50'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+2026-04-17 23:47:57,438 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=12&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:47:58,087 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=12&pagina=2&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:48:01,936 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=12&pagina=3&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:48:06,484 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=12&pagina=4&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:48:11,155 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=12&pagina=5&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:49:43,733 WARNING PNCP API timeout after 2 retries (modalidade 12, window 20250417-20260416, page 6) — skipping rest of modalidade
+2026-04-17 23:49:43,733 INFO   modalidade 12 (credenciamento): 500 records
+2026-04-17 23:49:46,252 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20240417&dataFinal=20250416&uf=GO&codigoModalidadeContratacao=13&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:50:36,213 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20250417&dataFinal=20260416&uf=GO&codigoModalidadeContratacao=13&pagina=1&tamanhoPagina=50 "HTTP/1.1 200 "
+2026-04-17 23:50:36,366 INFO HTTP Request: GET https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial=20260417&dataFinal=20260417&uf=GO&codigoModalidadeContratacao=13&pagina=1&tamanhoPagina=50 "HTTP/1.1 204 "
+2026-04-17 23:50:36,366 INFO   modalidade 13 (ata_pre_existente): 86 records
+2026-04-17 23:50:36,367 INFO Total raw GO procurement records: 1991
+2026-04-17 23:50:36,367 INFO [pncp_go] Starting transformation...
+2026-04-17 23:50:37,484 INFO Transformed: 1933 GO procurements (skipped 0 no-CNPJ, 58 zero-value)
+2026-04-17 23:50:37,484 INFO [pncp_go] Starting load...
+2026-04-17 23:50:38,939 INFO Loaded 1933 GoProcurement nodes
+2026-04-17 23:50:39,276 INFO Merged 464 Company (agency) nodes
+2026-04-17 23:50:39,614 INFO Created 1933 CONTRATOU_GO relationships
+2026-04-17 23:50:39,679 INFO [pncp_go] Pipeline complete.
+2026-04-17 23:50:39,679 INFO No post-load linking hook configured for source=pncp_go
