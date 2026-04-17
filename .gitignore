@@ -81,6 +81,7 @@ scripts/audit-prompts/
 
 # Claude plans
 .claude/plans/
+.claude/*.lock
 
 # Data directories (downloaded datasets)
 data/comprasnet/
