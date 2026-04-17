@@ -250,9 +250,13 @@ def gerar_alertas_completos(
 
     if not alertas:
         alertas.append({
-            "tipo": "ok",
-            "icone": "ok",
-            "texto": "Nenhuma irregularidade aparente encontrada",
+            "tipo": "info",
+            "icone": "info",
+            "texto": (
+                "Avaliação indisponível no momento. "
+                "Não foi possível obter dados suficientes para analisar esta entidade. "
+                "A ausência de alertas não significa que não existam irregularidades."
+            ),
         })
 
     return alertas
