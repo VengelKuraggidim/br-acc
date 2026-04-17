@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import unicodedata
 from datetime import datetime
 from typing import Any
 
@@ -23,48 +24,81 @@ TRANSPARENCIA_API_KEY = os.getenv("TRANSPARENCIA_API_KEY", "")
 _TIMEOUT = 15.0
 
 
+def _so_digitos(s: str) -> str:
+    return "".join(c for c in s if c.isdigit())
+
+
+def _normalizar_nome(nome: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", nome or "")
+    sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return " ".join(sem_acento.lower().split())
+
+
 async def buscar_deputado_camara(
     nome: str,
     cpf: str | None = None,
+    uf: str | None = None,
 ) -> dict[str, Any] | None:
-    """Busca um deputado na API da Camara pelo nome."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        # Primeira tentativa: nome completo
-        dados = await _buscar_deputados(client, nome)
+    """Busca um deputado na API da Camara pelo nome, com desambiguacao.
 
-        # Fallback: partes do nome
+    Regras para evitar foto/perfil errado quando ha homonimos:
+    - Se CPF for informado e nenhum candidato bater com ele, retorna None.
+    - Sem CPF: so retorna quando ha candidato unico ou match exato de nome
+      (normalizado). Caso contrario retorna None para nao servir a foto
+      de outra pessoa.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        dados = await _buscar_deputados(client, nome, uf)
+
         if not dados:
             partes = nome.split()
             if len(partes) >= 2:
                 for tentativa in [partes[-1], partes[0]]:
-                    dados = await _buscar_deputados(client, tentativa)
+                    dados = await _buscar_deputados(client, tentativa, uf)
                     if dados:
                         break
 
         if not dados:
             return None
 
-        # Se temos CPF, match exato
         if cpf:
-            cpf_limpo = cpf.replace(".", "").replace("-", "")
+            cpf_limpo = _so_digitos(cpf)
             for dep in dados:
                 detalhe = await _detalhe_deputado(client, dep["id"])
-                if detalhe:
-                    cpf_dep = (detalhe.get("cpf") or "").replace(".", "").replace("-", "")
-                    if cpf_dep == cpf_limpo:
-                        return detalhe
+                if not detalhe:
+                    continue
+                cpf_dep = _so_digitos(detalhe.get("cpf") or "")
+                if cpf_dep and cpf_dep == cpf_limpo:
+                    return detalhe
+            # CPF nao bateu com nenhum candidato: nao retorna outro pra
+            # evitar foto errada.
+            return None
 
-        # Sem CPF, retorna o primeiro com detalhes
-        detalhe = await _detalhe_deputado(client, dados[0]["id"])
-        return detalhe or dados[0]
+        if len(dados) == 1:
+            detalhe = await _detalhe_deputado(client, dados[0]["id"])
+            return detalhe or dados[0]
+
+        nome_norm = _normalizar_nome(nome)
+        candidatos_exatos = [
+            d for d in dados if _normalizar_nome(d.get("nome", "")) == nome_norm
+        ]
+        if len(candidatos_exatos) == 1:
+            detalhe = await _detalhe_deputado(client, candidatos_exatos[0]["id"])
+            return detalhe or candidatos_exatos[0]
+
+        # Multiplos homonimos sem criterio de desempate: nao arrisca.
+        return None
 
 
 async def _buscar_deputados(
-    client: httpx.AsyncClient, nome: str,
+    client: httpx.AsyncClient, nome: str, uf: str | None = None,
 ) -> list[dict[str, Any]]:
+    params: dict[str, Any] = {"nome": nome}
+    if uf:
+        params["siglaUf"] = uf.upper()
     try:
         resp = await client.get(
-            f"{CAMARA_API}/deputados", params={"nome": nome},
+            f"{CAMARA_API}/deputados", params=params,
         )
         resp.raise_for_status()
         return resp.json().get("dados", [])

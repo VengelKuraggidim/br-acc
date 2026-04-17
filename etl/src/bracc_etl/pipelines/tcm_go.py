@@ -26,6 +26,19 @@ REQUEST_DELAY = 0.3
 RREO_YEARS = range(2021, 2025)
 RREO_ANEXO = "RREO-Anexo 01"
 
+# Canonical cumulative-realized column names in SICONFI RREO Anexo 01.
+# The endpoint returns ~7 rows per (ente, ano, conta), one per "coluna"
+# (previsao inicial, previsao atualizada, no bimestre, ate o bimestre,
+# saldo, %). We keep only the annual cumulative realized value to avoid
+# summing semantically different figures.
+REVENUE_COLUMNS = {"até o bimestre (c)", "ate o bimestre (c)"}
+EXPENDITURE_COLUMNS = {
+    "despesas liquidadas até o bimestre (h)",
+    "despesas liquidadas ate o bimestre (h)",
+}
+# FINBRA CSV fallback uses a single pre-aggregated "Valor" column.
+FINBRA_COLUMN = "valor"
+
 
 class TcmGoPipeline(Pipeline):
     """ETL pipeline for Goias municipal finance data from SICONFI/Tesouro Nacional.
@@ -243,6 +256,7 @@ class TcmGoPipeline(Pipeline):
 
             conta = str(row.get("conta", "")).strip()
             coluna = str(row.get("coluna", "") or row.get("rotulo", "")).strip()
+            coluna_norm = coluna.lower()
             descricao = conta
             exercicio = str(
                 row.get("exercicio", "")
@@ -257,10 +271,19 @@ class TcmGoPipeline(Pipeline):
             except (ValueError, TypeError):
                 continue
 
+            is_revenue = self._is_revenue(conta)
+            # Drop rows that are not the cumulative-realized value.
+            # Without this, we would sum previsao + realizada + saldo + %
+            # and produce nonsense totals.
+            if is_revenue:
+                if coluna_norm not in REVENUE_COLUMNS and coluna_norm != FINBRA_COLUMN:
+                    continue
+            else:
+                if coluna_norm not in EXPENDITURE_COLUMNS and coluna_norm != FINBRA_COLUMN:
+                    continue
+
             id_source = f"{cod_ibge}_{exercicio}_{conta}_{coluna}"
             stable_id = hashlib.sha256(id_source.encode()).hexdigest()[:16]
-
-            is_revenue = self._is_revenue(conta)
 
             if is_revenue:
                 revenues.append({
@@ -268,6 +291,7 @@ class TcmGoPipeline(Pipeline):
                     "municipality_id": cod_ibge,
                     "year": exercicio,
                     "account": conta,
+                    "column": coluna,
                     "description": descricao,
                     "amount": amount,
                     "source": "tcm_go",
@@ -282,6 +306,7 @@ class TcmGoPipeline(Pipeline):
                     "municipality_id": cod_ibge,
                     "year": exercicio,
                     "account": conta,
+                    "column": coluna,
                     "description": descricao,
                     "amount": amount,
                     "source": "tcm_go",
