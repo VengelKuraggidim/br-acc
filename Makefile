@@ -1,4 +1,4 @@
-.PHONY: help setup-env dev stop api etl frontend lint type-check test test-api test-etl test-frontend test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: help setup-env dev stop api etl lint type-check test test-api test-etl test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract generate-pipeline-status generate-source-summary generate-reference-metrics
 
 # Default target when running `make` with no arguments.
 .DEFAULT_GOAL := help
@@ -15,10 +15,9 @@ help:
 	@echo "  Per-module dev servers"
 	@echo "    api              Run API with --reload on :8000"
 	@echo "    etl              Show bracc-etl CLI help"
-	@echo "    frontend         Run frontend dev server"
 	@echo ""
 	@echo "  Quality gates (what CI runs)"
-	@echo "    check            lint + type-check + tests (python + frontend)"
+	@echo "    check            lint + type-check + tests (api + etl)"
 	@echo "    pre-commit       check + neutrality + registry/docs governance"
 	@echo "    neutrality       Ban-list check on source text"
 	@echo "    check-public-claims / -pipeline-contracts / -pipeline-inputs"
@@ -109,20 +108,14 @@ etl-all: etl-cnpj etl-tse etl-transparencia etl-sanctions
 link-persons:
 	docker compose exec neo4j cypher-shell -u neo4j -p "$${NEO4J_PASSWORD}" -f /scripts/link_persons.cypher
 
-# ── Frontend ────────────────────────────────────────────
-frontend:
-	cd frontend && npm run dev
-
 # ── Quality ─────────────────────────────────────────────
 lint:
 	cd api && uv run ruff check src/ tests/
 	cd etl && uv run ruff check src/ tests/
-	cd frontend && npm run lint
 
 type-check:
 	cd api && uv run mypy src/ tests/
 	cd etl && uv run mypy src/ tests/
-	cd frontend && npm run type-check
 
 test-api:
 	cd api && uv run pytest
@@ -130,10 +123,7 @@ test-api:
 test-etl:
 	cd etl && uv run pytest
 
-test-frontend:
-	cd frontend && npm test
-
-test: test-api test-etl test-frontend
+test: test-api test-etl
 
 # ── Integration tests ─────────────────────────────────
 test-integration-api:
@@ -158,8 +148,8 @@ pre-commit: check neutrality check-public-claims check-pipeline-contracts check-
 neutrality:
 	@! grep -rn \
 		"suspicious\|corrupt\|criminal\|fraudulent\|illegal\|guilty\|CRITICAL\|HIGH.*severity\|MEDIUM.*severity\|LOW.*severity" \
-		api/src/ etl/src/ frontend/src/ \
-		--include="*.py" --include="*.ts" --include="*.tsx" --include="*.json" \
+		api/src/ etl/src/ \
+		--include="*.py" --include="*.json" \
 		|| (echo "NEUTRALITY VIOLATION FOUND" && exit 1)
 	@echo "Neutrality check passed."
 
@@ -220,4 +210,3 @@ clean:
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .mypy_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
-	rm -rf frontend/dist
