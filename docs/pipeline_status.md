@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-03-01T23:08:43Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T05:38:37Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -26,12 +26,13 @@ Status buckets:
 | bolsa_familia_bpc | bolsa_familia_bpc | not_built | not_loaded | file_batch | data/bolsa_familia_bpc/* | High volume masked identities |
 | caged | caged | implemented_partial | partial | file_batch | data/caged/* | Aggregate-only implementation |
 | camara | camara | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.camara.leg.br/ | - |
+| camara_goiania | camara_goiania | implemented_loaded | loaded | api_json | API payload from https://www.goiania.go.leg.br/ | - |
 | camara_inquiries | camara_inquiries | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/ | Sessions still low |
 | camara_votes_bills | camara_votes_bills | not_built | not_loaded | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2 | Legislative behavior |
 | carf_tax_appeals | carf_tax_appeals | not_built | not_loaded | file_batch | data/carf_tax_appeals/* | Tax litigation |
 | ceaf | ceaf | implemented_loaded | loaded | file_batch | data/ceaf/* | - |
 | cepim | cepim | implemented_loaded | loaded | file_batch | data/cepim/* | - |
-| cnciai_improbidade | cnciai_improbidade | not_built | not_loaded | api_json | API payload from https://www.cnj.jus.br/sistemas/datajud/ | Misconduct convictions |
+| cnciai_improbidade | cnciai_improbidade | not_built | not_loaded | api_json | API payload from https://www.cnj.jus.br/sistemas/cnciai/ | Misconduct convictions |
 | cnpj | cnpj | implemented_loaded | loaded | file_batch | data/cnpj/* | - |
 | comprasnet | comprasnet | implemented_partial | partial | file_batch | data/comprasnet/* | Needs freshness backfill |
 | cpgf | cpgf | implemented_loaded | loaded | file_batch | data/cpgf/* | - |
@@ -43,6 +44,7 @@ Status buckets:
 | dou | dou | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
 | estban | estban | not_built | not_loaded | file_batch | data/estban/* | Banking aggregates |
 | eu_sanctions | eu_sanctions | implemented_loaded | loaded | file_batch | data/eu_sanctions/* | - |
+| folha_go | folha_go | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.go.gov.br/ | - |
 | holdings | holdings | implemented_loaded | loaded | file_batch | data/holdings/* | - |
 | ibama | ibama | implemented_loaded | loaded | file_batch | data/ibama/* | - |
 | icij | icij | implemented_loaded | loaded | file_batch | data/icij/* | - |
@@ -57,8 +59,10 @@ Status buckets:
 | opensanctions | opensanctions | implemented_loaded | loaded | file_batch | data/opensanctions/* | - |
 | pep_cgu | pep_cgu | implemented_loaded | loaded | file_batch | data/pep_cgu/* | - |
 | pgfn | pgfn | implemented_loaded | loaded | file_batch | data/pgfn/* | - |
-| pncp | pncp | implemented_partial | partial | api_json | API payload from https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao | Freshness SLA pending |
+| pncp | pncp | implemented_partial | partial | api_json | API payload from https://pncp.gov.br/app/editais | Freshness SLA pending |
+| pncp_go | pncp_go | implemented_loaded | loaded | api_json | API payload from https://pncp.gov.br/api/consulta/v1/ | - |
 | querido_diario | querido_diario | implemented_partial | partial | api_json | API payload from https://queridodiario.ok.org.br/api | Text availability gap |
+| querido_diario_go | querido_diario_go | implemented_loaded | loaded | api_json | API payload from https://queridodiario.ok.org.br/api/ | - |
 | rais | rais | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
 | receita_dirbi | receita_dirbi | not_built | not_loaded | file_batch | data/receita_dirbi/* | Tax benefit declarations |
 | renuncias | renuncias | implemented_loaded | loaded | file_batch | data/renuncias/* | - |
@@ -81,7 +85,7 @@ Status buckets:
 | state_portal_sc | state_portal_sc | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_sc/ | State expenses and contracts |
 | state_portal_sp | state_portal_sp | not_built | not_loaded | api_json | API payload from https://www.transparencia.sp.gov.br/ | State expenses and contracts |
 | stf | stf | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
-| stj_dados_abertos | stj_dados_abertos | not_built | not_loaded | api_json | API payload from https://dadosabertos.stj.jus.br/ | Superior court decisions |
+| stj_dados_abertos | stj_dados_abertos | implemented_partial | not_loaded | api_json | API payload from https://dadosabertos.stj.jus.br/ | Superior court decisions |
 | susep_insurance_market | susep_insurance_market | not_built | not_loaded | file_batch | data/susep_insurance_market/* | Insurance entities |
 | tce_al | tce_al | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_al/ | State audit procurement |
 | tce_am | tce_am | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_am/ | State audit procurement |
@@ -108,8 +112,9 @@ Status buckets:
 | tce_se | tce_se | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_se/ | State audit procurement |
 | tce_sp | tce_sp | not_built | not_loaded | api_json | API payload from https://transparencia.tce.sp.gov.br/ | State audit procurement |
 | tce_to | tce_to | not_built | not_loaded | web_portal | Portal export/scrape output under data/tce_to/ | State audit procurement |
+| tcm_go | tcm_go | implemented_loaded | loaded | api_json | API payload from https://apidatalake.tesouro.gov.br/ords/siconfi/tt/ | - |
 | tcu | tcu | implemented_loaded | loaded | file_batch | data/tcu/* | - |
-| tesouro_emendas | tesouro_emendas | not_built | not_loaded | file_batch | data/tesouro_emendas/* | Budget execution |
+| tesouro_emendas | tesouro_emendas | implemented_partial | not_loaded | file_batch | data/tesouro_emendas/* | Budget execution |
 | transferegov | transferegov | implemented_loaded | loaded | file_batch | data/transferegov/* | - |
 | transparencia | transparencia | implemented_loaded | loaded | file_batch | data/transparencia/* | - |
 | tse | tse | implemented_loaded | loaded | file_batch | data/tse/* | - |
