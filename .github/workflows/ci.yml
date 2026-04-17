@@ -103,6 +103,26 @@ jobs:
       - name: Check for banned words
         run: make neutrality
 
+  governance:
+    name: Registry & Docs Governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check public claims (README + data-sources summary)
+        run: make check-public-claims
+
+      - name: Check pipeline contracts (registry ⇆ runner)
+        run: make check-pipeline-contracts
+
+      - name: Check pipeline inputs (registry ⇆ pipeline_status doc)
+        run: make check-pipeline-inputs
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
