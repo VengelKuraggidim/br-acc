@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from bracc_etl.pipelines.renuncias import RenunciasPipeline, _parse_brl
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -101,9 +102,9 @@ class TestTransform:
             assert isinstance(w["amount"], float)
 
     def test_transform_empty_input(self, pipeline: RenunciasPipeline) -> None:
-        pipeline._raw = pipeline._raw.head(0)  # type: ignore[union-attr]
+        pipeline._raw = pipeline._raw.head(0)
         pipeline.extract()  # re-extract to get DataFrame
-        pipeline._raw = pipeline._raw.head(0)  # type: ignore[union-attr]
+        pipeline._raw = pipeline._raw.head(0)
         pipeline.transform()
         assert len(pipeline.waivers) == 0
 
@@ -126,7 +127,7 @@ class TestLoad:
         pipeline.extract()
         pipeline.transform()
         pipeline.load()
-        session = pipeline.driver.session.return_value.__enter__.return_value
+        session = mock_session(pipeline)
         assert session.run.called
 
     def test_load_empty_data(self, pipeline: RenunciasPipeline) -> None:

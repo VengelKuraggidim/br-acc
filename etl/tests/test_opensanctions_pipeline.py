@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.opensanctions import (
@@ -11,6 +12,7 @@ from bracc_etl.pipelines.opensanctions import (
     _extract_cpf,
     _is_brazilian_entity,
 )
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -83,7 +85,7 @@ def test_is_not_brazilian() -> None:
 
 
 def test_is_not_brazilian_empty() -> None:
-    entity = {"properties": {}}
+    entity: dict[str, Any] = {"properties": {}}
     assert not _is_brazilian_entity(entity)
 
 
@@ -106,7 +108,7 @@ def test_extract_cpf_picks_first_valid() -> None:
 
 
 def test_extract_cpf_empty_props() -> None:
-    entity = {"properties": {}}
+    entity: dict[str, Any] = {"properties": {}}
     assert _extract_cpf(entity) is None
 
 
@@ -242,7 +244,7 @@ def test_load_calls_batch_loader() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     assert session.run.call_count >= 1
 
 
@@ -253,7 +255,7 @@ def test_load_empty_pipeline_no_calls() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     assert session.run.call_count == 0
 
 

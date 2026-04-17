@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.holdings import HoldingsPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -115,7 +116,7 @@ def test_load_calls_batch_loader() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     assert session.run.call_count >= 1
 
 
@@ -125,7 +126,7 @@ def test_load_empty_pipeline_no_calls() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     assert session.run.call_count == 0
 
 
@@ -135,7 +136,7 @@ def test_load_cypher_uses_holding_de_rel() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     # Check that HOLDING_DE appears in the cypher query
     first_call = session.run.call_args_list[0]
     query = first_call[0][0]

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from bracc_etl.pipelines.cepim import CepimPipeline, _generate_ngo_id
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -173,7 +174,7 @@ class TestCepimLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         ngo_calls = [
@@ -188,7 +189,7 @@ class TestCepimLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         company_calls = [
@@ -203,7 +204,7 @@ class TestCepimLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -217,5 +218,5 @@ class TestCepimLoad:
         # Don't load fixture data — ngos and company_rels remain empty
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0

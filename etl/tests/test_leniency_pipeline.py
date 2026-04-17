@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from bracc_etl.pipelines.leniency import LeniencyPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -146,7 +147,7 @@ class TestLeniencyLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         agreement_calls = [
@@ -161,7 +162,7 @@ class TestLeniencyLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         company_calls = [
@@ -186,7 +187,7 @@ class TestLeniencyLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [

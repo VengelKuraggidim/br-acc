@@ -10,6 +10,7 @@ from bracc_etl.pipelines.querido_diario_go import (
     _extract_cnpjs,
     _stable_id,
 )
+from tests._mock_helpers import mock_driver
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -143,5 +144,4 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        driver = pipeline.driver
-        assert driver.session.called
+        assert mock_driver(pipeline).session.called

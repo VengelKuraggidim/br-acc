@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from bracc_etl.pipelines.cvm import CvmPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -168,7 +169,7 @@ class TestCvmLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         proceeding_calls = [
@@ -182,7 +183,7 @@ class TestCvmLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -196,7 +197,7 @@ class TestCvmLoad:
         pipeline.accused_entities = []
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_name_based_matching_query(self) -> None:
@@ -205,7 +206,7 @@ class TestCvmLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [

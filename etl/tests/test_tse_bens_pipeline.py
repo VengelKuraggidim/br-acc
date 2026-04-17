@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from bracc_etl.pipelines.tse_bens import TseBensPipeline, _make_asset_id, _parse_value
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -268,7 +269,7 @@ class TestTseBensLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         asset_calls = [
@@ -283,7 +284,7 @@ class TestTseBensLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         person_calls = [
@@ -298,7 +299,7 @@ class TestTseBensLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -313,7 +314,7 @@ class TestTseBensLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -335,7 +336,7 @@ class TestTseBensLoad:
         pipeline.person_rels.append(pipeline.person_rels[0].copy())
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         person_calls = [

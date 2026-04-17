@@ -11,6 +11,7 @@ from bracc_etl.pipelines.eu_sanctions import (
     _clean_entity_type,
     _generate_sanction_id,
 )
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -207,7 +208,7 @@ def test_load_creates_sanction_nodes() -> None:
     _extract_and_transform(pipeline)
     pipeline.load()
 
-    session = pipeline.driver.session.return_value.__enter__.return_value
+    session = mock_session(pipeline)
     run_calls = session.run.call_args_list
     sanction_calls = [
         call for call in run_calls if "MERGE (n:InternationalSanction" in str(call)
@@ -220,7 +221,7 @@ def test_load_creates_person_rels() -> None:
     _extract_and_transform(pipeline)
     pipeline.load()
 
-    session = pipeline.driver.session.return_value.__enter__.return_value
+    session = mock_session(pipeline)
     run_calls = session.run.call_args_list
     rel_calls = [
         call for call in run_calls
@@ -235,7 +236,7 @@ def test_load_creates_company_rels() -> None:
     _extract_and_transform(pipeline)
     pipeline.load()
 
-    session = pipeline.driver.session.return_value.__enter__.return_value
+    session = mock_session(pipeline)
     run_calls = session.run.call_args_list
     rel_calls = [
         call for call in run_calls
@@ -252,7 +253,7 @@ def test_load_empty_pipeline_no_calls() -> None:
     pipeline.company_rels = []
     pipeline.load()
 
-    session = pipeline.driver.session.return_value.__enter__.return_value
+    session = mock_session(pipeline)
     assert session.run.call_count == 0
 
 

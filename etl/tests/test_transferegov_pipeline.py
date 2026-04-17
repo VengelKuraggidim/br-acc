@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.transferegov import TransferegovPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -112,6 +113,6 @@ def test_load_calls_session() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     # Should have called session.run for nodes + relationships
     assert session.run.call_count >= 3

@@ -130,7 +130,7 @@ class TestWorldBankLoad:
             }
         ]
         p.load()
-        loader = p.driver  # type: ignore[attr-defined]
+        loader = p.driver
         # Check Neo4jBatchLoader was used
         assert loader is not None
 

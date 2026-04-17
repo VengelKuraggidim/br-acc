@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.rais import RaisPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -86,6 +87,6 @@ def test_load_calls_session() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     # Should call session.run for: LaborStats nodes + 2 index creations = at least 3
     assert session.run.call_count >= 3

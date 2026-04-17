@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.tse import TSEPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -162,7 +163,7 @@ def test_load_doou_merge_preserves_multi_year_donations() -> None:
     pipeline.load()
 
     # Find the person DOOU query
-    session_mock = pipeline.driver.session.return_value.__enter__.return_value
+    session_mock = mock_session(pipeline)
     run_calls = session_mock.run.call_args_list
 
     doou_calls = [
@@ -194,7 +195,7 @@ def test_load_company_donors_include_razao_social() -> None:
     pipeline.load()
 
     # Collect all load_nodes calls from the mock driver
-    session_mock = pipeline.driver.session.return_value.__enter__.return_value
+    session_mock = mock_session(pipeline)
     run_calls = session_mock.run.call_args_list
 
     # Find the MERGE (n:Company ...) call — its rows should include razao_social

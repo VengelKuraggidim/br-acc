@@ -10,6 +10,8 @@ from click.testing import CliRunner
 if TYPE_CHECKING:
     from types import ModuleType
 
+    import pytest
+
 
 def _load_script_module(filename: str, module_name: str) -> ModuleType:
     scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
@@ -22,7 +24,9 @@ def _load_script_module(filename: str, module_name: str) -> ModuleType:
     return module
 
 
-def test_download_mides_fails_when_all_tables_fail(monkeypatch, tmp_path: Path) -> None:
+def test_download_mides_fails_when_all_tables_fail(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     module = _load_script_module("download_mides.py", "download_mides_test_fail")
 
     def _always_fail(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -44,7 +48,7 @@ def test_download_mides_fails_when_all_tables_fail(monkeypatch, tmp_path: Path) 
 
 
 def test_download_mides_partial_success_writes_manifest(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     module = _load_script_module("download_mides.py", "download_mides_test_partial")
@@ -70,7 +74,7 @@ def test_download_mides_partial_success_writes_manifest(
 
 
 def test_download_datajud_strict_auth_fails_without_credentials(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     module = _load_script_module("download_datajud.py", "download_datajud_test_strict")
@@ -88,7 +92,7 @@ def test_download_datajud_strict_auth_fails_without_credentials(
 
 
 def test_download_datajud_non_strict_keeps_dry_run_success(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     module = _load_script_module("download_datajud.py", "download_datajud_test_non_strict")

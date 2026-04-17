@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from bracc_etl.pipelines.stf import StfPipeline, _generate_case_id
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -196,7 +197,7 @@ class TestStfLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         case_calls = [call for call in run_calls if "MERGE (n:LegalCase" in str(call)]
@@ -208,7 +209,7 @@ class TestStfLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [call for call in run_calls if "RELATOR_DE" in str(call)]
@@ -219,7 +220,7 @@ class TestStfLoad:
         # Don't load fixture data — cases and rapporteur_rels remain empty
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_load_skips_rels_when_no_rapporteurs(self) -> None:
@@ -241,7 +242,7 @@ class TestStfLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         # Should have LegalCase MERGE but no RELATOR_DE

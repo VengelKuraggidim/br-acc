@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.pncp_go import PncpGoPipeline, _make_procurement_id
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -284,7 +285,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         procurement_calls = [
@@ -299,7 +300,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         company_calls = [
@@ -314,7 +315,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -329,7 +330,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -343,7 +344,7 @@ class TestLoad:
         pipeline.procurements = []
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_load_calls_correct_number_of_batches(self) -> None:
@@ -354,7 +355,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         # At minimum: 1 GoProcurement + 1 Company(agency) + 1 CONTRATOU_GO
         # + 1 Company(supplier) + 1 FORNECEU_GO = 5
         assert session_mock.run.call_count >= 5

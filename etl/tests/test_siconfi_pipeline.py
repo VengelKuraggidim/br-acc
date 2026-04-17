@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from bracc_etl.pipelines.siconfi import SiconfiPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -115,7 +116,7 @@ class TestLoad:
         pipeline.extract()
         pipeline.transform()
         pipeline.load()
-        session = pipeline.driver.session.return_value.__enter__.return_value
+        session = mock_session(pipeline)
         assert session.run.called
 
     def test_load_empty_data(self, pipeline: SiconfiPipeline) -> None:
@@ -145,7 +146,7 @@ class TestLoad:
             }
         ]
         pipeline.load()
-        session = pipeline.driver.session.return_value.__enter__.return_value
+        session = mock_session(pipeline)
         assert session.run.called
 
 

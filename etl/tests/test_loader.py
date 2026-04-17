@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from neo4j.exceptions import TransientError
@@ -61,7 +62,7 @@ class TestNeo4jBatchLoader:
 
     def test_load_nodes_filters_empty_keys(self) -> None:
         loader, session = self._make_loader()
-        rows = [
+        rows: list[dict[str, Any]] = [
             {"cnpj": "111", "name": "A"},
             {"cnpj": "", "name": "B"},
             {"cnpj": None, "name": "C"},
@@ -79,7 +80,7 @@ class TestNeo4jBatchLoader:
 
     def test_load_relationships_filters_empty_keys(self) -> None:
         loader, session = self._make_loader()
-        rows = [
+        rows: list[dict[str, Any]] = [
             {"source_key": "111", "target_key": "AAA", "value": 10},
             {"source_key": "", "target_key": "BBB", "value": 20},
             {"source_key": "222", "target_key": "", "value": 30},

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.pgfn import PgfnPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -100,6 +101,6 @@ def test_load_calls_session_run() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     # load_nodes for Finance + _run_with_retry batches for relationships
     assert session.run.call_count >= 2

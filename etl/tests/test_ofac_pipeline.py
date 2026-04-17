@@ -10,6 +10,7 @@ from bracc_etl.pipelines.ofac import (
     OfacPipeline,
     _clean_sdn_type,
 )
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -176,7 +177,7 @@ def test_load_calls_batch_loader() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     assert session.run.call_count >= 1
 
 
@@ -186,7 +187,7 @@ def test_load_empty_pipeline_no_calls() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     assert session.run.call_count == 0
 
 

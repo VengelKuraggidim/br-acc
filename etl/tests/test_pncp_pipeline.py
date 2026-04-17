@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.pncp import PncpPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -290,7 +291,7 @@ class TestPncpLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         bid_calls = [
@@ -305,7 +306,7 @@ class TestPncpLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         company_calls = [
@@ -320,7 +321,7 @@ class TestPncpLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -334,7 +335,7 @@ class TestPncpLoad:
         pipeline.bids = []
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_load_calls_correct_number_of_batches(self) -> None:
@@ -344,7 +345,7 @@ class TestPncpLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         # At minimum: 1 Bid batch + 1 Company batch + 1 LICITOU batch = 3
         assert session_mock.run.call_count >= 3
 

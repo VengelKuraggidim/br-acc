@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from bracc_etl.pipelines.datasus import DatasusPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -138,7 +139,7 @@ def test_load_calls_batch_loader() -> None:
     pipeline.load()
 
     driver = pipeline.driver
-    session = driver.session.return_value.__enter__.return_value
+    session = mock_session(driver)
     # Should have called session.run for:
     # Health nodes, Company nodes, OPERA_UNIDADE rels = 3 calls minimum
     assert session.run.call_count >= 3

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bracc_etl.pipelines.tcm_go import TcmGoPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -171,7 +172,7 @@ class TestLoad:
         pipeline.extract()
         pipeline.transform()
         pipeline.load()
-        session = pipeline.driver.session.return_value.__enter__.return_value
+        session = mock_session(pipeline)
         assert session.run.called
 
     def test_load_empty_data(self, pipeline: TcmGoPipeline) -> None:
@@ -210,7 +211,7 @@ class TestLoad:
         ]
         pipeline.expenditure_rels = []
         pipeline.load()
-        session = pipeline.driver.session.return_value.__enter__.return_value
+        session = mock_session(pipeline)
         assert session.run.called
 
     def test_load_sets_rows_loaded(self, pipeline: TcmGoPipeline) -> None:

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from bracc_etl.pipelines.cvm_funds import CvmFundsPipeline
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -236,7 +237,7 @@ class TestCvmFundsLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         fund_calls = [c for c in run_calls if "MERGE (n:Fund" in str(c)]
@@ -248,7 +249,7 @@ class TestCvmFundsLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [c for c in run_calls if "ADMINISTRA" in str(c)]
@@ -260,7 +261,7 @@ class TestCvmFundsLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [c for c in run_calls if "GERE" in str(c)]
@@ -272,7 +273,7 @@ class TestCvmFundsLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         admin_calls = [c for c in run_calls if "ADMINISTRA" in str(c)]
@@ -287,7 +288,7 @@ class TestCvmFundsLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         gere_calls = [c for c in run_calls if "GERE" in str(c)]
@@ -302,7 +303,7 @@ class TestCvmFundsLoad:
         pipeline.manager_rels = []
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_company_on_create_sets_name(self) -> None:
@@ -311,7 +312,7 @@ class TestCvmFundsLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         admin_calls = [c for c in run_calls if "ADMINISTRA" in str(c)]

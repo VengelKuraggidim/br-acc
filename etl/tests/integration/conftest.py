@@ -10,12 +10,12 @@ if TYPE_CHECKING:
 
 try:
     from neo4j import Driver, GraphDatabase
-    from testcontainers.neo4j import Neo4jContainer
+    from testcontainers.neo4j import Neo4jContainer  # type: ignore[import-untyped]
 
     HAS_TESTCONTAINERS = True
 except ImportError:
     HAS_TESTCONTAINERS = False
-    Neo4jContainer = None  # type: ignore[assignment,misc]
+    Neo4jContainer = None
     Driver = None  # type: ignore[assignment,misc]
 
 

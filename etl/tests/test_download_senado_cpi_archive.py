@@ -5,7 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from download_senado_cpi_archive import ArchiveSource, parse_archive_text
+from download_senado_cpi_archive import (  # type: ignore[import-not-found]
+    ArchiveSource,
+    parse_archive_text,
+)
 
 
 def test_parse_archive_text_extracts_rows() -> None:

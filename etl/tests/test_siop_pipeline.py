@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from bracc_etl.pipelines.siop import SiopPipeline, _classify_amendment_type, _parse_brl
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -319,7 +320,7 @@ class TestSiopLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         amendment_calls = [
@@ -334,7 +335,7 @@ class TestSiopLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         person_calls = [
@@ -349,7 +350,7 @@ class TestSiopLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [
@@ -363,7 +364,7 @@ class TestSiopLoad:
         pipeline = _make_pipeline()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_load_cypher_uses_param_binding(self) -> None:
@@ -373,7 +374,7 @@ class TestSiopLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         for call in session_mock.run.call_args_list:
             query = str(call[0][0])
             if "AUTOR_EMENDA" in query:

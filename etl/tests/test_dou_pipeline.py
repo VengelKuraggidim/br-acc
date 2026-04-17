@@ -19,9 +19,10 @@ from bracc_etl.pipelines.dou import (
     _make_act_id,
 )
 from bracc_etl.transforms import extract_cnpjs, extract_cpfs
+from tests._mock_helpers import mock_session
 
 try:
-    import pyarrow  # noqa: F401
+    import pyarrow  # type: ignore[import-not-found]  # noqa: F401
 
     _HAS_PYARROW = True
 except ImportError:
@@ -465,7 +466,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         act_calls = [c for c in run_calls if "MERGE (n:DOUAct" in str(c)]
@@ -477,7 +478,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [c for c in run_calls if "PUBLICOU" in str(c)]
@@ -489,7 +490,7 @@ class TestLoad:
         pipeline.transform()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         rel_calls = [c for c in run_calls if "MENCIONOU" in str(c)]
@@ -502,7 +503,7 @@ class TestLoad:
         pipeline.company_rels = []
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
     def test_load_without_person_rels(self, tmp_path: Path) -> None:
@@ -530,7 +531,7 @@ class TestLoad:
         assert len(pipeline.company_rels) == 1
 
         pipeline.load()
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         publicou_calls = [c for c in run_calls if "PUBLICOU" in str(c)]
@@ -546,5 +547,5 @@ class TestFullRun:
         pipeline = _make_pipeline()
         pipeline.run()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         assert session_mock.run.call_count >= 1

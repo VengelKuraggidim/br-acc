@@ -10,6 +10,8 @@ from click.testing import CliRunner
 if TYPE_CHECKING:
     from types import ModuleType
 
+    import pytest
+
 
 def _load_script_module(filename: str, module_name: str) -> ModuleType:
     scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
@@ -23,7 +25,7 @@ def _load_script_module(filename: str, module_name: str) -> ModuleType:
 
 
 def test_download_cnpj_bq_writes_manifest_on_success(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     module = _load_script_module("download_cnpj_bq.py", "download_cnpj_bq_ok")
@@ -69,7 +71,7 @@ def test_download_cnpj_bq_writes_manifest_on_success(
 
 
 def test_download_cnpj_bq_fails_closed_when_table_fails(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     module = _load_script_module("download_cnpj_bq.py", "download_cnpj_bq_fail")

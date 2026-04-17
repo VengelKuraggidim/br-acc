@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from bracc_etl.pipelines.cnpj import CNPJPipeline, parse_capital_social
+from tests._mock_helpers import mock_driver
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -529,13 +530,13 @@ def test_run_streaming_rf_format() -> None:
     """run_streaming processes RF files chunk-by-chunk and calls loader."""
     pipeline = _make_pipeline(chunk_size=2)
     mock_session = MagicMock()
-    pipeline.driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
-    pipeline.driver.session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_driver(pipeline).session.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_driver(pipeline).session.return_value.__exit__ = MagicMock(return_value=False)
 
     pipeline.run_streaming()
 
     # Verify loader was called (driver.session() was used)
-    assert pipeline.driver.session.called
+    assert mock_driver(pipeline).session.called
 
 
 def test_run_streaming_bq_format(tmp_path: Path) -> None:
@@ -543,13 +544,13 @@ def test_run_streaming_bq_format(tmp_path: Path) -> None:
     data_dir = _write_bq_fixtures(tmp_path)
     pipeline = _make_pipeline(data_dir=str(data_dir), chunk_size=2)
     mock_session = MagicMock()
-    pipeline.driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
-    pipeline.driver.session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_driver(pipeline).session.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_driver(pipeline).session.return_value.__exit__ = MagicMock(return_value=False)
 
     pipeline.run_streaming()
 
     # Verify loader was called with data
-    assert pipeline.driver.session.called
+    assert mock_driver(pipeline).session.called
     # estab_lookup should be populated from BQ estabelecimentos
     assert len(pipeline._estab_lookup) == 3
     bb = pipeline._estab_lookup["00000000"]
@@ -566,7 +567,7 @@ def test_run_streaming_bq_format_no_data(tmp_path: Path) -> None:
     pipeline.run_streaming()
 
     # No crash, no loader calls
-    assert not pipeline.driver.session.called
+    assert not mock_driver(pipeline).session.called
 
 
 # --- DM-002: PJ partner classification ---

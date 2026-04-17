@@ -11,6 +11,7 @@ from bracc_etl.pipelines.caged import (
     _generate_stats_id,
     _parse_salary,
 )
+from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -144,7 +145,7 @@ class TestCagedLoad:
         pipeline.extract()
         pipeline.load()
 
-        session_mock = pipeline.driver.session.return_value.__enter__.return_value
+        session_mock = mock_session(pipeline)
         run_calls = session_mock.run.call_args_list
 
         laborstats_calls = [call for call in run_calls if "MERGE (n:LaborStats" in str(call)]
