@@ -73,7 +73,7 @@ describe("Landing", () => {
     });
     expect(screen.getByText("Siga o dinheiro p\u00FAblico")).toBeInTheDocument();
     expect(screen.getByText("Explorar o grafo")).toBeInTheDocument();
-    expect(screen.getByText("BR-ACC \u00B7 Dados abertos")).toBeInTheDocument();
+    expect(screen.getByText("Fiscal Cidad\u00E3o \u00B7 Dados abertos")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("58.5M")).toBeInTheDocument();
     });

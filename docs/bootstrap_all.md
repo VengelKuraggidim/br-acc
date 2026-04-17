@@ -1,4 +1,6 @@
-# Bootstrap All
+# Fiscal Cidadão — Bootstrap All
+
+> Fork of [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3) re-scoped to Goiás. Mechanics below are unchanged from upstream; pipeline list reflects the GO-focused priority in `config/bootstrap_all_contract.yml`.
 
 `bootstrap-all` is the heavy reproducibility path for the public repository.
 
