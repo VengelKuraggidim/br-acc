@@ -23,6 +23,8 @@ help:
 	@echo "    neutrality       Ban-list check on source text"
 	@echo "    check-public-claims / -pipeline-contracts / -pipeline-inputs"
 	@echo "                     Registry / docs governance scripts"
+	@echo "    check-bootstrap-contract"
+	@echo "                     bootstrap-all contract vs registry parity"
 	@echo ""
 	@echo "  Data loading"
 	@echo "    bootstrap-demo   Small deterministic synthetic graph"
