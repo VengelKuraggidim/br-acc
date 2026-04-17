@@ -1,0 +1,39 @@
+* text=auto eol=lf
+
+# Source code — always LF regardless of OS
+*.py       text eol=lf
+*.ts       text eol=lf
+*.tsx      text eol=lf
+*.js       text eol=lf
+*.jsx      text eol=lf
+*.json     text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.md       text eol=lf
+*.toml     text eol=lf
+*.cypher   text eol=lf
+*.sh       text eol=lf
+*.cfg      text eol=lf
+*.ini      text eol=lf
+*.lock     text eol=lf
+Makefile   text eol=lf
+Dockerfile text eol=lf
+
+# Binary / opaque formats — never convert
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.pdf      binary
+*.zip      binary
+*.gz       binary
+*.parquet  binary
+*.dbc      binary
+
+# Linguist overrides so GitHub's language stats aren't dominated by
+# vendored assets or lockfiles.
+*.lock     linguist-generated
+package-lock.json linguist-generated
+uv.lock           linguist-generated
+docs/**           linguist-documentation
