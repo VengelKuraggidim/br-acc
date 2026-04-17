@@ -180,6 +180,16 @@ Se voce achou o projeto util, **de uma estrela no repo** — ajuda outras pessoa
 
 ---
 
+## Contribuidores
+
+Obrigado a todas as pessoas que ja contribuiram com o br/acc.
+
+[![Contributors](https://contrib.rocks/image?repo=brunoclz/br-acc)](https://github.com/brunoclz/br-acc/graphs/contributors)
+
+Veja a [lista completa de contribuidores](https://github.com/brunoclz/br-acc/graphs/contributors) no GitHub.
+
+---
+
 ## Apoie o Projeto
 
 [![Sponsor](https://img.shields.io/badge/GitHub_Sponsors-Apoiar-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/brunoclz)
