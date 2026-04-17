@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-17",
   "full_historical_default": true,
-  "expected_implemented_count": 52,
+  "expected_implemented_count": 57,
   "core_sources": [
     "camara",
     "cnpj",
@@ -499,6 +499,51 @@
         "data/world_bank/*"
       ],
       "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "alego",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/alego/*"
+      ],
+      "blocking_reason_if_any": "Pending public API discovery",
+      "core": false
+    },
+    {
+      "pipeline_id": "ssp_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/ssp_go/*"
+      ],
+      "blocking_reason_if_any": "Pending machine-readable crime statistics export",
+      "core": false
+    },
+    {
+      "pipeline_id": "state_portal_go",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/state_portal_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "tce_go",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/tce_go/*"
+      ],
+      "blocking_reason_if_any": "Pending CSV export schema from TCE-GO dashboards",
+      "core": false
+    },
+    {
+      "pipeline_id": "tcmgo_sancoes",
+      "acquisition_mode": "file_manifest",
+      "required_inputs": [
+        "data/tcmgo_sancoes/*"
+      ],
+      "blocking_reason_if_any": "Pending CSV export schema from TCM-GO",
       "core": false
     }
   ]

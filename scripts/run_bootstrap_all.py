@@ -216,8 +216,10 @@ def remediation_hint(status: str, source: dict[str, Any]) -> str:
 
 
 def write_markdown(summary: dict[str, Any], path: Path) -> None:
+    label = str(summary.get("output_label", "bootstrap-all"))
+    title = "Bootstrap All Summary" if label == "bootstrap-all" else f"{label} Summary"
     lines = [
-        "# Bootstrap All Summary",
+        f"# {title}",
         "",
         f"- run_id: `{summary['run_id']}`",
         f"- started_at_utc: `{summary['started_at_utc']}`",
@@ -271,17 +273,29 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--report-latest", action="store_true")
+    parser.add_argument(
+        "--output-label",
+        default="bootstrap-all",
+        help=(
+            "Subdirectory name under audit-results/ for run outputs "
+            "(use e.g. 'bootstrap-go' for filtered runs to avoid overwriting all-history)"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     repo_root = Path(args.repo_root).resolve()
-    latest_summary = repo_root / "audit-results" / "bootstrap-all" / "latest" / "summary.md"
+    output_label = args.output_label.strip() or "bootstrap-all"
+    latest_summary = repo_root / "audit-results" / output_label / "latest" / "summary.md"
 
     if args.report_latest:
         if not latest_summary.exists():
-            print("No bootstrap-all report found at audit-results/bootstrap-all/latest/summary.md")
+            print(
+                f"No {output_label} report found at "
+                f"audit-results/{output_label}/latest/summary.md"
+            )
             return 1
         print(latest_summary.read_text(encoding="utf-8"))
         return 0
@@ -318,15 +332,23 @@ def main() -> int:
         )
         return 1
 
-    if contract_ids != implemented_ids:
-        missing = sorted(implemented_ids - contract_ids)
+    contract_mode = str(contract.get("contract_mode", "full")).strip().lower()
+    if contract_mode == "subset":
         extra = sorted(contract_ids - implemented_ids)
-        print("Contract/registry mismatch", file=sys.stderr)
-        if missing:
-            print(f"- missing in contract: {missing}", file=sys.stderr)
         if extra:
-            print(f"- extra in contract: {extra}", file=sys.stderr)
-        return 1
+            print("Contract/registry mismatch (subset mode)", file=sys.stderr)
+            print(f"- in contract but not implemented in registry: {extra}", file=sys.stderr)
+            return 1
+    else:
+        if contract_ids != implemented_ids:
+            missing = sorted(implemented_ids - contract_ids)
+            extra = sorted(contract_ids - implemented_ids)
+            print("Contract/registry mismatch", file=sys.stderr)
+            if missing:
+                print(f"- missing in contract: {missing}", file=sys.stderr)
+            if extra:
+                print(f"- extra in contract: {extra}", file=sys.stderr)
+            return 1
 
     selected_ids: set[str] | None = None
     if args.sources.strip():
@@ -391,8 +413,8 @@ def main() -> int:
 
     run_started = utc_now()
     stamp = utc_stamp(run_started)
-    run_id = f"bootstrap-all-{stamp}"
-    output_dir = repo_root / "audit-results" / "bootstrap-all" / stamp
+    run_id = f"{output_label}-{stamp}"
+    output_dir = repo_root / "audit-results" / output_label / stamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
     context = PreparationContext(repo_root=str(repo_root), run_in_etl_shell=run_etl_shell)
@@ -491,6 +513,8 @@ def main() -> int:
 
     summary = {
         "run_id": run_id,
+        "output_label": output_label,
+        "contract_mode": contract_mode,
         "started_at_utc": run_started.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "ended_at_utc": ended.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "full_historical": bool(contract.get("full_historical_default", True)),
@@ -511,12 +535,12 @@ def main() -> int:
     summary_md = output_dir / "summary.md"
     write_markdown(summary, summary_md)
 
-    latest_dir = repo_root / "audit-results" / "bootstrap-all" / "latest"
+    latest_dir = repo_root / "audit-results" / output_label / "latest"
     if latest_dir.exists():
         shutil.rmtree(latest_dir)
     shutil.copytree(output_dir, latest_dir)
 
-    print(f"Bootstrap-all summary written to: {summary_json}")
+    print(f"{output_label} summary written to: {summary_json}")
 
     if core_failures:
         print(f"Core source failures detected: {[row['pipeline_id'] for row in core_failures]}", file=sys.stderr)

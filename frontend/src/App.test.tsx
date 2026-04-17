@@ -24,7 +24,7 @@ vi.mock("./stores/auth", () => ({
 
 // Keep App route test deterministic without Landing async effects.
 vi.mock("./pages/Landing", () => ({
-  Landing: () => <div>BR-ACC</div>,
+  Landing: () => <div>Fiscal Cidadão</div>,
 }));
 
 import { App } from "./App";
@@ -39,7 +39,7 @@ describe("App", () => {
       );
     });
     await waitFor(() => {
-      expect(screen.getAllByText("BR-ACC").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Fiscal Cidadão").length).toBeGreaterThan(0);
     });
   });
 

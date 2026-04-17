@@ -1,14 +1,16 @@
-# BR/ACC Data Source Catalog
+# Fiscal Cidadão — Data Source Catalog
+
+> Fork re-scoped to Goiás. Derived from [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3). Goiás-specific pipelines (`camara_goiania`, `folha_go`, `mides`, SIOP GO transfers, etc.) are the priority; federal sources are kept where they add context for GO-based entities.
 
 <!-- SOURCE_SUMMARY_START -->
-**Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T05:38:38Z)**
+**Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T20:16:52Z)**
 
-- Universe v1 sources: 113
-- Implemented pipelines: 52
+- Universe v1 sources: 116
+- Implemented pipelines: 57
 - Loaded sources (load_state=loaded): 41
 - Partial sources (load_state=partial): 8
-- Not loaded sources (load_state=not_loaded): 64
-- Status counts: loaded=41, partial=7, stale=3, blocked_external=1, not_built=61
+- Not loaded sources (load_state=not_loaded): 67
+- Status counts: loaded=41, partial=12, stale=3, blocked_external=1, not_built=59
 <!-- SOURCE_SUMMARY_END -->
 
 

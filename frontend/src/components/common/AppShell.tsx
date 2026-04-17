@@ -146,7 +146,7 @@ export function AppShell() {
       <nav className={`${styles.sidebar} ${sidebarCollapsed ? styles.collapsed : ""}`}>
         <div className={styles.sidebarHeader}>
           <Link to="/app" className={styles.logo}>
-            {sidebarCollapsed ? "B" : "BR-ACC"}
+            {sidebarCollapsed ? "FC" : "Fiscal Cidadão"}
           </Link>
         </div>
 
