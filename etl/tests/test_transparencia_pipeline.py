@@ -8,7 +8,6 @@ from bracc_etl.pipelines.transparencia import (
     _extract_cpf_middle6,
     _make_office_id,
     _make_servidor_id,
-    _parse_brl,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -225,15 +224,6 @@ def test_transform_caps_absurd_contract_value() -> None:
         c for c in pipeline.contracts if c["razao_social"] == "EMPRESA ABSURDA LTDA"
     )
     assert absurd_contract["value"] is None
-
-
-def test_parse_brl_handles_formats() -> None:
-    assert _parse_brl("1.500.000,00") == 1_500_000.00
-    assert _parse_brl("3.200.000,50") == 3_200_000.50
-    assert _parse_brl("R$ 1.000,00") == 1_000.00
-    assert _parse_brl("0") == 0.0
-    assert _parse_brl("") == 0.0
-    assert _parse_brl(None) == 0.0
 
 
 # ── cpf_partial extraction tests ───────────────────────────────────

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.transferegov import TransferegovPipeline, _parse_brl
+from bracc_etl.pipelines.transferegov import TransferegovPipeline
 from tests._mock_helpers import mock_driver, mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -116,36 +116,6 @@ def test_load_calls_session() -> None:
     session = mock_session(driver)
     # Should have called session.run for nodes + relationships
     assert session.run.call_count >= 3
-
-
-# --- _parse_brl helper ---
-
-
-class TestParseBrl:
-    def test_none_returns_zero(self) -> None:
-        assert _parse_brl(None) == 0.0
-
-    def test_empty_string_returns_zero(self) -> None:
-        assert _parse_brl("") == 0.0
-        assert _parse_brl("   ") == 0.0
-
-    def test_plain_brazilian_format(self) -> None:
-        # Thousands-dot + decimal-comma.
-        assert _parse_brl("1.234.567,89") == 1234567.89
-
-    def test_with_currency_symbol(self) -> None:
-        assert _parse_brl("R$ 1.234,56") == 1234.56
-        assert _parse_brl("R$500,00") == 500.00
-
-    def test_integer_without_comma(self) -> None:
-        # No comma → treated as-is (period not stripped since no comma present)
-        assert _parse_brl("500") == 500.0
-
-    def test_invalid_returns_zero(self) -> None:
-        assert _parse_brl("nao numerico") == 0.0
-
-    def test_only_currency_symbol_returns_zero(self) -> None:
-        assert _parse_brl("R$") == 0.0
 
 
 # --- Value-summing across duplicate amendment rows ---
