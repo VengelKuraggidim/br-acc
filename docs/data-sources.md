@@ -1,4 +1,4 @@
-# ICARUS Data Source Catalog
+# BR/ACC Data Source Catalog
 
 <!-- SOURCE_SUMMARY_START -->
 **Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T05:38:38Z)**
