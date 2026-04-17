@@ -1,0 +1,6 @@
+OB;Data;Ano;Mês;Nome Emenda;Transferência Especial;Categoria Econômica Despesa;Valor;CNPJ do Favorecido;Nome Favorecido
+900001;45658;2024;01;Emenda A;NÃO;Despesas Correntes;1000,50;12345678000195;EMPRESA UM LTDA
+900002;45659;2024;01;Emenda B;SIM;Despesas de Capital;250000,00;98765432000110;EMPRESA DOIS LTDA
+900003;2024-02-15;2024;02;Emenda C;NÃO;Despesas Correntes;0,00;;SEM CNPJ
+900004;45690;2024;02;Emenda D;NÃO;Despesas Correntes;750,25;11222333000144;EMPRESA TRES ME
+900001;45658;2024;01;Emenda A;NÃO;Despesas Correntes;1000,50;12345678000195;EMPRESA UM LTDA
