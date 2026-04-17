@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <title>Fiscal Cidadão</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #06060f;
+      --bg-secondary: #0d0d1a;
+      --bg-card: #111127;
+      --bg-card-hover: #161640;
+      --bg-elevated: #1a1a3e;
+
+      --accent: #00e5a0;
+      --accent-glow: rgba(0, 229, 160, 0.15);
+      --accent-dim: #00b87d;
+
+      --danger: #ff3b5c;
+      --danger-bg: rgba(255, 59, 92, 0.1);
+      --warning: #ffb627;
+      --warning-bg: rgba(255, 182, 39, 0.1);
+      --info: #3b82f6;
+      --info-bg: rgba(59, 130, 246, 0.1);
+      --ok: #00e5a0;
+      --ok-bg: rgba(0, 229, 160, 0.1);
+
+      --text-primary: #f0f0f5;
+      --text-secondary: #9191ad;
+      --text-dim: #5c5c7a;
+
+      --border: #1e1e3a;
+      --border-light: #2a2a50;
+
+      --radius: 14px;
+      --radius-sm: 10px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* === HEADER === */
+    .header {
+      background: linear-gradient(180deg, #0f0f2e 0%, var(--bg-primary) 100%);
+      padding: 20px 20px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent) 0%, #00b87d 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--bg-primary);
+      font-weight: 800;
+    }
+
+    .brand-text h1 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .brand-text span {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .status-pill .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+    .status-pill .dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+    /* === SEARCH === */
+    .search-container {
+      padding: 0 20px 16px;
+      background: var(--bg-primary);
+      position: sticky;
+      top: 72px;
+      z-index: 99;
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 14px 16px 14px 44px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-size: 15px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-input::placeholder { color: var(--text-dim); }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 18px;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px; height: 24px;
+      background: var(--bg-elevated);
+      border: none;
+      border-radius: 50%;
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* === CONTAINER === */
+    .container {
+      padding: 0 20px 90px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    /* === CARDS === */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 10px;
+      transition: all 0.15s;
+    }
+
+    .card:active { transform: scale(0.98); background: var(--bg-card-hover); }
+
+    .card-clickable { cursor: pointer; }
+
+    /* === STAT CARDS === */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 10px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 6px;
+    }
+
+    /* === SECTION === */
+    .section {
+      margin-top: 20px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-icon {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .badge-accent { background: var(--accent-glow); color: var(--accent); }
+    .badge-danger { background: var(--danger-bg); color: var(--danger); }
+    .badge-warning { background: var(--warning-bg); color: var(--warning); }
+
+    /* === RESULTADO DE BUSCA === */
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .result-item:active { transform: scale(0.98); }
+
+    .result-avatar {
+      width: 42px; height: 42px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .result-avatar.pessoa { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+    .result-avatar.empresa { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+    .result-avatar.contrato { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .result-avatar.emenda { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .result-avatar.outro { background: linear-gradient(135deg, #6b7280, #4b5563); }
+
+    .result-info { flex: 1; min-width: 0; }
+    .result-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .result-detail {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .result-arrow {
+      color: var(--text-dim);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .pep-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-weight: 700;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* === PERFIL DO POLITICO === */
+    .profile-header {
+      text-align: center;
+      padding: 24px 16px;
+      background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-primary) 100%);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .profile-avatar {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, #00b87d 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin: 0 auto 12px;
+      color: var(--bg-primary);
+      font-weight: 800;
+      overflow: hidden;
+    }
+
+    .profile-avatar img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+
+    .profile-name {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .profile-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .profile-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .profile-patrimonio {
+      margin-top: 14px;
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      display: inline-block;
+    }
+
+    .profile-patrimonio-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .profile-patrimonio-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    /* === ALERTA === */
+    .alerta-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      border: 1px solid;
+    }
+
+    .alerta-card.grave {
+      background: var(--danger-bg);
+      border-color: rgba(255, 59, 92, 0.2);
+    }
+    .alerta-card.atencao {
+      background: var(--warning-bg);
+      border-color: rgba(255, 182, 39, 0.2);
+    }
+    .alerta-card.info {
+      background: var(--info-bg);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    .alerta-card.ok {
+      background: var(--ok-bg);
+      border-color: rgba(0, 229, 160, 0.2);
+    }
+
+    .alerta-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .alerta-card.grave .alerta-icon { background: rgba(255,59,92,0.2); }
+    .alerta-card.atencao .alerta-icon { background: rgba(255,182,39,0.2); }
+    .alerta-card.info .alerta-icon { background: rgba(59,130,246,0.2); }
+    .alerta-card.ok .alerta-icon { background: rgba(0,229,160,0.2); }
+
+    .alerta-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      padding-top: 5px;
+    }
+
+    /* === COMPARACAO CIDADA === */
+    .cidadao-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 6px;
+    }
+    .cidadao-card.abusivo { border-left: 3px solid var(--danger); }
+    .cidadao-card.elevado { border-left: 3px solid var(--warning); }
+    .cidadao-card.normal { border-left: 3px solid var(--ok); }
+
+    .cidadao-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .cidadao-categoria {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .cidadao-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .cidadao-badge.abusivo { background: var(--danger-bg); color: var(--danger); }
+    .cidadao-badge.elevado { background: var(--warning-bg); color: var(--warning); }
+    .cidadao-badge.normal { background: var(--ok-bg); color: var(--ok); }
+
+    .cidadao-bar-container {
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .cidadao-bar {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.6s ease;
+    }
+    .cidadao-bar.abusivo { background: var(--danger); }
+    .cidadao-bar.elevado { background: var(--warning); }
+    .cidadao-bar.normal { background: var(--ok); }
+
+    .cidadao-valores {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .cidadao-valores strong {
+      color: var(--text-primary);
+    }
+
+    .cidadao-resumo {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+      line-height: 1.5;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: var(--radius-sm);
+    }
+
+    /* === EMENDA CARD === */
+    .emenda-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 8px;
+    }
+
+    .emenda-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .emenda-funcao {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .emenda-tipo {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+    }
+
+    .emenda-valores {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .emenda-valor-box {
+      padding: 8px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+    }
+
+    .emenda-valor-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .emenda-valor-num {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .emenda-local {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* === CONEXAO CARD === */
+    .conexao-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+    }
+
+    .conexao-icon {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .conexao-icon.empresa { background: rgba(139,92,246,0.15); }
+    .conexao-icon.pessoa { background: rgba(59,130,246,0.15); }
+    .conexao-icon.contrato { background: rgba(245,158,11,0.15); }
+
+    .conexao-info { flex: 1; min-width: 0; }
+    .conexao-nome {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .conexao-rel {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .conexao-valor {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    /* === BACK BUTTON === */
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 0;
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    /* === SHARE === */
+    .share-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .share-btn {
+      flex: 1;
+      padding: 13px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .share-btn:active { transform: scale(0.96); }
+
+    .share-btn.whatsapp {
+      background: #25d366;
+      color: #fff;
+    }
+
+    .share-btn.copiar {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    /* === LOADING === */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px;
+      gap: 14px;
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { font-size: 13px; color: var(--text-dim); }
+
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.5; }
+
+    /* === TAB BAR === */
+    .tab-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 6px 0;
+      padding-bottom: max(6px, env(safe-area-inset-bottom));
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 0;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 10px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .tab.active { color: var(--accent); }
+    .tab-icon { font-size: 22px; line-height: 1; }
+
+    /* === PAGES === */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* === FADE IN === */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in { animation: fadeUp 0.3s ease forwards; }
+
+    /* === SCROLLBAR === */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="brand">
+      <div class="brand-icon">FC</div>
+      <div class="brand-text">
+        <h1>Fiscal Cidadão</h1>
+        <span>Goiânia, GO</span>
+      </div>
+    </div>
+    <div class="status-pill">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">...</span>
+    </div>
+  </div>
+</div>
+
+<!-- SEARCH -->
+<div class="search-container">
+  <div class="search-wrap">
+    <span class="search-icon">&#128269;</span>
+    <input
+      class="search-input"
+      id="searchInput"
+      type="text"
+      placeholder="Buscar político, empresa ou CNPJ..."
+      autocomplete="off"
+    >
+    <button class="search-clear" id="searchClear" onclick="limparBusca()">&#10005;</button>
+  </div>
+</div>
+
+<!-- PAGE: INICIO -->
+<div class="page active" id="pageInicio">
+  <div class="container">
+    <div id="inicioLoading" class="loading">
+      <div class="spinner"></div>
+      <span class="loading-text">Conectando a base de dados...</span>
+    </div>
+    <div id="inicioContent" style="display:none"></div>
+  </div>
+</div>
+
+<!-- PAGE: RESULTADOS -->
+<div class="page" id="pageResultados">
+  <div class="container">
+    <div id="resultadosContent"></div>
+  </div>
+</div>
+
+<!-- PAGE: PERFIL -->
+<div class="page" id="pagePerfil">
+  <div class="container">
+    <div id="perfilContent"></div>
+  </div>
+</div>
+
+<!-- PAGE: SOBRE -->
+<div class="page" id="pageSobre">
+  <div class="container" style="padding-top: 16px;">
+    <div class="card" style="border: 1px solid var(--accent); border-radius: var(--radius); position: relative;">
+      <button onclick="irPara('pageInicio', document.getElementById('tabInicio'))"
+        style="position:absolute; top:12px; right:12px; background:var(--bg-secondary); border:1px solid var(--border); color:var(--text-secondary); width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
+        onmouseover="this.style.background='var(--accent)'; this.style.color='#fff'"
+        onmouseout="this.style.background='var(--bg-secondary)'; this.style.color='var(--text-secondary)'"
+        title="Voltar ao início">&times;</button>
+      <div style="text-align:center; margin-bottom: 16px;">
+        <div class="brand-icon" style="width:48px;height:48px;font-size:22px;margin:0 auto 10px;">FC</div>
+        <div style="font-size:18px; font-weight:700;">Fiscal Cidadão</div>
+        <div style="font-size:12px; color:var(--text-dim); margin-top:4px;">v0.2.0</div>
+      </div>
+      <p style="font-size:13px; line-height:1.7; color:var(--text-secondary); margin-bottom:14px;">
+        O Fiscal Cidadão traduz dados públicos em linguagem que qualquer pessoa entende.
+        Digite o nome de um político e veja suas conexões, emendas, patrimônio e alertas.
+      </p>
+      <p style="font-size:13px; line-height:1.7; color:var(--text-secondary); margin-bottom:14px;">
+        Todos os dados são públicos, garantidos pela <strong style="color:var(--text-primary)">Lei de Acesso à Informação</strong> (Lei 12.527/2011)
+        e pela <strong style="color:var(--text-primary)">Lei da Transparência</strong> (LC 131/2009).
+      </p>
+      <div style="padding:12px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:var(--radius-sm); margin-top:14px;">
+        <div style="font-size:11px; color:#ef4444; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; font-weight:700;">Sobre a comparação Cidadão vs Político</div>
+        <p style="font-size:12px; line-height:1.7; color:var(--text-secondary); margin:0 0 8px 0;">
+          Categorias como <strong style="color:var(--text-primary)">divulgação</strong>, <strong style="color:var(--text-primary)">segurança privada</strong>,
+          <strong style="color:var(--text-primary)">fretamento de aeronaves</strong> e <strong style="color:var(--text-primary)">locação de veículos</strong>
+          aparecem em vermelho porque são gastos que um cidadão comum simplesmente não tem.
+        </p>
+        <p style="font-size:12px; line-height:1.7; color:var(--text-secondary); margin:0;">
+          O objetivo da comparação não é dizer que políticos não podem ter esses gastos,
+          mas sim mostrar ao cidadão a <strong style="color:var(--text-primary)">dimensão real</strong>
+          do quanto é gasto em seu nome &mdash; para que você possa julgar se o dinheiro público
+          está sendo bem aplicado.
+        </p>
+      </div>
+
+      <div style="padding:12px; background:var(--bg-secondary); border-radius:var(--radius-sm); margin-top:12px;">
+        <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Fontes dos valores de referência</div>
+        <p style="font-size:11px; line-height:1.7; color:var(--text-dim); margin:0;">
+          IBGE/PNAD Contínua 2025 (renda per capita R$ 2.316) &bull;
+          DIEESE (cesta básica) &bull; ANAC (tarifas aéreas) &bull;
+          ANP (combustíveis) &bull; Anatel/Teleco (telefonia) &bull;
+          FBHA (hospedagem) &bull; IPCA (transporte por app)
+        </p>
+      </div>
+
+      <div style="padding:12px; background:var(--bg-secondary); border-radius:var(--radius-sm); margin-top:12px;">
+        <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Dados fornecidos por</div>
+        <div style="font-size:15px; font-weight:700; color:var(--accent);">BRACC (br/acc)</div>
+        <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Infraestrutura open-source de transparência pública</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab active" onclick="irPara('pageInicio', this)" id="tabInicio">
+    <span class="tab-icon">&#127968;</span>Início
+  </button>
+  <button class="tab" onclick="document.getElementById('searchInput').focus()" id="tabBuscar">
+    <span class="tab-icon">&#128269;</span>Buscar
+  </button>
+  <button class="tab" onclick="irPara('pageSobre', this)" id="tabSobre">
+    <span class="tab-icon">&#9432;</span>Sobre
+  </button>
+</div>
+
+<script>
+const API = window.location.hostname === "localhost" ? "http://localhost:8001" : "/api";
+let buscaTimeout = null;
+
+// === NAVEGACAO ===
+function irPara(pageId, tabEl) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById(pageId).classList.add("active");
+  if (tabEl) tabEl.classList.add("active");
+}
+
+// === STATUS ===
+async function carregarStatus() {
+  try {
+    const r = await fetch(`${API}/status`);
+    const d = await r.json();
+    const dot = document.getElementById("statusDot");
+    const txt = document.getElementById("statusText");
+    if (d.bracc_conectado) {
+      dot.classList.add("on");
+      txt.textContent = `${d.total_nos} registros`;
+    } else {
+      txt.textContent = "Offline";
+    }
+    return d;
+  } catch {
+    document.getElementById("statusText").textContent = "Offline";
+    return null;
+  }
+}
+
+// === TELA INICIAL ===
+async function carregarInicio() {
+  const d = await carregarStatus();
+  if (!d) {
+    document.getElementById("inicioLoading").innerHTML =
+      '<div class="empty"><div class="empty-icon">&#9888;</div>Servidor offline.<br>Verifique se o backend está rodando.</div>';
+    return;
+  }
+
+  const icones = { sancao:"&#9888;", contrato:"&#128196;", empresa:"&#127970;" };
+
+  document.getElementById("inicioContent").innerHTML = `
+    <div class="stats-row fade-in">
+      <div class="stat">
+        <div class="stat-value">${d.deputados_federais}</div>
+        <div class="stat-label">Dep. Federais</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${d.deputados_estaduais}</div>
+        <div class="stat-label">Dep. Estaduais</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${d.senadores}</div>
+        <div class="stat-label">Senadores</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${d.vereadores_goiania}</div>
+        <div class="stat-label">Vereadores</div>
+      </div>
+    </div>
+
+    <div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:var(--info-bg);">&#128269;</span>
+          Como usar
+        </div>
+      </div>
+      <div class="card">
+        <p style="font-size:13px; line-height:1.7; color:var(--text-secondary);">
+          <strong style="color:var(--text-primary)">1.</strong> Digite o nome de um político na busca acima<br>
+          <strong style="color:var(--text-primary)">2.</strong> Selecione o político na lista de resultados<br>
+          <strong style="color:var(--text-primary)">3.</strong> Veja emendas, empresas conectadas e alertas<br>
+          <strong style="color:var(--text-primary)">4.</strong> Compartilhe via WhatsApp
+        </p>
+      </div>
+    </div>
+
+    <div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(239,68,68,0.15);">&#128176;</span>
+          Quanto custa um deputado federal?
+        </div>
+      </div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div style="display:flex; flex-direction:column; gap:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
+            <span style="font-size:12px; color:var(--text-secondary);">Subsídio mensal</span>
+            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">R$ 46.366</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
+            <span style="font-size:12px; color:var(--text-secondary);">Cota parlamentar (CEAP)</span>
+            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">até R$ 57,3 mil</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
+            <span style="font-size:12px; color:var(--text-secondary);">Verba de gabinete (25 assessores)</span>
+            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">R$ 165,8 mil</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
+            <span style="font-size:12px; color:var(--text-secondary);">Auxílio-moradia</span>
+            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">R$ 4.253</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
+            <span style="font-size:12px; color:var(--text-secondary);">Saúde (Demed) + encargos trabalhistas</span>
+            <span style="font-size:14px; font-weight:700; color:var(--text-dim);">não divulgado</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:14px; background:rgba(239,68,68,0.08);">
+            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">Custo real por deputado/mês</span>
+            <span style="font-size:16px; font-weight:800; color:#ef4444;">R$ 334.743</span>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:10px; padding:10px 14px; background:var(--bg-secondary);">
+        <p style="font-size:12px; line-height:1.7; color:var(--text-dim); margin:0;">
+          O custo real inclui encargos dos assessores (13º, férias, FGTS), saúde e estrutura
+          que a Câmara não detalha por deputado. No total, os 513 deputados custam
+          <strong style="color:var(--text-secondary);">R$ 2,06 bilhões por ano</strong> &mdash;
+          equivalente ao salário de <strong style="color:var(--text-secondary);">145 trabalhadores</strong>
+          para sustentar cada um. Busque seu deputado e veja como ele gasta.
+        </p>
+      </div>
+      <p style="font-size:10px; color:var(--text-dim); margin:8px 0 0; text-align:right;">
+        Fontes: Poder360/Instituto Millenium, Câmara dos Deputados, Ato da Mesa 243/2026
+      </p>
+    </div>
+
+    <div class="fade-in" style="text-align:center; margin:32px 0 16px;">
+      <div style="font-size:28px; font-weight:900; letter-spacing:2px; color:var(--accent); text-transform:uppercase;">
+        Vote Consciente
+      </div>
+    </div>
+  `;
+
+  document.getElementById("inicioLoading").style.display = "none";
+  document.getElementById("inicioContent").style.display = "block";
+}
+
+// === BUSCA ===
+const searchInput = document.getElementById("searchInput");
+const searchClear = document.getElementById("searchClear");
+
+searchInput.addEventListener("input", () => {
+  const v = searchInput.value.trim();
+  searchClear.style.display = v.length > 0 ? "flex" : "none";
+
+  clearTimeout(buscaTimeout);
+  if (v.length >= 2) {
+    buscaTimeout = setTimeout(() => fazerBusca(v), 400);
+  } else if (v.length === 0) {
+    irPara("pageInicio", document.getElementById("tabInicio"));
+  }
+});
+
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    clearTimeout(buscaTimeout);
+    const v = searchInput.value.trim();
+    if (v.length >= 2) fazerBusca(v);
+  }
+});
+
+function limparBusca() {
+  searchInput.value = "";
+  searchClear.style.display = "none";
+  irPara("pageInicio", document.getElementById("tabInicio"));
+}
+
+async function fazerBusca(query) {
+  searchInput.value = query;
+  searchClear.style.display = "flex";
+
+  irPara("pageResultados", document.getElementById("tabBuscar"));
+  document.getElementById("resultadosContent").innerHTML =
+    '<div class="loading"><div class="spinner"></div><span class="loading-text">Buscando...</span></div>';
+
+  try {
+    const r = await fetch(`${API}/buscar-tudo?q=${encodeURIComponent(query)}`);
+    const d = await r.json();
+    renderResultados(d.resultados, d.total, query);
+  } catch {
+    document.getElementById("resultadosContent").innerHTML =
+      '<div class="empty"><div class="empty-icon">&#9888;</div>Erro na busca. Tente novamente.</div>';
+  }
+}
+
+function renderResultados(items, total, query) {
+  if (!items.length) {
+    document.getElementById("resultadosContent").innerHTML = `
+      <div class="empty fade-in">
+        <div class="empty-icon">&#128269;</div>
+        Nenhum resultado para "${query}".<br>
+        Tente outro nome ou termo.
+      </div>`;
+    return;
+  }
+
+  const avatarIcons = { pessoa:"&#128100;", empresa:"&#127970;", contrato:"&#128196;", emenda:"&#128176;", outro:"&#128196;" };
+
+  let html = `
+    <div class="section-header fade-in" style="margin-top:8px;">
+      <div class="section-title">Resultados</div>
+      <span class="badge badge-accent">${total}</span>
+    </div>`;
+
+  items.forEach((item, i) => {
+    const icon = avatarIcons[item.icone] || avatarIcons.outro;
+    const pepBadge = item.is_pep ? '<span class="pep-badge">PEP</span>' : '';
+    const onclick = item.tipo === 'person' ? `onclick="abrirPerfil('${item.id}')"` : '';
+    html += `
+      <div class="result-item fade-in" style="animation-delay:${i*50}ms" ${onclick}>
+        <div class="result-avatar ${item.icone}">${icon}</div>
+        <div class="result-info">
+          <div class="result-name">${item.nome}${pepBadge}</div>
+          <div class="result-detail">${item.detalhe || item.tipo}</div>
+        </div>
+        ${item.tipo === 'person' ? '<span class="result-arrow">&#8250;</span>' : ''}
+      </div>`;
+  });
+
+  document.getElementById("resultadosContent").innerHTML = html;
+}
+
+// === PERFIL DO POLITICO ===
+let perfilAtualId = null;
+
+async function abrirPerfil(entityId) {
+  perfilAtualId = entityId;
+  history.replaceState(null, "", `#perfil/${encodeURIComponent(entityId)}`);
+  irPara("pagePerfil", null);
+  document.getElementById("perfilContent").innerHTML =
+    '<div class="loading"><div class="spinner"></div><span class="loading-text">Carregando perfil...</span></div>';
+
+  try {
+    const r = await fetch(`${API}/politico/${encodeURIComponent(entityId)}`);
+    if (!r.ok) throw new Error("Não encontrado");
+    const d = await r.json();
+    renderPerfil(d);
+  } catch (e) {
+    document.getElementById("perfilContent").innerHTML = `
+      <button class="back-btn" onclick="voltarResultados()">&#8249; Voltar</button>
+      <div class="empty"><div class="empty-icon">&#9888;</div>${e.message}</div>`;
+  }
+}
+
+function voltarResultados() {
+  perfilAtualId = null;
+  history.replaceState(null, "", window.location.pathname);
+  irPara("pageResultados", document.getElementById("tabBuscar"));
+}
+
+function renderPerfil(d) {
+  const p = d.politico;
+  const iniciais = p.nome.split(" ").filter(n=>n.length>1).slice(0,2).map(n=>n[0]).join("");
+  const avatarContent = p.foto_url
+    ? `<img src="${p.foto_url}" alt="${p.nome}" onerror="this.replaceWith(document.createTextNode('${iniciais}'))">`
+    : iniciais;
+
+  const alertaIcons = { sancao:"&#9888;", emenda:"&#128176;", patrimonio:"&#128176;", familia:"&#128106;", ok:"&#10004;", despesa:"&#128179;", comparacao:"&#128202;", pico:"&#128200;", empresa:"&#127970;", cidadao:"&#128101;" };
+
+  let html = `
+    <button class="back-btn fade-in" onclick="voltarResultados()">&#8249; Voltar aos resultados</button>
+
+    <div class="profile-header fade-in">
+      <div class="profile-avatar">${avatarContent}</div>
+      <div class="profile-name">${p.nome}</div>
+      <div class="profile-meta">
+        ${p.cargo ? `<span class="profile-meta-item">&#127979; ${p.cargo}</span>` : ''}
+        ${p.partido ? `<span class="profile-meta-item">&#127988; ${p.partido}</span>` : ''}
+        ${p.uf ? `<span class="profile-meta-item">&#128205; ${p.uf}</span>` : ''}
+        ${p.is_pep ? '<span class="pep-badge" style="font-size:11px;padding:3px 8px;">PEP</span>' : ''}
+      </div>
+      ${p.patrimonio ? `
+        <div class="profile-patrimonio">
+          <div class="profile-patrimonio-label">Patrimônio declarado</div>
+          <div class="profile-patrimonio-value">${p.patrimonio_formatado}</div>
+        </div>` : ''}
+    </div>
+
+    ${d.resumo ? `
+    <div class="card fade-in" style="border-left: 3px solid var(--accent); margin-bottom:16px;">
+      <p style="font-size:13px; line-height:1.7; color:var(--text-secondary);">${d.resumo}</p>
+    </div>` : ''}`;
+
+  // Alertas
+  if (d.alertas.length) {
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:var(--danger-bg);">&#9888;</span>
+          Alertas
+        </div>
+        <span class="badge badge-${d.alertas.some(a=>a.tipo==='grave')?'danger':'warning'}">${d.alertas.length}</span>
+      </div>`;
+    d.alertas.forEach(a => {
+      const icon = alertaIcons[a.icone] || "&#9432;";
+      html += `<div class="alerta-card ${a.tipo}">
+        <div class="alerta-icon">${icon}</div>
+        <div class="alerta-text">${a.texto}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Emendas
+  if (d.emendas.length) {
+    const fonteLabel = d.fonte_emendas === 'transparencia'
+      ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real do Portal da Transparência</div>'
+      : '';
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(239,68,68,0.15);">&#128176;</span>
+          Emendas Parlamentares
+        </div>
+        <span class="badge badge-accent">${d.total_emendas_valor_fmt}</span>
+      </div>
+      ${fonteLabel}`;
+    d.emendas.forEach(e => {
+      html += `<div class="emenda-card">
+        <div class="emenda-top">
+          <div class="emenda-funcao">${e.funcao}</div>
+          <span class="emenda-tipo">${e.tipo}</span>
+        </div>
+        <div class="emenda-valores">
+          <div class="emenda-valor-box">
+            <div class="emenda-valor-label">Empenhado</div>
+            <div class="emenda-valor-num">${e.valor_empenhado_fmt}</div>
+          </div>
+          <div class="emenda-valor-box">
+            <div class="emenda-valor-label">Pago</div>
+            <div class="emenda-valor-num">${e.valor_pago_fmt}</div>
+          </div>
+        </div>
+        ${e.municipio ? `<div class="emenda-local">&#128205; ${e.municipio}${e.uf ? ', '+e.uf : ''}</div>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Despesas de gabinete (cota parlamentar - dados em tempo real da Camara)
+  if (d.despesas_gabinete && d.despesas_gabinete.length) {
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(249,115,22,0.15);">&#128179;</span>
+          Cota Parlamentar (CEAP)
+        </div>
+        <span class="badge badge-warning">${d.total_despesas_gabinete_fmt}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real da API da Câmara dos Deputados</div>`;
+    d.despesas_gabinete.forEach(g => {
+      html += `<div class="emenda-card">
+        <div class="emenda-top">
+          <div class="emenda-funcao">${g.tipo}</div>
+        </div>
+        <div class="emenda-valores">
+          <div class="emenda-valor-box">
+            <div class="emenda-valor-label">Total gasto</div>
+            <div class="emenda-valor-num">${g.total_fmt}</div>
+          </div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Comparacao Cidada - gastos vs pessoa comum
+  if (d.comparacao_cidada && d.comparacao_cidada.length) {
+    const nAbusivo = d.comparacao_cidada.filter(c => c.classificacao === 'abusivo').length;
+    const nElevado = d.comparacao_cidada.filter(c => c.classificacao === 'elevado').length;
+    const badgeClass = nAbusivo > 0 ? 'danger' : (nElevado > 0 ? 'warning' : 'accent');
+    const badgeText = nAbusivo > 0 ? `${nAbusivo} abusivo(s)` : (nElevado > 0 ? `${nElevado} elevado(s)` : 'OK');
+
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(255,59,92,0.15);">&#128101;</span>
+          Gastos vs Cidadão Comum
+        </div>
+        <span class="badge badge-${badgeClass}">${badgeText}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Comparação com o que uma pessoa normal gasta por mês</div>`;
+
+    if (d.comparacao_cidada_resumo) {
+      html += `<div class="cidadao-resumo">${d.comparacao_cidada_resumo}</div>`;
+    }
+
+    // Ordenar: abusivos primeiro, depois elevados, depois normais
+    const ordem = {abusivo: 0, elevado: 1, normal: 2};
+    const sorted = [...d.comparacao_cidada].sort((a, b) => ordem[a.classificacao] - ordem[b.classificacao]);
+
+    sorted.forEach(c => {
+      const labelMap = {abusivo: 'ABUSIVO', elevado: 'ELEVADO', normal: 'ACEITÁVEL'};
+      // Barra proporcional: razao de 1x = 12.5%, capped at 100%
+      const barWidth = c.razao ? Math.min(c.razao / 8 * 100, 100) : 100;
+
+      html += `<div class="cidadao-card ${c.classificacao}">
+        <div class="cidadao-header">
+          <span class="cidadao-categoria">${c.categoria}</span>
+          <span class="cidadao-badge ${c.classificacao}">${labelMap[c.classificacao]}</span>
+        </div>
+        <div class="cidadao-bar-container">
+          <div class="cidadao-bar ${c.classificacao}" style="width:${barWidth}%"></div>
+        </div>
+        <div class="cidadao-valores">
+          <span>Político: <strong>${c.media_mensal_politico_fmt}/mês</strong></span>
+          <span>Cidadão: ${c.referencia_cidadao_fmt}/mês</span>
+          <span>${c.razao_texto}</span>
+        </div>
+      </div>`;
+    });
+
+    html += '</div>';
+  }
+
+  // Empresas e pessoas conectadas
+  if (d.empresas.length) {
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(139,92,246,0.15);">&#128279;</span>
+          Conexões
+        </div>
+        <span class="badge badge-accent">${d.conexoes_total}</span>
+      </div>`;
+    d.empresas.forEach(e => {
+      const isEmpresa = e.cnpj && e.cnpj.length >= 14;
+      html += `<div class="conexao-card">
+        <div class="conexao-icon ${isEmpresa ? 'empresa' : 'pessoa'}">${isEmpresa ? '&#127970;' : '&#128100;'}</div>
+        <div class="conexao-info">
+          <div class="conexao-nome">${e.nome}</div>
+          <div class="conexao-rel">${e.relacao}</div>
+        </div>
+        ${e.capital_social_fmt ? `<div class="conexao-valor">${e.capital_social_fmt}</div>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Contratos
+  if (d.contratos.length) {
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(245,158,11,0.15);">&#128196;</span>
+          Contratos Relacionados
+        </div>
+        <span class="badge badge-accent">${d.contratos.length}</span>
+      </div>`;
+    d.contratos.forEach(c => {
+      html += `<div class="conexao-card">
+        <div class="conexao-icon contrato">&#128196;</div>
+        <div class="conexao-info">
+          <div class="conexao-nome">${c.objeto}</div>
+          <div class="conexao-rel">${c.orgao || ''} ${c.data ? '- '+c.data : ''}</div>
+        </div>
+        <div class="conexao-valor">${c.valor_fmt}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Compartilhar
+  html += `
+    <div class="share-bar fade-in">
+      <button class="share-btn whatsapp" onclick="compartilharWhatsapp('${p.nome}', '${d.total_emendas_valor_fmt}', ${d.alertas.length})">
+        &#128172; WhatsApp
+      </button>
+      <button class="share-btn copiar" onclick="copiarLink()">
+        &#128203; Copiar Link
+      </button>
+    </div>`;
+
+  document.getElementById("perfilContent").innerHTML = html;
+}
+
+function getLinkPerfil() {
+  if (perfilAtualId) {
+    return `${window.location.origin}${window.location.pathname}#perfil/${encodeURIComponent(perfilAtualId)}`;
+  }
+  return window.location.href;
+}
+
+function compartilharWhatsapp(nome, totalEmendas, numAlertas) {
+  const link = getLinkPerfil();
+  const texto = encodeURIComponent(
+    `Você conhece o perfil público de ${nome}?\n\n` +
+    `Total em emendas: ${totalEmendas}\n` +
+    `Alertas encontrados: ${numAlertas}\n\n` +
+    `Fiscalize você também! Acesse o Fiscal Cidadão:\n${link}`
+  );
+  window.open(`https://api.whatsapp.com/send?text=${texto}`, "_blank");
+}
+
+function copiarLink() {
+  const link = getLinkPerfil();
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.querySelector(".share-btn.copiar");
+    btn.innerHTML = "&#10004; Copiado!";
+    setTimeout(() => btn.innerHTML = "&#128203; Copiar Link", 2000);
+  });
+}
+
+// === SERVICE WORKER ===
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
+// === DEEP LINKING ===
+function processarHash() {
+  const hash = window.location.hash;
+  if (hash.startsWith("#perfil/")) {
+    const entityId = decodeURIComponent(hash.substring(8));
+    abrirPerfil(entityId);
+  }
+}
+window.addEventListener("hashchange", processarHash);
+
+// === INIT ===
+carregarInicio();
+processarHash();
+</script>
+
+</body>
+</html>

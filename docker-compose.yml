@@ -1,12 +1,14 @@
 services:
+  # Neo4j
   neo4j:
-    container_name: bracc-neo4j
+    container_name: fiscal-neo4j
     image: neo4j:5-community
+    restart: unless-stopped
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-changeme}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP_INITIAL:-512m}
       NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP_MAX:-1G}
@@ -17,25 +19,29 @@ services:
       - ./infra/neo4j/import:/var/lib/neo4j/import
       - ./infra/neo4j/init.cypher:/var/lib/neo4j/init.cypher
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-changeme}", "RETURN 1"]
       interval: 15s
       timeout: 30s
       retries: 12
       start_period: 30s
 
-  api:
+  # BRACC API (camada de dados)
+  bracc-api:
+    container_name: fiscal-bracc-api
     build: ./api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-generate-with-openssl-rand-hex-32}
-      INVITE_CODE: ${INVITE_CODE:-}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
+      CORS_ORIGINS: "*"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       APP_ENV: ${APP_ENV:-dev}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      PUBLIC_MODE: "true"
+      PUBLIC_ALLOW_PERSON: "true"
+      PUBLIC_ALLOW_ENTITY_LOOKUP: "true"
     depends_on:
       neo4j:
         condition: service_healthy
@@ -46,30 +52,77 @@ services:
       retries: 8
       start_period: 20s
 
-  frontend:
-    build: ./frontend
+  # Fiscal Cidadao Backend (FastAPI que traduz bracc-api pro PWA)
+  backend:
+    container_name: fiscal-backend
+    build: ./backend
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8001:8001"
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      BRACC_API_URL: http://bracc-api:8000
+      TRANSPARENCIA_API_KEY: ${TRANSPARENCIA_API_KEY:-}
     depends_on:
-      api:
+      bracc-api:
         condition: service_healthy
 
+  # ETL - todos os pipelines (run manualmente)
   etl:
+    container_name: fiscal-etl
     build: ./etl
     profiles: ["etl"]
     working_dir: /workspace
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
       PYTHONUNBUFFERED: "1"
     volumes:
       - .:/workspace
+      - etl-data:/workspace/data
     depends_on:
       neo4j:
         condition: service_healthy
 
+  # ETL GO - roda apenas os 5 pipelines de Goias
+  etl-go:
+    container_name: fiscal-etl-go
+    build: ./etl
+    profiles: ["etl-go"]
+    working_dir: /workspace
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-changeme}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/workspace
+      - etl-data:/workspace/data
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        set -e
+        cd /workspace/etl
+        echo "=== Sincronizando dependencias ETL ==="
+        uv sync --no-dev
+        echo "=== Carregando dados de Goias ==="
+        echo "[1/5] Folha de pagamento GO..."
+        uv run python -m bracc_etl.runner run --source folha_go --neo4j-password $$NEO4J_PASSWORD --data-dir /workspace/data || echo "WARN: folha_go falhou"
+        echo "[2/5] Financas municipais GO..."
+        uv run python -m bracc_etl.runner run --source tcm_go --neo4j-password $$NEO4J_PASSWORD --data-dir /workspace/data || echo "WARN: tcm_go falhou"
+        echo "[3/5] Licitacoes GO..."
+        uv run python -m bracc_etl.runner run --source pncp_go --neo4j-password $$NEO4J_PASSWORD --data-dir /workspace/data || echo "WARN: pncp_go falhou"
+        echo "[4/5] Diarios oficiais GO..."
+        uv run python -m bracc_etl.runner run --source querido_diario_go --neo4j-password $$NEO4J_PASSWORD --data-dir /workspace/data || echo "WARN: querido_diario_go falhou"
+        echo "[5/5] Camara de Goiania..."
+        uv run python -m bracc_etl.runner run --source camara_goiania --neo4j-password $$NEO4J_PASSWORD --data-dir /workspace/data || echo "WARN: camara_goiania falhou"
+        echo "=== Carga de Goias concluida ==="
+
 volumes:
   neo4j-data:
+    external: true
+    name: br-acc_neo4j-data
+  etl-data:
