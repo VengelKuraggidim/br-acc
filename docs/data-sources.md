@@ -19,7 +19,7 @@ Last updated: 2026-02-26
 
 ## 1. LOADED (38 sources)
 
-All sources below have working ETL pipelines in `etl/src/icarus_etl/pipelines/` and are loaded into production Neo4j.
+All sources below have working ETL pipelines in `etl/src/bracc_etl/pipelines/` and are loaded into production Neo4j.
 
 | # | Source | Pipeline | Nodes Created | Rels Created | Notes |
 |---|--------|----------|---------------|--------------|-------|
