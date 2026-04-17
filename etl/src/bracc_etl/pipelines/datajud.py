@@ -16,6 +16,7 @@ from bracc_etl.transforms import (
     format_cpf,
     normalize_name,
     parse_date,
+    row_pick,
     strip_document,
 )
 
@@ -30,12 +31,6 @@ def _stable_id(*parts: str, length: int = 24) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
-def _pick(row: pd.Series, *keys: str) -> str:
-    for key in keys:
-        value = str(row.get(key, "")).strip()
-        if value:
-            return value
-    return ""
 
 
 class DatajudPipeline(Pipeline):
@@ -106,15 +101,15 @@ class DatajudPipeline(Pipeline):
         cases: list[dict[str, Any]] = []
 
         for _, row in self._raw_cases.iterrows():
-            case_id = _pick(row, "judicial_case_id", "case_id", "id")
-            case_number = _pick(row, "case_number", "numero_processo")
-            court = _pick(row, "court", "tribunal")
-            branch = _pick(row, "branch", "segmento")
-            class_name = _pick(row, "class", "classe")
-            subject = normalize_name(_pick(row, "subject", "assunto"))
-            filed_at = parse_date(_pick(row, "filed_at", "data_ajuizamento"))
-            status = _pick(row, "status", "situacao")
-            source_url = _pick(row, "source_url", "url")
+            case_id = row_pick(row, "judicial_case_id", "case_id", "id")
+            case_number = row_pick(row, "case_number", "numero_processo")
+            court = row_pick(row, "court", "tribunal")
+            branch = row_pick(row, "branch", "segmento")
+            class_name = row_pick(row, "class", "classe")
+            subject = normalize_name(row_pick(row, "subject", "assunto"))
+            filed_at = parse_date(row_pick(row, "filed_at", "data_ajuizamento"))
+            status = row_pick(row, "status", "situacao")
+            source_url = row_pick(row, "source_url", "url")
 
             if not case_id:
                 case_id = _stable_id(case_number, court, filed_at)
@@ -141,15 +136,15 @@ class DatajudPipeline(Pipeline):
         company_rels: list[dict[str, Any]] = []
 
         for _, row in self._raw_parties.iterrows():
-            case_id = _pick(row, "judicial_case_id", "case_id", "id_processo")
+            case_id = row_pick(row, "judicial_case_id", "case_id", "id_processo")
             if not case_id:
                 continue
 
-            role = _pick(row, "role", "polo", "tipo_parte")
-            party_name = normalize_name(_pick(row, "party_name", "nome", "parte"))
+            role = row_pick(row, "role", "polo", "tipo_parte")
+            party_name = normalize_name(row_pick(row, "party_name", "nome", "parte"))
 
-            cpf_digits = strip_document(_pick(row, "party_cpf", "cpf"))
-            cnpj_digits = strip_document(_pick(row, "party_cnpj", "cnpj"))
+            cpf_digits = strip_document(row_pick(row, "party_cpf", "cpf"))
+            cnpj_digits = strip_document(row_pick(row, "party_cnpj", "cnpj"))
 
             if len(cpf_digits) == 11:
                 cpf = format_cpf(cpf_digits)

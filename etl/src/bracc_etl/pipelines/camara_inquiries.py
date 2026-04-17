@@ -16,6 +16,7 @@ from bracc_etl.transforms import (
     format_cpf,
     normalize_name,
     parse_date,
+    row_pick,
     strip_document,
 )
 
@@ -69,12 +70,6 @@ class CamaraInquiriesPipeline(Pipeline):
             logger.info("[camara_inquiries] empty file (treated as no data): %s", path.name)
             return pd.DataFrame()
 
-    def _get(self, row: pd.Series, *keys: str) -> str:
-        for key in keys:
-            value = str(row.get(key, "")).strip()
-            if value:
-                return value
-        return ""
 
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "camara_inquiries"
@@ -108,25 +103,25 @@ class CamaraInquiriesPipeline(Pipeline):
         rows: list[dict[str, Any]] = []
 
         for _, row in self._raw_inquiries.iterrows():
-            inquiry_id = self._get(row, "inquiry_id", "id")
-            code = self._get(row, "inquiry_code", "codigo")
-            name = self._get(row, "name", "titulo", "nome")
+            inquiry_id = row_pick(row, "inquiry_id", "id")
+            code = row_pick(row, "inquiry_code", "codigo")
+            name = row_pick(row, "name", "titulo", "nome")
             if not name:
                 continue
 
             if not inquiry_id:
                 inquiry_id = _stable_id(code, name)
 
-            kind = self._get(row, "kind", "tipo").upper()
+            kind = row_pick(row, "kind", "tipo").upper()
             if not kind:
                 kind = "CPMI" if "CPMI" in name.upper() else "CPI"
-            status = self._get(row, "status", "situacao")
-            subject = self._get(row, "subject", "objeto")
-            source_url = self._get(row, "source_url", "url")
-            source_system = self._get(row, "source_system")
-            extraction_method = self._get(row, "extraction_method")
-            date_start = parse_date(self._get(row, "date_start", "data_inicio"))
-            date_end = parse_date(self._get(row, "date_end", "data_fim"))
+            status = row_pick(row, "status", "situacao")
+            subject = row_pick(row, "subject", "objeto")
+            source_url = row_pick(row, "source_url", "url")
+            source_system = row_pick(row, "source_system")
+            extraction_method = row_pick(row, "extraction_method")
+            date_start = parse_date(row_pick(row, "date_start", "data_inicio"))
+            date_end = parse_date(row_pick(row, "date_end", "data_fim"))
 
             rows.append({
                 "inquiry_id": inquiry_id,
@@ -157,18 +152,18 @@ class CamaraInquiriesPipeline(Pipeline):
         mentions: list[dict[str, Any]] = []
 
         for _, row in self._raw_requirements.iterrows():
-            inquiry_id = self._get(row, "inquiry_id")
+            inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
                 continue
 
-            requirement_id = self._get(row, "requirement_id", "id", "codigo")
-            req_type = self._get(row, "type", "tipo")
-            text = self._get(row, "text", "texto", "ementa")
-            status = self._get(row, "status", "situacao")
-            source_url = self._get(row, "source_url", "url")
-            source_system = self._get(row, "source_system")
-            extraction_method = self._get(row, "extraction_method")
-            date = parse_date(self._get(row, "date", "data"))
+            requirement_id = row_pick(row, "requirement_id", "id", "codigo")
+            req_type = row_pick(row, "type", "tipo")
+            text = row_pick(row, "text", "texto", "ementa")
+            status = row_pick(row, "status", "situacao")
+            source_url = row_pick(row, "source_url", "url")
+            source_system = row_pick(row, "source_system")
+            extraction_method = row_pick(row, "extraction_method")
+            date = parse_date(row_pick(row, "date", "data"))
 
             if not requirement_id:
                 requirement_id = _stable_id(inquiry_id, req_type, text[:200])
@@ -187,8 +182,8 @@ class CamaraInquiriesPipeline(Pipeline):
 
             inquiry_rels.append({"source_key": inquiry_id, "target_key": requirement_id})
 
-            author_name = normalize_name(self._get(row, "author_name", "autor"))
-            author_cpf_raw = self._get(row, "author_cpf", "cpf_autor")
+            author_name = normalize_name(row_pick(row, "author_name", "autor"))
+            author_cpf_raw = row_pick(row, "author_cpf", "cpf_autor")
             author_digits = strip_document(author_cpf_raw)
             if len(author_digits) == 11:
                 author_cpf_rels.append(
@@ -199,7 +194,7 @@ class CamaraInquiriesPipeline(Pipeline):
                     {"person_name": author_name, "target_key": requirement_id},
                 )
 
-            explicit_mentioned = self._get(row, "mentioned_cnpj", "cnpj")
+            explicit_mentioned = row_pick(row, "mentioned_cnpj", "cnpj")
             explicit_digits = strip_document(explicit_mentioned)
             if len(explicit_digits) == 14:
                 mentions.append({
@@ -238,16 +233,16 @@ class CamaraInquiriesPipeline(Pipeline):
         rels: list[dict[str, Any]] = []
 
         for _, row in self._raw_sessions.iterrows():
-            inquiry_id = self._get(row, "inquiry_id")
+            inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
                 continue
 
-            session_id = self._get(row, "session_id", "id")
-            date = parse_date(self._get(row, "date", "data"))
-            topic = self._get(row, "topic", "assunto")
-            source_url = self._get(row, "source_url", "url")
-            source_system = self._get(row, "source_system")
-            extraction_method = self._get(row, "extraction_method")
+            session_id = row_pick(row, "session_id", "id")
+            date = parse_date(row_pick(row, "date", "data"))
+            topic = row_pick(row, "topic", "assunto")
+            source_url = row_pick(row, "source_url", "url")
+            source_system = row_pick(row, "source_system")
+            extraction_method = row_pick(row, "extraction_method")
 
             if not session_id:
                 session_id = _stable_id(inquiry_id, date, topic[:200])

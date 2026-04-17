@@ -16,6 +16,7 @@ from bracc_etl.transforms import (
     mask_cpf,
     normalize_name,
     parse_number_smart,
+    row_pick,
     strip_document,
 )
 
@@ -38,12 +39,6 @@ def _stable_id(*parts: str, length: int = 24) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
-def _pick(row: pd.Series, *keys: str) -> str:
-    for key in keys:
-        value = str(row.get(key, "")).strip()
-        if value and value.lower() not in ("nan", "none", ""):
-            return value
-    return ""
 
 
 def _is_commissioned(role: str) -> bool:
@@ -170,10 +165,10 @@ class FolhaGoPipeline(Pipeline):
 
         for _, row in self._raw_servidores.iterrows():
             name = normalize_name(
-                _pick(row, "nome", "nome_servidor", "servidor", "name"),
+                row_pick(row, "nome", "nome_servidor", "servidor", "name"),
             )
-            cpf_raw = _pick(row, "cpf", "nr_cpf", "documento")
-            role = _pick(
+            cpf_raw = row_pick(row, "cpf", "nr_cpf", "documento")
+            role = row_pick(
                 row,
                 "cargo",
                 "cargo_efetivo",
@@ -182,10 +177,10 @@ class FolhaGoPipeline(Pipeline):
                 "role",
             )
             agency_name = normalize_name(
-                _pick(row, "orgao", "orgao_lotacao", "lotacao", "agency", "unidade"),
+                row_pick(row, "orgao", "orgao_lotacao", "lotacao", "agency", "unidade"),
             )
             salary_gross = parse_number_smart(
-                _pick(
+                row_pick(
                     row,
                     "remuneracao_bruta",
                     "salario_bruto",
@@ -195,7 +190,7 @@ class FolhaGoPipeline(Pipeline):
                 default=None,
             )
             salary_net = parse_number_smart(
-                _pick(
+                row_pick(
                     row,
                     "remuneracao_liquida",
                     "salario_liquido",
@@ -204,7 +199,7 @@ class FolhaGoPipeline(Pipeline):
                 ),
                 default=None,
             )
-            municipality = _pick(row, "municipio", "cidade", "municipality")
+            municipality = row_pick(row, "municipio", "cidade", "municipality")
             is_commissioned = _is_commissioned(role)
 
             # Stable employee ID from name + CPF (last 4) + role + agency

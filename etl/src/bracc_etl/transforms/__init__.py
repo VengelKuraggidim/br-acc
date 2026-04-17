@@ -21,6 +21,7 @@ from bracc_etl.transforms.document_formatting import (
     validate_cpf,
 )
 from bracc_etl.transforms.name_normalization import normalize_name
+from bracc_etl.transforms.row_access import row_pick
 from bracc_etl.transforms.value_sanitization import (
     MAX_CONTRACT_VALUE,
     cap_contract_value,
@@ -43,6 +44,7 @@ __all__ = [
     "parse_date",
     "parse_number_smart",
     "parse_numeric_comma",
+    "row_pick",
     "strip_document",
     "validate_cnpj",
     "validate_cpf",

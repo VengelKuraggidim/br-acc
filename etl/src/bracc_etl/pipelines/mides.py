@@ -16,6 +16,7 @@ from bracc_etl.transforms import (
     normalize_name,
     parse_date,
     parse_number_smart,
+    row_pick,
     strip_document,
 )
 
@@ -30,12 +31,6 @@ def _stable_id(*parts: str, length: int = 24) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
-def _pick(row: pd.Series, *keys: str) -> str:
-    for key in keys:
-        value = str(row.get(key, "")).strip()
-        if value:
-            return value
-    return ""
 
 
 def _valid_cnpj(value: str) -> str:
@@ -123,22 +118,22 @@ class MidesPipeline(Pipeline):
         bid_company_rels: list[dict[str, Any]] = []
 
         for _, row in self._raw_bids.iterrows():
-            bid_id = _pick(row, "municipal_bid_id", "licitacao_id", "id_licitacao", "id")
-            process_number = _pick(row, "process_number", "numero_processo", "numero")
-            org_code = _pick(row, "municipality_code", "cod_ibge", "codigo_ibge")
-            org_name = _pick(row, "municipality_name", "municipio", "nome_municipio")
-            uf = _pick(row, "uf", "estado")
-            modality = _pick(row, "modality", "modalidade")
-            obj = normalize_name(_pick(row, "object", "objeto", "descricao"))
-            pub_date = parse_date(_pick(row, "published_at", "data_publicacao", "data"))
-            year = _pick(row, "year", "ano")
+            bid_id = row_pick(row, "municipal_bid_id", "licitacao_id", "id_licitacao", "id")
+            process_number = row_pick(row, "process_number", "numero_processo", "numero")
+            org_code = row_pick(row, "municipality_code", "cod_ibge", "codigo_ibge")
+            org_name = row_pick(row, "municipality_name", "municipio", "nome_municipio")
+            uf = row_pick(row, "uf", "estado")
+            modality = row_pick(row, "modality", "modalidade")
+            obj = normalize_name(row_pick(row, "object", "objeto", "descricao"))
+            pub_date = parse_date(row_pick(row, "published_at", "data_publicacao", "data"))
+            year = row_pick(row, "year", "ano")
             amount_estimated = cap_contract_value(
                 parse_number_smart(
-                    _pick(row, "amount_estimated", "valor_estimado", "valor"),
+                    row_pick(row, "amount_estimated", "valor_estimado", "valor"),
                     default=None,
                 ),
             )
-            source_url = _pick(row, "source_url", "url")
+            source_url = row_pick(row, "source_url", "url")
 
             if not bid_id:
                 bid_id = _stable_id(process_number, org_code, obj[:180], pub_date)
@@ -158,7 +153,7 @@ class MidesPipeline(Pipeline):
                 "source": "mides",
             })
 
-            supplier_cnpj = _valid_cnpj(_pick(
+            supplier_cnpj = _valid_cnpj(row_pick(
                 row,
                 "supplier_cnpj",
                 "winner_cnpj",
@@ -183,22 +178,22 @@ class MidesPipeline(Pipeline):
         contract_bid_rels: list[dict[str, Any]] = []
 
         for _, row in self._raw_contracts.iterrows():
-            contract_id = _pick(row, "municipal_contract_id", "contrato_id", "id_contrato", "id")
-            number = _pick(row, "contract_number", "numero_contrato", "numero")
-            bid_ref = _pick(row, "municipal_bid_id", "licitacao_id", "id_licitacao")
-            process_number = _pick(row, "process_number", "numero_processo")
-            municipality_code = _pick(row, "municipality_code", "cod_ibge", "codigo_ibge")
-            municipality_name = _pick(row, "municipality_name", "municipio", "nome_municipio")
-            uf = _pick(row, "uf", "estado")
-            signed_at = parse_date(_pick(row, "signed_at", "data_assinatura", "data"))
-            obj = normalize_name(_pick(row, "object", "objeto", "descricao"))
+            contract_id = row_pick(row, "municipal_contract_id", "contrato_id", "id_contrato", "id")
+            number = row_pick(row, "contract_number", "numero_contrato", "numero")
+            bid_ref = row_pick(row, "municipal_bid_id", "licitacao_id", "id_licitacao")
+            process_number = row_pick(row, "process_number", "numero_processo")
+            municipality_code = row_pick(row, "municipality_code", "cod_ibge", "codigo_ibge")
+            municipality_name = row_pick(row, "municipality_name", "municipio", "nome_municipio")
+            uf = row_pick(row, "uf", "estado")
+            signed_at = parse_date(row_pick(row, "signed_at", "data_assinatura", "data"))
+            obj = normalize_name(row_pick(row, "object", "objeto", "descricao"))
             amount = cap_contract_value(
                 parse_number_smart(
-                    _pick(row, "amount", "valor", "valor_contrato"),
+                    row_pick(row, "amount", "valor", "valor_contrato"),
                     default=None,
                 ),
             )
-            source_url = _pick(row, "source_url", "url")
+            source_url = row_pick(row, "source_url", "url")
 
             if not contract_id:
                 contract_id = _stable_id(number, municipality_code, obj[:160], signed_at)
@@ -218,7 +213,7 @@ class MidesPipeline(Pipeline):
             })
 
             supplier_cnpj = _valid_cnpj(
-                _pick(row, "supplier_cnpj", "cnpj_fornecedor", "cnpj_vencedor"),
+                row_pick(row, "supplier_cnpj", "cnpj_fornecedor", "cnpj_vencedor"),
             )
             if supplier_cnpj:
                 contract_company_rels.append({
@@ -244,21 +239,21 @@ class MidesPipeline(Pipeline):
         rels: list[dict[str, Any]] = []
 
         for _, row in self._raw_items.iterrows():
-            contract_id = _pick(row, "municipal_contract_id", "contrato_id", "id_contrato")
-            bid_id = _pick(row, "municipal_bid_id", "licitacao_id", "id_licitacao")
+            contract_id = row_pick(row, "municipal_contract_id", "contrato_id", "id_contrato")
+            bid_id = row_pick(row, "municipal_bid_id", "licitacao_id", "id_licitacao")
 
-            item_id = _pick(row, "municipal_item_id", "item_id", "id_item")
-            item_number = _pick(row, "item_number", "numero_item")
-            description = normalize_name(_pick(row, "description", "descricao", "objeto_item"))
-            quantity = parse_number_smart(_pick(row, "quantity", "quantidade"), default=None)
+            item_id = row_pick(row, "municipal_item_id", "item_id", "id_item")
+            item_number = row_pick(row, "item_number", "numero_item")
+            description = normalize_name(row_pick(row, "description", "descricao", "objeto_item"))
+            quantity = parse_number_smart(row_pick(row, "quantity", "quantidade"), default=None)
             unit_price = cap_contract_value(
                 parse_number_smart(
-                    _pick(row, "unit_price", "valor_unitario"),
+                    row_pick(row, "unit_price", "valor_unitario"),
                     default=None,
                 ),
             )
             total_price = cap_contract_value(
-                parse_number_smart(_pick(row, "total_price", "valor_total", "valor"), default=None),
+                parse_number_smart(row_pick(row, "total_price", "valor_total", "valor"), default=None),
             )
 
             if not item_id:

@@ -16,6 +16,7 @@ from bracc_etl.transforms import (
     format_cpf,
     normalize_name,
     parse_date,
+    row_pick,
     strip_document,
 )
 
@@ -173,36 +174,30 @@ class SenadoCpisPipeline(Pipeline):
         self._transform_sessions()
         self._transform_source_documents()
 
-    def _get_inquiry_value(self, row: pd.Series, *keys: str) -> str:
-        for key in keys:
-            value = str(row.get(key, "")).strip()
-            if value:
-                return value
-        return ""
 
     def _transform_inquiries(self) -> None:
         inquiries: list[dict[str, Any]] = []
         cpis: list[dict[str, Any]] = []
 
         for _, row in self._raw_inquiries.iterrows():
-            code = self._get_inquiry_value(row, "inquiry_code", "codigo", "codigo_cpi")
-            name = self._get_inquiry_value(row, "name", "nome", "nome_cpi")
+            code = row_pick(row, "inquiry_code", "codigo", "codigo_cpi")
+            name = row_pick(row, "name", "nome", "nome_cpi")
             if not name:
                 continue
 
-            kind = _infer_kind(name, self._get_inquiry_value(row, "kind", "tipo"))
-            house = self._get_inquiry_value(row, "house", "casa") or "senado"
-            status = self._get_inquiry_value(row, "status", "situacao")
-            subject = self._get_inquiry_value(row, "subject", "objeto")
-            source_url = self._get_inquiry_value(row, "source_url", "url")
-            source_system = self._get_inquiry_value(row, "source_system")
-            extraction_method = self._get_inquiry_value(row, "extraction_method")
-            source_ref = self._get_inquiry_value(row, "source_ref")
-            date_precision = self._get_inquiry_value(row, "date_precision") or "unknown"
-            date_start = parse_date(self._get_inquiry_value(row, "date_start", "data_inicio"))
-            date_end = parse_date(self._get_inquiry_value(row, "date_end", "data_fim"))
+            kind = _infer_kind(name, row_pick(row, "kind", "tipo"))
+            house = row_pick(row, "house", "casa") or "senado"
+            status = row_pick(row, "status", "situacao")
+            subject = row_pick(row, "subject", "objeto")
+            source_url = row_pick(row, "source_url", "url")
+            source_system = row_pick(row, "source_system")
+            extraction_method = row_pick(row, "extraction_method")
+            source_ref = row_pick(row, "source_ref")
+            date_precision = row_pick(row, "date_precision") or "unknown"
+            date_start = parse_date(row_pick(row, "date_start", "data_inicio"))
+            date_end = parse_date(row_pick(row, "date_end", "data_fim"))
 
-            inquiry_id = self._get_inquiry_value(row, "inquiry_id")
+            inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
                 inquiry_id = _stable_id(code, name)
 
@@ -257,21 +252,21 @@ class SenadoCpisPipeline(Pipeline):
         source = self._raw_members if not self._raw_members.empty else self._raw_inquiries
 
         for _, row in source.iterrows():
-            inquiry_id = self._get_inquiry_value(row, "inquiry_id")
+            inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
-                code = self._get_inquiry_value(row, "inquiry_code", "codigo", "codigo_cpi")
-                name = self._get_inquiry_value(row, "name", "nome", "nome_cpi")
+                code = row_pick(row, "inquiry_code", "codigo", "codigo_cpi")
+                name = row_pick(row, "name", "nome", "nome_cpi")
                 if not name:
                     continue
                 inquiry_id = _stable_id(code, name)
 
             person_name = normalize_name(
-                self._get_inquiry_value(row, "member_name", "nome_parlamentar", "name")
+                row_pick(row, "member_name", "nome_parlamentar", "name")
             )
             if not person_name:
                 continue
 
-            role = self._get_inquiry_value(row, "role", "papel")
+            role = row_pick(row, "role", "papel")
 
             rows.append({
                 "inquiry_id": inquiry_id,
@@ -303,20 +298,20 @@ class SenadoCpisPipeline(Pipeline):
         mentions: list[dict[str, Any]] = []
 
         for _, row in self._raw_requirements.iterrows():
-            inquiry_id = self._get_inquiry_value(row, "inquiry_id")
+            inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
                 continue
 
-            requirement_id = self._get_inquiry_value(row, "requirement_id", "codigo", "id")
-            req_type = self._get_inquiry_value(row, "type", "tipo")
-            text = self._get_inquiry_value(row, "text", "texto", "ementa")
-            status = self._get_inquiry_value(row, "status", "situacao")
-            source_url = self._get_inquiry_value(row, "source_url", "url")
-            source_system = self._get_inquiry_value(row, "source_system")
-            extraction_method = self._get_inquiry_value(row, "extraction_method")
-            source_ref = self._get_inquiry_value(row, "source_ref")
-            date_precision = self._get_inquiry_value(row, "date_precision") or "unknown"
-            date = parse_date(self._get_inquiry_value(row, "date", "data"))
+            requirement_id = row_pick(row, "requirement_id", "codigo", "id")
+            req_type = row_pick(row, "type", "tipo")
+            text = row_pick(row, "text", "texto", "ementa")
+            status = row_pick(row, "status", "situacao")
+            source_url = row_pick(row, "source_url", "url")
+            source_system = row_pick(row, "source_system")
+            extraction_method = row_pick(row, "extraction_method")
+            source_ref = row_pick(row, "source_ref")
+            date_precision = row_pick(row, "date_precision") or "unknown"
+            date = parse_date(row_pick(row, "date", "data"))
 
             if not requirement_id:
                 requirement_id = _stable_id(inquiry_id, req_type, text[:200])
@@ -357,7 +352,7 @@ class SenadoCpisPipeline(Pipeline):
                     "run_id": self.run_id,
                 })
 
-            author_cpf_raw = self._get_inquiry_value(row, "author_cpf", "cpf_autor")
+            author_cpf_raw = row_pick(row, "author_cpf", "cpf_autor")
             author_digits = strip_document(author_cpf_raw)
             if len(author_digits) == 11:
                 author_cpf_rels.append({
@@ -367,7 +362,7 @@ class SenadoCpisPipeline(Pipeline):
             # Do not infer factual author->requirement edges from name-only rows.
             # Name is preserved on InquiryRequirement for exploratory analysis.
 
-            explicit_mentioned = self._get_inquiry_value(row, "mentioned_cnpj", "cnpj")
+            explicit_mentioned = row_pick(row, "mentioned_cnpj", "cnpj")
             explicit_digits = strip_document(explicit_mentioned)
             if len(explicit_digits) == 14:
                 mentions.append({
@@ -406,18 +401,18 @@ class SenadoCpisPipeline(Pipeline):
         session_rels: list[dict[str, Any]] = []
 
         for _, row in self._raw_sessions.iterrows():
-            inquiry_id = self._get_inquiry_value(row, "inquiry_id")
+            inquiry_id = row_pick(row, "inquiry_id")
             if not inquiry_id:
                 continue
 
-            session_id = self._get_inquiry_value(row, "session_id", "id")
-            date = parse_date(self._get_inquiry_value(row, "date", "data"))
-            topic = self._get_inquiry_value(row, "topic", "assunto")
-            source_url = self._get_inquiry_value(row, "source_url", "url")
-            source_system = self._get_inquiry_value(row, "source_system")
-            extraction_method = self._get_inquiry_value(row, "extraction_method")
-            source_ref = self._get_inquiry_value(row, "source_ref")
-            date_precision = self._get_inquiry_value(row, "date_precision") or "unknown"
+            session_id = row_pick(row, "session_id", "id")
+            date = parse_date(row_pick(row, "date", "data"))
+            topic = row_pick(row, "topic", "assunto")
+            source_url = row_pick(row, "source_url", "url")
+            source_system = row_pick(row, "source_system")
+            extraction_method = row_pick(row, "extraction_method")
+            source_ref = row_pick(row, "source_ref")
+            date_precision = row_pick(row, "date_precision") or "unknown"
 
             if not session_id:
                 session_id = _stable_id(inquiry_id, date, topic[:200])
@@ -465,8 +460,8 @@ class SenadoCpisPipeline(Pipeline):
 
         documents: list[dict[str, Any]] = []
         for _, row in self._raw_history_sources.iterrows():
-            url = self._get_inquiry_value(row, "source_url", "url")
-            checksum = self._get_inquiry_value(row, "checksum")
+            url = row_pick(row, "source_url", "url")
+            checksum = row_pick(row, "checksum")
             if not url:
                 continue
             doc_id = _stable_id(url, checksum or "", length=24)
@@ -474,9 +469,9 @@ class SenadoCpisPipeline(Pipeline):
                 "doc_id": doc_id,
                 "url": url,
                 "checksum": checksum,
-                "published_at": self._get_inquiry_value(row, "period_end"),
-                "retrieved_at": self._get_inquiry_value(row, "retrieved_at_utc"),
-                "content_type": self._get_inquiry_value(row, "doc_type") or "application/pdf",
+                "published_at": row_pick(row, "period_end"),
+                "retrieved_at": row_pick(row, "retrieved_at_utc"),
+                "content_type": row_pick(row, "doc_type") or "application/pdf",
                 "source_id": self.source_id,
                 "run_id": self.run_id,
             })
