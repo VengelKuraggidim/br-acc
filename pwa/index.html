@@ -1383,7 +1383,10 @@ function renderPerfil(d) {
         </div>
         <span class="badge badge-warning">${d.total_despesas_gabinete_fmt}</span>
       </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real da API da Câmara dos Deputados</div>`;
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real da API da Câmara dos Deputados</div>
+      <details class="collapsible">
+        <summary>Ver ${d.despesas_gabinete.length} tipo(s) de gasto</summary>
+        <div class="collapsible-body">`;
     d.despesas_gabinete.forEach(g => {
       html += `<div class="emenda-card">
         <div class="emenda-top">
@@ -1397,7 +1400,7 @@ function renderPerfil(d) {
         </div>
       </div>`;
     });
-    html += '</div>';
+    html += '</div></details></div>';
   } else if (d.aviso_despesas) {
     html += `<div class="section fade-in">
       <div class="section-header">

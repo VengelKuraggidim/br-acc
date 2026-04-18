@@ -849,6 +849,11 @@ async def perfil_politico(entity_id: str):
     if len(alertas) > 1:
         alertas = [a for a in alertas if a["tipo"] != "ok"]
 
+    # Ordenar por severidade: grave > atencao > info > ok — para que os
+    # problemas mais serios apareçam antes do "dobra" na tela
+    _severidade = {"grave": 0, "atencao": 1, "info": 2, "ok": 3}
+    alertas.sort(key=lambda a: _severidade.get(a.get("tipo", "info"), 2))
+
     # Se achamos qualquer dado util sobre o politico, nao mostrar o alerta
     # generico "Avaliacao indisponivel" — ele soh faz sentido se o perfil
     # esta completamente vazio.
