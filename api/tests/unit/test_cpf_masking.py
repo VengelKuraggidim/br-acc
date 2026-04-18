@@ -26,18 +26,18 @@ if TYPE_CHECKING:
 
 class TestMaskFormattedCPF:
     def test_basic(self) -> None:
-        assert mask_formatted_cpf("123.456.789-00") == "***.***.789-00"
+        assert mask_formatted_cpf("123.456.789-00") == "***.***.***-00"
 
     def test_another(self) -> None:
-        assert mask_formatted_cpf("000.111.222-33") == "***.***.222-33"
+        assert mask_formatted_cpf("000.111.222-33") == "***.***.***-33"
 
 
 class TestMaskRawCPF:
     def test_basic(self) -> None:
-        assert mask_raw_cpf("12345678900") == "*******8900"
+        assert mask_raw_cpf("12345678900") == "*********00"
 
     def test_zeros(self) -> None:
-        assert mask_raw_cpf("00000000000") == "*******0000"
+        assert mask_raw_cpf("00000000000") == "*********00"
 
 
 class TestIsPepRecord:
@@ -143,13 +143,13 @@ class TestMaskCpfsInJson:
     def test_formatted_cpf_masked(self) -> None:
         text = '{"cpf": "123.456.789-00"}'
         result = mask_cpfs_in_json(text)
-        assert "***.***.789-00" in result
+        assert "***.***.***-00" in result
         assert "123.456" not in result
 
     def test_raw_cpf_masked(self) -> None:
         text = '{"cpf": "12345678900"}'
         result = mask_cpfs_in_json(text)
-        assert "*******8900" in result
+        assert "*********00" in result
         assert "1234567" not in result
 
     def test_pep_cpf_not_masked(self) -> None:
@@ -182,8 +182,8 @@ class TestMaskCpfsInJson:
             ]
         })
         result = mask_cpfs_in_json(text)
-        assert "***.***.333-44" in result
-        assert "***.***.777-88" in result
+        assert "***.***.***-44" in result
+        assert "***.***.***-88" in result
 
     def test_mixed_pep_and_non_pep(self) -> None:
         text = json.dumps({
@@ -194,7 +194,7 @@ class TestMaskCpfsInJson:
         })
         result = mask_cpfs_in_json(text, pep_cpfs={"11122233344"})
         assert "111.222.333-44" in result  # PEP: not masked
-        assert "***.***.777-88" in result  # Non-PEP: masked
+        assert "***.***.***-88" in result  # Non-PEP: masked
 
     def test_empty_string(self) -> None:
         assert mask_cpfs_in_json("") == ""
@@ -216,7 +216,7 @@ class TestMaskCpfsInJson:
             }
         })
         result = mask_cpfs_in_json(text)
-        assert "***.***.321-00" in result
+        assert "***.***.***-00" in result
 
     def test_short_digit_sequence_not_masked(self) -> None:
         """A 6-digit number should NOT be treated as CPF."""

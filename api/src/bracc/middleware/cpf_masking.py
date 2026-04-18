@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response, StreamingResponse
 
 from bracc.constants import PEP_ROLES
+from bracc.services.formatacao_service import mascarar_cpf
 
 if TYPE_CHECKING:
     from starlette.middleware.base import RequestResponseEndpoint
@@ -27,19 +28,32 @@ _CPF_RAW = re.compile(r"(?<!\d)\d{11}(?!\d)")
 
 
 def mask_formatted_cpf(cpf: str) -> str:
-    """Mask a formatted CPF, keeping only the last 4 visible digits.
+    """Mask a formatted CPF, keeping only the last 2 visible digits.
 
-    Example: 123.456.789-00 -> ***.***.789-00
+    Delegates to :func:`bracc.services.formatacao_service.mascarar_cpf`
+    (canonical LGPD-first helper). Defensive fallback: if the service
+    rejects the input (non-11-digit CPF), returns a fully-asterisked
+    placeholder so the middleware never leaks raw digits.
+
+    Example: 123.456.789-00 -> ***.***.***-00
     """
-    return f"***.***.{cpf[8:]}"
+    masked = mascarar_cpf(cpf)
+    if masked is None:
+        return "***.***.***-**"
+    return masked
 
 
 def mask_raw_cpf(cpf: str) -> str:
-    """Mask a raw 11-digit CPF, keeping only the last 4 digits.
+    """Mask a raw 11-digit CPF, keeping only the last 2 digits.
 
-    Example: 12345678900 -> *******8900
+    Mirrors :func:`mask_formatted_cpf` symmetry but preserves the
+    unpunctuated shape used in raw JSON payloads.
+
+    Example: 12345678900 -> *********00
     """
-    return f"*******{cpf[7:]}"
+    if len(cpf) != 11 or not cpf.isdigit():
+        return "***********"
+    return f"*********{cpf[9:]}"
 
 
 def _is_pep_record(record: dict[str, Any]) -> bool:
