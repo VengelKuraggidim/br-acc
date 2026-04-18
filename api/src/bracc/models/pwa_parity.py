@@ -9,6 +9,8 @@ consumer; the renaming work is tracked in the post-migration cleanup.
 
 from pydantic import BaseModel
 
+from bracc.models.entity import ProvenanceBlock
+
 
 class StatusResponse(BaseModel):
     """Mirrors the Flask ``/status`` response.
@@ -58,3 +60,50 @@ class BuscarTudoResponse(BaseModel):
     resultados: list[BuscarTudoItem]
     total: int
     pagina: int
+
+
+class CeapAnoBreakdown(BaseModel):
+    """Agregação por ano das despesas CEAP (Cota de Atividade Parlamentar)."""
+
+    ano: int
+    valor_total: float
+    n_despesas: int
+
+
+class PoliticoResumo(BaseModel):
+    """Shape cadastral exibido pela PWA no cabeçalho do perfil.
+
+    Campos alinhados com o que o Flask ``/politico/{entity_id}`` já
+    emite (ver ``audit-results/frontend-consolidation/01-flask-backend-
+    inventory.md`` seção 1). ``cpf`` é mascarado por LGPD mesmo sendo
+    público por DOU.
+    """
+
+    id_camara: str
+    legislator_id: str
+    nome: str
+    cpf: str | None = None
+    partido: str | None = None
+    uf: str = "GO"
+    email: str | None = None
+    foto_url: str | None = None
+    situacao: str | None = None
+    legislatura_atual: int | None = None
+    scope: str = "federal"
+
+
+class PoliticoResponse(BaseModel):
+    """Envelope de detalhe de um político lido do grafo.
+
+    Substitui o orquestrador do Flask (live-call à Câmara +
+    Transparência) pela leitura direta do grafo já ingerido pelo
+    pipeline ``camara_politicos_go``. Proveniência no nível do nó é
+    devolvida no ``provenance`` (incluindo ``snapshot_url`` quando a
+    camada de archival gravou o snapshot bruto).
+    """
+
+    politico: PoliticoResumo
+    despesas_ceap: list[CeapAnoBreakdown]
+    total_ceap: float
+    total_ceap_fmt: str
+    provenance: ProvenanceBlock | None = None

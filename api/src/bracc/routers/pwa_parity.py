@@ -16,13 +16,17 @@ removed once the PWA is updated to call ``/api/v1`` directly.
 import re
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from neo4j import AsyncSession
 
 from bracc.dependencies import get_session
+from bracc.models.entity import ProvenanceBlock
 from bracc.models.pwa_parity import (
     BuscarTudoItem,
     BuscarTudoResponse,
+    CeapAnoBreakdown,
+    PoliticoResponse,
+    PoliticoResumo,
     StatusResponse,
 )
 from bracc.services.neo4j_service import execute_query, execute_query_single
@@ -50,6 +54,41 @@ _GO_TYPES = {
 }
 
 _LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}[\]^"~*?:\\/])')
+
+
+_POLITICO_PROVENANCE_FIELDS = (
+    "source_id",
+    "source_record_id",
+    "source_url",
+    "ingested_at",
+    "run_id",
+    "source_snapshot_uri",
+)
+
+
+def _pop_provenance(props: dict[str, Any]) -> ProvenanceBlock | None:
+    """Extract the provenance block from a node's property dict.
+
+    Returns ``None`` when any required field is missing (legacy rows)
+    so clients see ``provenance: null`` instead of an error.
+    """
+    popped = {field: props.pop(field, None) for field in _POLITICO_PROVENANCE_FIELDS}
+    for required in ("source_id", "source_url", "ingested_at", "run_id"):
+        if not popped.get(required):
+            return None
+    snapshot_uri = popped.get("source_snapshot_uri")
+    return ProvenanceBlock(
+        source_id=str(popped["source_id"]),
+        source_record_id=(
+            str(popped["source_record_id"])
+            if popped.get("source_record_id")
+            else None
+        ),
+        source_url=str(popped["source_url"]),
+        ingested_at=str(popped["ingested_at"]),
+        run_id=str(popped["run_id"]),
+        snapshot_url=str(snapshot_uri) if snapshot_uri else None,
+    )
 
 
 def _to_lucene_query(query: str) -> str:
@@ -304,3 +343,97 @@ async def pwa_buscar_tudo(
             items.append(item)
 
     return BuscarTudoResponse(resultados=items, total=total, pagina=page)
+
+
+def _aggregate_ceap(
+    despesas: list[dict[str, Any]] | None,
+) -> tuple[list[CeapAnoBreakdown], float]:
+    """Collapse per-expense rows into (per-year breakdown, total)."""
+    if not despesas:
+        return [], 0.0
+    per_year: dict[int, tuple[float, int]] = {}
+    total = 0.0
+    for item in despesas:
+        if not isinstance(item, dict):
+            continue
+        ano_raw = item.get("ano")
+        valor_raw = item.get("valor")
+        if ano_raw is None or valor_raw is None:
+            continue
+        try:
+            ano = int(ano_raw)
+            valor = float(valor_raw)
+        except (TypeError, ValueError):
+            continue
+        if valor <= 0:
+            continue
+        prev_total, prev_count = per_year.get(ano, (0.0, 0))
+        per_year[ano] = (prev_total + valor, prev_count + 1)
+        total += valor
+    breakdown = [
+        CeapAnoBreakdown(ano=ano, valor_total=vals[0], n_despesas=vals[1])
+        for ano, vals in sorted(per_year.items(), reverse=True)
+    ]
+    return breakdown, total
+
+
+@router.get("/politico/{entity_id}", response_model=PoliticoResponse)
+async def pwa_politico(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    entity_id: Annotated[str, Path(min_length=1, max_length=200)],
+) -> PoliticoResponse:
+    """Perfil de um político federal GO lido do grafo.
+
+    Substitui o ``/politico/{entity_id}`` do Flask, que fazia live-call
+    direto pra API da Câmara a cada request. Os dados aqui vêm do
+    pipeline ``camara_politicos_go`` (ver ``etl/src/bracc_etl/pipelines/
+    camara_politicos_go.py``), com ``ProvenanceBlock`` completo incluindo
+    ``snapshot_url`` quando o archival capturou a resposta bruta.
+    """
+    try:
+        record = await execute_query_single(
+            session, "pwa_politico", {"entity_id": entity_id},
+        )
+    except Exception as exc:  # noqa: BLE001 — degrade, don't leak 500
+        raise HTTPException(status_code=502, detail=f"Erro: {exc}") from exc
+
+    if record is None or record.get("legislator") is None:
+        raise HTTPException(status_code=404, detail="Politico nao encontrado")
+
+    node = record["legislator"]
+    props = dict(node)
+    provenance = _pop_provenance(props)
+
+    id_camara = str(props.get("id_camara") or "")
+    legislator_id = str(
+        props.get("legislator_id") or (f"camara_{id_camara}" if id_camara else ""),
+    )
+    legislatura = props.get("legislatura_atual")
+    try:
+        legislatura_int = int(legislatura) if legislatura is not None else None
+    except (TypeError, ValueError):
+        legislatura_int = None
+
+    resumo = PoliticoResumo(
+        id_camara=id_camara,
+        legislator_id=legislator_id,
+        nome=str(props.get("name") or props.get("nome") or ""),
+        cpf=str(props.get("cpf")) if props.get("cpf") else None,
+        partido=str(props.get("partido")) if props.get("partido") else None,
+        uf=str(props.get("uf") or UF_FILTRO),
+        email=str(props.get("email")) if props.get("email") else None,
+        foto_url=str(props.get("url_foto")) if props.get("url_foto") else None,
+        situacao=str(props.get("situacao")) if props.get("situacao") else None,
+        legislatura_atual=legislatura_int,
+        scope=str(props.get("scope") or "federal"),
+    )
+
+    despesas_ceap, total = _aggregate_ceap(record.get("despesas"))
+
+    return PoliticoResponse(
+        politico=resumo,
+        despesas_ceap=despesas_ceap,
+        total_ceap=total,
+        total_ceap_fmt=_fmt_brl(total),
+        provenance=provenance,
+    )
