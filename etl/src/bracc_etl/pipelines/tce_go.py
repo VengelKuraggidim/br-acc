@@ -19,6 +19,22 @@ Human validation required before production use:
    exclusively on operator-provided exports.
 
 Data source: https://portal.tce.go.gov.br/
+
+Archival (retrofit #5 do plano em
+``todo-list-prompts/high_priority/11-archival-retrofit-go.md``):
+
+TCE-GO é o único caso especial dos 10 pipelines GO — não expõe endpoint
+público, então todo o fluxo de ingestão é **operator-fed** (CSVs colocados
+manualmente sob ``data/tce_go/`` por quem exportou os dashboards). Como o
+prompt do retrofit prevê: "pipeline sem fluxo online roda archival opt-out
+por default". Ligando ``archive_local=True``, a camada lê os bytes do CSV
+local, chama :func:`bracc_etl.archival.archive_fetch` com
+``url="file://<abs>"``, e a URI content-addressed devolvida é carimbada em
+cada row derivada daquele arquivo. Resultado: mesmo que o operador delete
+os CSVs de ``data/``, a cópia imutável usada na ingestão sobrevive sob
+``BRACC_ARCHIVAL_ROOT/tce_go/YYYY-MM/*.csv`` — satisfazendo o requisito de
+proveniência rastreável do Fiscal Cidadão para uma fonte que só existe
+como export manual.
 """
 
 from __future__ import annotations
@@ -30,6 +46,7 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -45,6 +62,10 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
+
+# Fallback content-type pros CSVs locais do TCE-GO (archival é content-
+# addressed, então o único efeito é a extensão: ``.csv`` vs ``.bin``).
+_CSV_CONTENT_TYPE = "text/csv"
 
 
 def _hash_id(*parts: str, length: int = 20) -> str:
@@ -69,6 +90,8 @@ class TceGoPipeline(Pipeline):
         data_dir: str = "./data",
         limit: int | None = None,
         chunk_size: int = 50_000,
+        *,
+        archive_local: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(driver, data_dir, limit=limit, chunk_size=chunk_size, **kwargs)
@@ -80,6 +103,23 @@ class TceGoPipeline(Pipeline):
         self.irregular_accounts: list[dict[str, Any]] = []
         self.audits: list[dict[str, Any]] = []
         self.impedido_rels: list[dict[str, Any]] = []
+
+        # Archival dos CSVs locais. TCE-GO não tem endpoint público, então
+        # o único "fetch" é o operador-drop em ``data/tce_go/*.csv``.
+        # ``archive_local=True`` liga a preservação content-addressed dos
+        # bytes desses arquivos via :func:`bracc_etl.archival.archive_fetch`.
+        # Default ``False`` segue a diretriz do prompt de retrofit #11
+        # ("pipelines sem fluxo online roda archival opt-out por default")
+        # e mantém os testes legados verdes — ``source_snapshot_uri`` é
+        # opt-in em ``attach_provenance``, logo rows ficam sem a chave.
+        self._archive_local_enabled = archive_local
+        # URIs carimbadas em cada domínio. Três CSVs = três snapshots
+        # distintos (content-addressed, então dedup acontece no archival
+        # mesmo quando dois arquivos carregam o mesmo conteúdo).
+        # ``None`` no caminho opt-out ou quando o arquivo não existe.
+        self._decisions_snapshot_uri: str | None = None
+        self._irregular_snapshot_uri: str | None = None
+        self._audits_snapshot_uri: str | None = None
 
     # ------------------------------------------------------------------
     # Extract
@@ -107,6 +147,45 @@ class TceGoPipeline(Pipeline):
             logger.warning("[tce_go] failed to read %s: %s", path, exc)
             return pd.DataFrame()
 
+    def _archive_local_csv(self, path: Path) -> str | None:
+        """Arquiva os bytes crus de um CSV operator-fed via ``archive_fetch``.
+
+        TCE-GO não tem fonte HTTP pública, então o "fetch" conceitual é o
+        operador jogando o arquivo em ``data/tce_go/``. Preservar esses
+        bytes content-addressed garante que, se o CSV for deletado ou
+        sobrescrito, a cópia usada na ingestão ainda exista sob o root de
+        archival — requisito de proveniência rastreável do Fiscal Cidadão.
+
+        Falhas de I/O são absorvidas (log + ``None``): o pipeline continua
+        carregando a partir do DataFrame já parseado; rows apenas não
+        ganham ``source_snapshot_uri`` (opt-in preservado).
+        """
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            logger.warning(
+                "[tce_go] failed to read %s for archival: %s", path, exc,
+            )
+            return None
+        try:
+            uri = archive_fetch(
+                url=f"file://{path.resolve()}",
+                content=content,
+                content_type=_CSV_CONTENT_TYPE,
+                run_id=self.run_id,
+                source_id=self.source_id,
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "[tce_go] archive_fetch falhou para %s: %s", path, exc,
+            )
+            return None
+        logger.info(
+            "[tce_go] archived %s -> %s (%d bytes)",
+            path.name, uri, len(content),
+        )
+        return uri
+
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "tce_go"
         if not src_dir.exists():
@@ -117,9 +196,26 @@ class TceGoPipeline(Pipeline):
             )
             return
 
-        self._raw_decisions = self._read_csv_optional(src_dir / "decisoes.csv")
-        self._raw_irregular = self._read_csv_optional(src_dir / "irregulares.csv")
-        self._raw_audits = self._read_csv_optional(src_dir / "fiscalizacoes.csv")
+        decisions_path = src_dir / "decisoes.csv"
+        irregular_path = src_dir / "irregulares.csv"
+        audits_path = src_dir / "fiscalizacoes.csv"
+
+        self._raw_decisions = self._read_csv_optional(decisions_path)
+        self._raw_irregular = self._read_csv_optional(irregular_path)
+        self._raw_audits = self._read_csv_optional(audits_path)
+
+        # Archival do CSV operator-fed. Rodando com ``archive_local=True``
+        # (opt-in), grava snapshot content-addressed via ``archive_fetch``
+        # de cada CSV presente. O path offline default (``False``) mantém
+        # o contrato opt-in de ``attach_provenance`` — rows continuam sem
+        # ``source_snapshot_uri``, preservando os testes legados.
+        if self._archive_local_enabled:
+            if decisions_path.exists() and decisions_path.stat().st_size > 0:
+                self._decisions_snapshot_uri = self._archive_local_csv(decisions_path)
+            if irregular_path.exists() and irregular_path.stat().st_size > 0:
+                self._irregular_snapshot_uri = self._archive_local_csv(irregular_path)
+            if audits_path.exists() and audits_path.stat().st_size > 0:
+                self._audits_snapshot_uri = self._archive_local_csv(audits_path)
 
         if self.limit:
             self._raw_decisions = self._raw_decisions.head(self.limit)
@@ -186,6 +282,7 @@ class TceGoPipeline(Pipeline):
                     "source": "tce_go",
                 },
                 record_id=decision_record_id,
+                snapshot_uri=self._decisions_snapshot_uri,
             ))
 
     def _transform_irregular(self) -> None:
@@ -222,6 +319,7 @@ class TceGoPipeline(Pipeline):
                     "source": "tce_go",
                 },
                 record_id=account_record_id,
+                snapshot_uri=self._irregular_snapshot_uri,
             ))
             if cnpj_fmt:
                 self.impedido_rels.append(self.attach_provenance(
@@ -230,6 +328,7 @@ class TceGoPipeline(Pipeline):
                         "target_key": account_id,
                     },
                     record_id=account_record_id,
+                    snapshot_uri=self._irregular_snapshot_uri,
                 ))
 
     def _transform_audits(self) -> None:
@@ -257,6 +356,7 @@ class TceGoPipeline(Pipeline):
                     "source": "tce_go",
                 },
                 record_id=audit_record_id,
+                snapshot_uri=self._audits_snapshot_uri,
             ))
 
     # ------------------------------------------------------------------
@@ -281,12 +381,17 @@ class TceGoPipeline(Pipeline):
                 key_field="account_id",
             )
             # Company nodes carry the raw CNPJ digits as record_id (natural
-            # key for the cross-source Company entity).
+            # key for the cross-source Company entity). A URI de snapshot
+            # vem do ``irregular_accounts`` de origem: toda Company derivada
+            # neste pipeline sai do mesmo ``irregulares.csv`` arquivado,
+            # então carimbar a URI no row de Company mantém a cadeia de
+            # proveniência consistente (``None`` quando archive_local=False).
             companies = deduplicate_rows(
                 [
                     self.attach_provenance(
                         {"cnpj": r["cnpj"], "razao_social": r["name"]},
                         record_id=strip_document(str(r["cnpj"])),
+                        snapshot_uri=r.get("source_snapshot_uri"),
                     )
                     for r in self.irregular_accounts
                     if r["cnpj"]
