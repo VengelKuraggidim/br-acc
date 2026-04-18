@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import re
+import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -17,6 +21,142 @@ from bracc_etl.transforms import (
     normalize_name,
     strip_document,
 )
+
+logger = logging.getLogger(__name__)
+
+# Portal da Transparencia "Empresas Impedidas de Contratar" widget
+# publishes a single consolidated ZIP per day (mode "DIA"). The landing
+# page embeds the current snapshot date in an inline
+# ``arquivos.push({...})`` block; the download URL is
+# ``/download-de-dados/cepim/<YYYYMMDD>`` which 302s to a dated ZIP on
+# ``dadosabertos-download.cgu.gov.br``. Guessing a date that is not the
+# officially-published snapshot returns 403 from S3.
+_CEPIM_LANDING_URL = "https://portaldatransparencia.gov.br/download-de-dados/cepim"
+_CEPIM_DOWNLOAD_BASE = "https://portaldatransparencia.gov.br/download-de-dados/cepim"
+_CEPIM_USER_AGENT = "br-acc/bracc-etl download_cepim (httpx)"
+_CEPIM_HTTP_TIMEOUT = 120.0
+
+_CEPIM_PUSH_RE = re.compile(
+    r'arquivos\.push\(\s*\{\s*"ano"\s*:\s*"(\d{4})"\s*,\s*'
+    r'"mes"\s*:\s*"(\d{2})"\s*,\s*"dia"\s*:\s*"(\d{2})"',
+)
+
+
+def _discover_snapshot_date(
+    client: httpx.Client,
+    landing_url: str = _CEPIM_LANDING_URL,
+) -> str | None:
+    """Scrape the YYYYMMDD snapshot date off the CEPIM landing page."""
+    try:
+        resp = client.get(landing_url)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("[cepim] cannot fetch landing page: %s", exc)
+        return None
+    dates = [
+        f"{y}{m}{d}" for (y, m, d) in _CEPIM_PUSH_RE.findall(resp.text)
+    ]
+    if not dates:
+        logger.warning("[cepim] no arquivos.push entries on landing page")
+        return None
+    return max(dates)
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    *,
+    date: str | None = None,
+    skip_existing: bool = True,
+    timeout: float = _CEPIM_HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download the CGU CEPIM snapshot CSV to disk.
+
+    Scrapes the current snapshot date off the landing page (unless
+    ``date`` YYYYMMDD is passed), downloads the dated ZIP, extracts the
+    inner ``*_CEPIM.csv``, and writes it as ``cepim.csv`` into
+    ``output_dir`` using the upstream ``;``-delimited latin-1 layout
+    that :class:`CepimPipeline` already expects.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    out_csv = output_dir / "cepim.csv"
+    if skip_existing and out_csv.exists() and out_csv.stat().st_size > 0:
+        logger.info("[cepim] skipping existing %s", out_csv.name)
+        return [out_csv]
+
+    headers = {"User-Agent": _CEPIM_USER_AGENT}
+    with httpx.Client(
+        follow_redirects=True,
+        headers=headers,
+        timeout=timeout,
+        verify=False,
+    ) as client:
+        date_tag = date or _discover_snapshot_date(client)
+        if not date_tag:
+            logger.error(
+                "[cepim] could not determine snapshot date; aborting",
+            )
+            return []
+        if date is not None and date != _discover_snapshot_date(client):
+            logger.warning(
+                "[cepim] requested date %s differs from current "
+                "published snapshot; non-current dates usually 403",
+                date,
+            )
+
+        url = f"{_CEPIM_DOWNLOAD_BASE}/{date_tag}"
+        zip_path = raw_dir / f"cepim_{date_tag}.zip"
+
+        if not (skip_existing and zip_path.exists() and zip_path.stat().st_size > 0):
+            logger.info("[cepim] downloading %s -> %s", url, zip_path.name)
+            try:
+                with client.stream("GET", url) as resp:
+                    resp.raise_for_status()
+                    with zip_path.open("wb") as fh:
+                        for chunk in resp.iter_bytes(chunk_size=1 << 16):
+                            if chunk:
+                                fh.write(chunk)
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "[cepim] download failed (%s): %s", url, exc,
+                )
+                return []
+        else:
+            logger.info("[cepim] reusing cached zip %s", zip_path.name)
+
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                csv_member = next(
+                    (n for n in zf.namelist() if n.lower().endswith(".csv")),
+                    None,
+                )
+                if csv_member is None:
+                    logger.warning(
+                        "[cepim] no CSV in %s", zip_path.name,
+                    )
+                    return []
+                with zf.open(csv_member) as src, out_csv.open("wb") as dst:
+                    while True:
+                        block = src.read(1 << 20)
+                        if not block:
+                            break
+                        dst.write(block)
+        except zipfile.BadZipFile:
+            logger.warning(
+                "[cepim] bad zip %s -- deleting", zip_path.name,
+            )
+            zip_path.unlink(missing_ok=True)
+            return []
+
+    logger.info(
+        "[cepim] wrote %s (%.1f KB)",
+        out_csv,
+        out_csv.stat().st_size / 1024,
+    )
+    return [out_csv]
 
 
 def _generate_ngo_id(cnpj_digits: str, agreement_number: str) -> str:
