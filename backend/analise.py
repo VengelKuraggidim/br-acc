@@ -177,13 +177,16 @@ def analisar_emendas(emendas: list[dict]) -> list[dict]:
 
     total = sum(e.get("value_paid", 0) or e.get("value_committed", 0) or 0 for e in emendas)
 
-    # Concentracao em um municipio
+    # Concentracao em um municipio (so conta cidades reais — "Múltiplo" e
+    # marcador do SIOP pra emendas distribuidas em varios municipios, nao
+    # uma localidade real, entao nao indica concentracao)
     municipios: dict[str, float] = {}
     for e in emendas:
-        mun = e.get("municipality", "")
+        mun = (e.get("municipality") or "").strip()
+        if not mun or _sem_acento(mun).lower() == "multiplo":
+            continue
         val = e.get("value_paid", 0) or e.get("value_committed", 0) or 0
-        if mun:
-            municipios[mun] = municipios.get(mun, 0) + val
+        municipios[mun] = municipios.get(mun, 0) + val
 
     if municipios and total > 0:
         maior_mun = max(municipios, key=municipios.get)
@@ -213,12 +216,14 @@ def analisar_emendas(emendas: list[dict]) -> list[dict]:
     ]
     if nao_pagas:
         total_nao_pago = sum(e.get("value_committed", 0) or 0 for e in nao_pagas)
-        # Top municipio com mais emendas nao pagas
+        # Top municipio com mais emendas nao pagas (ignora "Múltiplo" — marcador
+        # do SIOP pra emendas distribuidas, nao localidade real)
         munic_nao_pago: dict[str, float] = {}
         for e in nao_pagas:
             mun = (e.get("municipality") or "").strip()
-            if mun:
-                munic_nao_pago[mun] = munic_nao_pago.get(mun, 0) + (e.get("value_committed", 0) or 0)
+            if not mun or _sem_acento(mun).lower() == "multiplo":
+                continue
+            munic_nao_pago[mun] = munic_nao_pago.get(mun, 0) + (e.get("value_committed", 0) or 0)
         local_txt = ""
         if munic_nao_pago:
             top_mun = max(munic_nao_pago, key=munic_nao_pago.get)

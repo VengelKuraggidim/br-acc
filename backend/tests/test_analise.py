@@ -177,6 +177,28 @@ class TestAnalisarEmendas:
         assert any("relator" in a["texto"].lower() for a in alertas)
         assert any(a["tipo"] == "grave" for a in alertas)
 
+    def test_multiplo_nao_conta_como_concentracao(self):
+        # "Múltiplo" e marcador do SIOP, nao localidade real — nao deve
+        # disparar alerta de concentracao mesmo dominando o total.
+        emendas = [
+            {"value_paid": 50_000_000, "value_committed": 50_000_000, "municipality": "Múltiplo"},
+            {"value_paid": 1_000_000, "value_committed": 1_000_000, "municipality": "Goiânia"},
+        ]
+        alertas = analisar_emendas(emendas)
+        assert not any("multiplo" in _sem_acento(a["texto"]).lower() for a in alertas)
+        assert not any("concentradas em Múltiplo" in a["texto"] for a in alertas)
+
+    def test_multiplo_nao_aparece_como_destino_principal_em_nao_pagas(self):
+        # Mesmo bug, mas no texto do alerta de "empenhada nao paga"
+        emendas = [
+            {"value_committed": 30_000_000, "value_paid": 0, "municipality": "Múltiplo"},
+            {"value_committed": 1_000_000, "value_paid": 0, "municipality": "Luziânia"},
+        ]
+        alertas = analisar_emendas(emendas)
+        nao_pagas = [a for a in alertas if "nao paga" in _sem_acento(a["texto"]).lower()]
+        assert nao_pagas, "deve gerar alerta de emenda nao paga"
+        assert "Múltiplo" not in nao_pagas[0]["texto"]
+
 
 # === analisar_conexoes ===
 
