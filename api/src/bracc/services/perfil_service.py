@@ -69,6 +69,7 @@ from bracc.services.conexoes_service import classificar
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
+    obter_verba_indenizatoria_alego,
 )
 from bracc.services.emendas_service import obter_emendas_deputado
 from bracc.services.formatacao_service import fmt_brl
@@ -349,21 +350,43 @@ def _build_descricao_conexoes(resultado: Any) -> str:
 
 def _build_aviso_despesas(
     despesas_gabinete: list[DespesaGabinete],
+    *,
     is_deputado_federal: bool,
+    is_estadual_go: bool,
 ) -> str:
-    """Aviso explicativo quando o político não é deputado federal (l. 936-945).
+    """Aviso explicativo da fonte de despesas de gabinete.
 
-    A cota CEAP só existe na Câmara Federal, então outros cargos não
-    tem esse dado ingerido.
+    Três casos cobertos — o PWA renderiza o texto como legenda da seção:
+
+    * Deputado federal com CEAP ingerido → fonte curta "cota CEAP".
+    * Deputado estadual GO com verba ALEGO ingerida → fonte "verba ALEGO".
+    * Qualquer outro caso (vereador, sem dados, etc.) → aviso de falta de
+      dados.
+
+    Quando ``despesas_gabinete`` está vazio mas o político É deputado
+    federal/estadual-GO (ou seja, teria dados ingeridos mas ainda não
+    tem nada registrado), exibimos ainda a fonte esperada pra não deixar
+    o PWA sem contexto.
     """
-    if despesas_gabinete or is_deputado_federal:
+    if is_deputado_federal:
+        return (
+            "Cota de atividade parlamentar da Camara Federal (CEAP) — "
+            "inclui gastos de gabinete, telefone, combustivel e aluguel "
+            "de escritorio."
+        )
+    if is_estadual_go:
+        return (
+            "Verba indenizatoria da Assembleia Legislativa de Goias "
+            "(ALEGO) — ressarcimento de despesas de atividade parlamentar."
+        )
+    if despesas_gabinete:
+        # Fallback improvável: tem despesas mas nenhum label conhecido.
         return ""
     return (
-        "Este(a) politico(a) nao e deputado(a) federal. "
-        "A cota parlamentar (CEAP) — com gastos de gabinete, telefone, "
-        "combustivel e aluguel de escritorio — so existe na Camara Federal. "
-        "Deputados estaduais e vereadores tem verbas parecidas, mas ainda "
-        "nao temos esses dados no sistema."
+        "Ainda nao temos os dados de gastos dessa casa legislativa. "
+        "A cota parlamentar (CEAP) so existe na Camara Federal e a verba "
+        "indenizatoria da ALEGO cobre deputados estaduais de Goias — "
+        "vereadores e outros cargos ficam para fases futuras."
     )
 
 
@@ -451,7 +474,12 @@ async def obter_perfil(
         limit_por_categoria=limit_conexoes,
     )
 
-    # --- 3. Paralelo: CEAP + emendas (só pra FederalLegislator) --------------
+    # --- 3. Paralelo: despesas_gabinete + emendas ----------------------------
+    # Roteamento por tipo de político:
+    #   * FederalLegislator com id_camara  → CEAP Câmara + emendas RP-06/09
+    #   * StateLegislator GO               → verba indenizatória ALEGO
+    #                                        (sem emendas federais, óbvio)
+    #   * qualquer outro                    → despesas vazias
     id_camara_raw = props.get("id_camara")
     id_camara: int | None = None
     if id_camara_raw is not None:
@@ -463,11 +491,20 @@ async def obter_perfil(
     is_deputado_federal = bool(
         labels_raw and "FederalLegislator" in labels_raw,
     )
+    uf_props_raw = props.get("uf")
+    uf_props = (
+        str(uf_props_raw).upper() if isinstance(uf_props_raw, str) else ""
+    )
+    is_estadual_go = bool(
+        labels_raw
+        and "StateLegislator" in labels_raw
+        and uf_props == "GO",
+    )
 
     despesas_gabinete: list[DespesaGabinete] = []
     emendas_grafo: list[Emenda] = []
 
-    if id_camara is not None:
+    if is_deputado_federal and id_camara is not None:
         try:
             despesas_gabinete, emendas_grafo = await asyncio.gather(
                 obter_ceap_deputado(driver, id_camara, anos_ceap),
@@ -475,6 +512,17 @@ async def obter_perfil(
             )
         except Exception as exc:  # noqa: BLE001
             raise DriverError(str(exc)) from exc
+    elif is_estadual_go:
+        # ``legislator_id`` é o hash estável que o pipeline ``alego`` grava
+        # no nó ``:StateLegislator`` e usa como chave do rel GASTOU_COTA_GO.
+        legislator_id_raw = props.get("legislator_id")
+        if legislator_id_raw:
+            try:
+                despesas_gabinete = await obter_verba_indenizatoria_alego(
+                    driver, str(legislator_id_raw), anos_ceap,
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise DriverError(str(exc)) from exc
 
     # Se a query ``perfil_politico_connections`` já trouxe emendas via
     # grafo (rel ``AUTOR_EMENDA``), usa aquelas — caso contrário, as do
@@ -614,7 +662,9 @@ async def obter_perfil(
     # --- 7. Descrição de conexões + aviso de despesas ------------------------
     descricao_conexoes = _build_descricao_conexoes(resultado)
     aviso_despesas = _build_aviso_despesas(
-        despesas_gabinete, is_deputado_federal,
+        despesas_gabinete,
+        is_deputado_federal=is_deputado_federal,
+        is_estadual_go=is_estadual_go,
     )
 
     # --- 8. Monta o PerfilPolitico final -------------------------------------

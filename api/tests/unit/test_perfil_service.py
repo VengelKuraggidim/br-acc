@@ -92,8 +92,9 @@ def _patch_ceap_and_emendas(
     despesas: list[DespesaGabinete] | None = None,
     emendas: list[Emenda] | None = None,
     media_estado: float = 0.0,
+    verba_alego: list[DespesaGabinete] | None = None,
 ) -> Any:
-    """Patch dos 3 sub-services paralelos do service 04.C/04.D."""
+    """Patch dos sub-services paralelos do service 04.C/04.D + ALEGO (verba)."""
     return (
         patch(
             "bracc.services.perfil_service.obter_ceap_deputado",
@@ -109,6 +110,11 @@ def _patch_ceap_and_emendas(
             "bracc.services.perfil_service.calcular_media_ceap_estado",
             new_callable=AsyncMock,
             return_value=media_estado,
+        ),
+        patch(
+            "bracc.services.perfil_service.obter_verba_indenizatoria_alego",
+            new_callable=AsyncMock,
+            return_value=verba_alego or [],
         ),
     )
 
@@ -237,7 +243,7 @@ class TestDeputadoFederalCompleto:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:abc:1")
 
@@ -328,7 +334,7 @@ class TestPoliticoSemMandato:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:pes:3")
 
@@ -338,8 +344,11 @@ class TestPoliticoSemMandato:
         assert perfil.total_emendas_valor == 0.0
         assert perfil.total_doacoes == 0.0
         assert perfil.fonte_emendas is None
-        # Aviso explicativo presente pra não-deputado-federal.
-        assert "nao e deputado(a) federal" in perfil.aviso_despesas
+        # Aviso explicativo presente pra não-deputado-federal — texto
+        # genérico do fallback "Ainda nao temos os dados ..." (caso
+        # vereador/outros).
+        assert "Ainda nao temos os dados" in perfil.aviso_despesas
+        assert "verba indenizatoria da ALEGO" in perfil.aviso_despesas
 
         # Alertas — deve ter o fallback "Avaliação indisponível" porque
         # não tem nenhum dado (ou algum alerta de rotina). No mínimo
@@ -397,7 +406,7 @@ class TestLgpd:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:abc:1")
 
@@ -435,7 +444,7 @@ class TestProvenance:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:abc:1")
 
@@ -463,7 +472,7 @@ class TestTetoGastos:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:abc:1")
 
@@ -491,7 +500,7 @@ class TestTetoGastos:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:abc:1")
 
@@ -514,7 +523,7 @@ class TestTetoGastos:
                 new_callable=AsyncMock,
                 return_value=record,
             ),
-            patches[0], patches[1], patches[2],
+            patches[0], patches[1], patches[2], patches[3],
         ):
             perfil = await obter_perfil(driver, "4:abc:1")
 
@@ -525,3 +534,208 @@ class TestTetoGastos:
         assert any(
             "23.607/2019" in a.get("texto", "") for a in graves
         ), f"Nao encontrou alerta grave com fonte legal: {graves}"
+
+
+# --- 7. Roteamento federal vs estadual (verba ALEGO) -----------------------
+
+
+def _state_legislator_node(
+    *, legislator_id: str = "alego-xyz", uf: str = "GO",
+    include_provenance: bool = True, **extra: Any,
+) -> dict[str, Any]:
+    """Props canônicos de um ``:StateLegislator`` (pipeline ``alego``)."""
+    props: dict[str, Any] = {
+        "name": "Deputado Estadual",
+        "cpf": "",
+        "partido": "XYZ",
+        "legislature": "",
+        "uf": uf,
+        "legislator_id": legislator_id,
+        "is_pep": False,
+        "element_id": "4:state:9",
+        "labels": ["StateLegislator"],
+        "source": "alego",
+    }
+    if include_provenance:
+        # Usa um source_id próprio do ALEGO pra não confundir com CEAP.
+        props.update({
+            "source_id": "alego",
+            "source_record_id": "dep-go-42",
+            "source_url": "https://transparencia.al.go.leg.br/",
+            "ingested_at": "2026-04-18T00:00:00+00:00",
+            "run_id": "alego_20260418000000",
+            "source_snapshot_uri": "alego/2026-04/snap.json",
+        })
+    props.update(extra)
+    return props
+
+
+class TestRoteamentoDespesasEstadualGo:
+    """``obter_verba_indenizatoria_alego`` é chamado quando o político é
+    ``:StateLegislator`` GO, e o CEAP federal NÃO é chamado. Inversão
+    simétrica no teste federal (outro grupo de testes já cobre)."""
+
+    @pytest.mark.anyio
+    async def test_estadual_go_usa_verba_alego(self) -> None:
+        driver = _build_driver()
+        state = _state_legislator_node(legislator_id="hash-go-1")
+        record = _mock_record({"politico": state, "conexoes": []})
+
+        verba_fake = [
+            DespesaGabinete(tipo="Combustivel", total=2_000.0, total_fmt="R$ 2,0 mil"),
+            DespesaGabinete(tipo="Telefone", total=400.0, total_fmt="R$ 400,00"),
+        ]
+        patches = _patch_ceap_and_emendas(verba_alego=verba_fake)
+        ceap_patch, emendas_patch, media_patch, verba_patch = patches
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            ceap_patch as ceap_mock,
+            emendas_patch as emendas_mock,
+            media_patch,
+            verba_patch as verba_mock,
+        ):
+            perfil = await obter_perfil(driver, "4:state:9")
+
+        # Não chamou CEAP federal nem emendas federais.
+        ceap_mock.assert_not_awaited()
+        emendas_mock.assert_not_awaited()
+        # Chamou a verba ALEGO com o legislator_id do nó focal.
+        verba_mock.assert_awaited_once()
+        call_args = verba_mock.await_args
+        assert call_args.args[1] == "hash-go-1"
+
+        # Despesas_gabinete populadas a partir da verba ALEGO.
+        assert len(perfil.despesas_gabinete) == 2
+        assert perfil.despesas_gabinete[0].tipo == "Combustivel"
+        assert perfil.total_despesas_gabinete == pytest.approx(2_400.0)
+
+        # Aviso específico da ALEGO (estadual), não o fallback federal.
+        assert "ALEGO" in perfil.aviso_despesas
+        assert "Camara Federal" not in perfil.aviso_despesas
+
+    @pytest.mark.anyio
+    async def test_estadual_sem_uf_go_nao_roteia(self) -> None:
+        """StateLegislator de outra UF (defesa em profundidade) não chama ALEGO."""
+        driver = _build_driver()
+        # Hipotético estadual MG — pipeline só cria uf=GO hoje, mas o guard
+        # deve bloquear de qualquer jeito (garante escopo GO-only do service).
+        state = _state_legislator_node(legislator_id="mg-1", uf="MG")
+        record = _mock_record({"politico": state, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        ceap_patch, emendas_patch, media_patch, verba_patch = patches
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            ceap_patch, emendas_patch, media_patch, verba_patch as verba_mock,
+        ):
+            perfil = await obter_perfil(driver, "4:state:9")
+
+        verba_mock.assert_not_awaited()
+        assert perfil.despesas_gabinete == []
+
+    @pytest.mark.anyio
+    async def test_federal_nao_chama_verba_alego(self) -> None:
+        """Safeguard: deputado federal só usa CEAP federal, nunca a verba ALEGO."""
+        driver = _build_driver()
+        legislator = _legislator_node()
+        record = _mock_record({"politico": legislator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        ceap_patch, emendas_patch, media_patch, verba_patch = patches
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            ceap_patch as ceap_mock,
+            emendas_patch as emendas_mock,
+            media_patch, verba_patch as verba_mock,
+        ):
+            await obter_perfil(driver, "4:abc:1")
+
+        # Federal chama CEAP + emendas, nunca verba ALEGO.
+        ceap_mock.assert_awaited_once()
+        emendas_mock.assert_awaited_once()
+        verba_mock.assert_not_awaited()
+
+
+class TestAvisoDespesasDinamico:
+    """``aviso_despesas`` tem 3 ramos (federal/estadual GO/sem fonte)."""
+
+    @pytest.mark.anyio
+    async def test_aviso_federal_menciona_ceap(self) -> None:
+        driver = _build_driver()
+        legislator = _legislator_node()
+        record = _mock_record({"politico": legislator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2], patches[3],
+        ):
+            perfil = await obter_perfil(driver, "4:abc:1")
+
+        assert "Camara Federal" in perfil.aviso_despesas
+        assert "CEAP" in perfil.aviso_despesas
+
+    @pytest.mark.anyio
+    async def test_aviso_estadual_menciona_alego(self) -> None:
+        driver = _build_driver()
+        state = _state_legislator_node()
+        record = _mock_record({"politico": state, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2], patches[3],
+        ):
+            perfil = await obter_perfil(driver, "4:state:9")
+
+        assert "ALEGO" in perfil.aviso_despesas
+        assert "Assembleia Legislativa de Goias" in perfil.aviso_despesas
+
+    @pytest.mark.anyio
+    async def test_aviso_sem_fonte_menciona_futuras(self) -> None:
+        driver = _build_driver()
+        pessoa = {
+            "name": "Vereador Qualquer",
+            "cpf": None,
+            "uf": "GO",
+            "role": "vereador",
+            "is_pep": False,
+            "element_id": "4:pes:10",
+            "labels": ["Person"],
+            **PROV_FIELDS,
+        }
+        record = _mock_record({"politico": pessoa, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2], patches[3],
+        ):
+            perfil = await obter_perfil(driver, "4:pes:10")
+
+        assert "Ainda nao temos os dados" in perfil.aviso_despesas
+        assert "ALEGO" in perfil.aviso_despesas
