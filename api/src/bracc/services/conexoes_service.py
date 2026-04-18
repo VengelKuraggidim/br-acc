@@ -80,7 +80,6 @@ from bracc.services.traducao_service import (
     traduzir_tipo_emenda,
 )
 
-
 _PROV_REQUIRED = ("source_id", "source_url", "ingested_at", "run_id")
 
 

@@ -431,6 +431,19 @@
       color: var(--accent);
       text-decoration: underline;
     }
+    /* Variante compacta pra sub-cards (emendas, doadores): border-top sutil
+       ao invés de linha completa, padding reduzido. Mantém tudo alinhado à
+       direita pra não competir com o valor da doação/emenda. */
+    .chip-fonte.chip-fonte-sub {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .chip-fonte.chip-fonte-sub a {
+      margin-left: 6px;
+    }
 
     /* === ALERTA === */
     .alerta-card {
@@ -1118,7 +1131,8 @@ function formatarDataIngestao(iso) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function renderChipFonte(provenance) {
+function renderChipFonte(provenance, variant) {
+  // variant: undefined (default, card principal) | "sub" (sub-cards compactos).
   if (!provenance) return "";
   const sid = escaparHTML(provenance.source_id || "");
   const recId = escaparHTML(provenance.source_record_id || "");
@@ -1132,7 +1146,8 @@ function renderChipFonte(provenance) {
   if (ingDate) partes.push(`ingerido ${ingDate}`);
   const metaTxt = partes.length ? `Fonte: ${partes.join(" &middot; ")}` : "Fonte";
 
-  let html = `<div class="chip-fonte"><span class="chip-fonte-meta">${metaTxt}</span>`;
+  const cls = variant === "sub" ? "chip-fonte chip-fonte-sub" : "chip-fonte";
+  let html = `<div class="${cls}"><span class="chip-fonte-meta">${metaTxt}</span>`;
   if (srcUrl) {
     html += `<a href="${escaparHTML(srcUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir fonte original">&#128279; Ver fonte</a>`;
   }
@@ -1569,6 +1584,7 @@ function renderPerfil(d) {
         </div>
         ${statusHtml}
         ${e.municipio ? `<div class="emenda-local">&#128205; ${e.municipio}${e.uf ? ', '+e.uf : ''}</div>` : ''}
+        ${renderChipFonte(e.provenance, "sub")}
       </div>`;
     });
     html += '</div></details></div>';
@@ -1760,13 +1776,15 @@ function renderPerfil(d) {
       arr.forEach(e => {
         const cnpjStr = e.cnpj ? ` &middot; CNPJ ${e.cnpj}` : '';
         const nStr = e.n_doacoes > 1 ? ` &middot; ${e.n_doacoes} doações` : '';
-        h += `<div class="conexao-card">
+        const chip = renderChipFonte(e.provenance, "sub");
+        h += `<div class="conexao-card" style="flex-wrap:wrap;">
           <div class="conexao-icon empresa">${icone}</div>
           <div class="conexao-info">
             <div class="conexao-nome">${e.nome}</div>
             <div class="conexao-rel">Repassou valor à campanha${cnpjStr}${nStr}</div>
           </div>
           <div class="conexao-valor">${e.valor_total_fmt}</div>
+          ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
         </div>`;
       });
       h += '</div></details>';
@@ -1786,13 +1804,15 @@ function renderPerfil(d) {
       d.doadores_pessoa.forEach(p => {
         const cpfStr = p.cpf_mascarado ? ` &middot; CPF ${p.cpf_mascarado}` : '';
         const nStr = p.n_doacoes > 1 ? ` &middot; ${p.n_doacoes} doações` : '';
-        html += `<div class="conexao-card">
+        const chip = renderChipFonte(p.provenance, "sub");
+        html += `<div class="conexao-card" style="flex-wrap:wrap;">
           <div class="conexao-icon pessoa">&#128100;</div>
           <div class="conexao-info">
             <div class="conexao-nome">${p.nome}</div>
             <div class="conexao-rel">Doou para campanha${cpfStr}${nStr}</div>
           </div>
           <div class="conexao-valor">${p.valor_total_fmt}</div>
+          ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
         </div>`;
       });
       html += '</div></details>';
