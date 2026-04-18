@@ -16,6 +16,33 @@ from bracc_etl.transforms import deduplicate_rows, normalize_name
 
 logger = logging.getLogger(__name__)
 
+# Base dos Dados mirror of the STF "Corte Aberta" decisions table.
+# Ingestion requires an authenticated GCP billing project — this is a hard
+# external requirement (not a bypassable paywall), so fetch_to_disk fails
+# open (returns []) when no project is available, letting public-mode
+# bootstrap skip gracefully.
+_BQ_TABLE = "basedosdados.br_stf_corte_aberta.decisoes"
+_BQ_COLUMNS = (
+    "ano",
+    "classe",
+    "numero",
+    "relator",
+    "link",
+    "subgrupo_andamento",
+    "andamento",
+    "observacao_andamento_decisao",
+    "modalidade_julgamento",
+    "tipo_julgamento",
+    "meio_tramitacao",
+    "indicador_tramitacao",
+    "assunto_processo",
+    "ramo_direito",
+    "data_autuacao",
+    "data_decisao",
+    "data_baixa_processo",
+)
+_BQ_PAGE_SIZE = 100_000
+
 
 def _generate_case_id(case_class: str, case_number: str, year: str) -> str:
     """Deterministic ID from case class + number + year."""
@@ -119,3 +146,77 @@ class StfPipeline(Pipeline):
                 "MERGE (p)-[:RELATOR_DE]->(lc)"
             )
             loader.run_query_with_retry(query, self.rapporteur_rels)
+
+
+# ────────────────────────────────────────────────────────────────────
+# Acquisition helper — Base dos Dados (BigQuery) export to CSV
+# ────────────────────────────────────────────────────────────────────
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    *,
+    billing_project: str | None = None,
+    date: str | None = None,  # noqa: ARG001 — accepted for bootstrap symmetry
+    skip_existing: bool = True,
+) -> list[Path]:
+    """Download STF decisions from Base dos Dados to ``<output_dir>/decisoes.csv``.
+
+    Requires ``billing_project`` — STF does not publish a stable bulk
+    endpoint, so the only automated open source is the Base dos Dados mirror
+    on BigQuery (``basedosdados.br_stf_corte_aberta.decisoes``). Without a
+    billing project the helper logs a clear skip message and returns ``[]``
+    so the bootstrap contract can proceed in public mode.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / "decisoes.csv"
+
+    if skip_existing and dest.exists() and dest.stat().st_size > 0:
+        logger.info("[stf] skipping (exists): %s", dest)
+        return [dest]
+
+    if not billing_project:
+        logger.warning(
+            "[stf] no --billing-project provided; STF decisions are only "
+            "available via Base dos Dados on BigQuery. Skipping. "
+            "To ingest, rerun with --billing-project <gcp-project-id>.",
+        )
+        return []
+
+    try:
+        from google.cloud import bigquery  # type: ignore[import-not-found]
+    except ImportError:
+        logger.warning(
+            "[stf] google-cloud-bigquery not installed; "
+            "`pip install '.[bigquery]'` (in etl/) and pass --billing-project.",
+        )
+        return []
+
+    client = bigquery.Client(project=billing_project)
+    schema_fields = [bigquery.SchemaField(c, "STRING") for c in _BQ_COLUMNS]
+
+    logger.info(
+        "[stf] streaming %s (%d columns, page_size=%d) -> %s",
+        _BQ_TABLE,
+        len(_BQ_COLUMNS),
+        _BQ_PAGE_SIZE,
+        dest,
+    )
+
+    if dest.exists():
+        dest.unlink()
+    rows_written = 0
+    for i, chunk_df in enumerate(
+        client.list_rows(
+            _BQ_TABLE,
+            selected_fields=schema_fields,
+            page_size=_BQ_PAGE_SIZE,
+        ).to_dataframe_iterable(),
+    ):
+        chunk_df.to_csv(dest, mode="a", header=(i == 0), index=False)
+        rows_written += len(chunk_df)
+        if i == 0 or rows_written % (_BQ_PAGE_SIZE * 5) == 0:
+            logger.info("[stf]   rows written: %d", rows_written)
+
+    logger.info("[stf] wrote %d rows → %s", rows_written, dest)
+    return [dest] if rows_written > 0 else []
