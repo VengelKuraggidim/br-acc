@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -74,6 +75,15 @@ _DOACOES_SSP_DATASET = "doacoes-recebidas-ssp"
 _PDF_HREF_RE = re.compile(
     r'href="(https?://[^"]*?[Ee]statistica[^"]*?\.pdf)"',
 )
+
+# Extrai o ano do nome do arquivo PDF (ex.: ``estatisticas_2024.pdf`` ou
+# ``Estatisticas-de-2025.pdf``) — usado pra casar snapshot_uri com a coluna
+# ``periodo`` das rows (``YYYY-MM``) na etapa de transform.
+_PDF_YEAR_RE = re.compile(r"(?:^|[_\-])(\d{4})(?=\.pdf$|[_\-])", re.IGNORECASE)
+# Fallback content-type: quando o servidor da SSP-GO não carimba
+# ``Content-Type`` na resposta, assumimos PDF — é o único tipo que o
+# fetch de PDFs trata. CSV tem seu próprio content_type vindo do CKAN.
+_PDF_CONTENT_TYPE = "application/pdf"
 
 
 def _extract_pdf_links(html: str) -> list[str]:
@@ -103,21 +113,59 @@ def _slug_from_pdf_url(url: str) -> str:
     return tail.lower()
 
 
+def _year_from_pdf_slug(slug: str) -> str | None:
+    """Return ``YYYY`` parsed from a PDF filename slug, or ``None``.
+
+    Usado pra mapear snapshot URIs (por PDF anual) pros rows do CSV de
+    ocorrências (chaveados por ``periodo = YYYY-MM``). Um match None
+    significa que o nome do PDF não tem ano reconhecível e, portanto,
+    nenhuma row será stampada a partir dele.
+    """
+    match = _PDF_YEAR_RE.search(slug)
+    return match.group(1) if match else None
+
+
 def _download_binary(
     client: httpx.Client,
     url: str,
     target: Path,
-) -> Path | None:
-    """Stream a URL to ``target``; return the path on success or ``None``."""
+    *,
+    run_id: str | None = None,
+    source_id: str | None = None,
+    default_content_type: str = _PDF_CONTENT_TYPE,
+) -> tuple[Path, str | None] | None:
+    """Stream a URL to ``target``; return ``(path, snapshot_uri)`` or ``None``.
+
+    Quando ``run_id`` e ``source_id`` são fornecidos, os bytes brutos
+    também são gravados via :func:`bracc_etl.archival.archive_fetch` e a
+    URI é devolvida. O download em disco é preservado (cache/debug);
+    archival é idempotente então não duplica o conteúdo.
+
+    Sem ``run_id``/``source_id`` o helper volta ao comportamento original
+    (apenas escreve em disco e devolve a URI como ``None``), preservando
+    o path do CLI ``fetch_to_disk`` onde archival não é necessária.
+    """
     try:
         resp = client.get(url)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning("[ssp_go] failed to download %s: %s", url, exc)
         return None
-    target.write_bytes(resp.content)
-    logger.info("[ssp_go] wrote %s (%d bytes)", target, len(resp.content))
-    return target
+    content = resp.content
+    target.write_bytes(content)
+    logger.info("[ssp_go] wrote %s (%d bytes)", target, len(content))
+
+    snapshot_uri: str | None = None
+    if run_id and source_id:
+        content_type = resp.headers.get("content-type", default_content_type)
+        snapshot_uri = archive_fetch(
+            url=url,
+            content=content,
+            content_type=content_type,
+            run_id=run_id,
+            source_id=source_id,
+        )
+    return target, snapshot_uri
 
 
 def _download_ckan_ssp_donations(
@@ -157,7 +205,13 @@ def _download_ckan_ssp_donations(
         return None
 
     target = output_dir / "doacoes_ssp.csv"
-    return _download_binary(client, csv_url, target)
+    result = _download_binary(
+        client, csv_url, target, default_content_type="text/csv",
+    )
+    if result is None:
+        return None
+    path, _uri = result
+    return path
 
 
 def fetch_to_disk(
@@ -216,7 +270,8 @@ def fetch_to_disk(
             target = output_dir / _slug_from_pdf_url(url)
             result = _download_binary(client, url, target)
             if result:
-                written.append(result)
+                path, _uri = result
+                written.append(path)
 
         # --- 2. CKAN donations CSV (single file, always attempted).
         donations = _download_ckan_ssp_donations(client, output_dir)
@@ -247,11 +302,26 @@ class SspGoPipeline(Pipeline):
         data_dir: str = "./data",
         limit: int | None = None,
         chunk_size: int = 50_000,
+        *,
+        archive_pdfs: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(driver, data_dir, limit=limit, chunk_size=chunk_size, **kwargs)
         self._raw_stats: pd.DataFrame = pd.DataFrame()
         self.stats: list[dict[str, Any]] = []
+        # Opt-out switch pro fetch online dos PDFs anuais. Fixtures
+        # offline (sem mock de HTTP) desativam via ``archive_pdfs=False``
+        # pra não hit network. Produção e testes com ``MockTransport``
+        # deixam ``True`` (default) — cada PDF baixado é persistido
+        # content-addressed via :func:`archive_fetch`.
+        self._archive_pdfs_enabled = archive_pdfs
+        # Mapa ``YYYY -> snapshot_uri`` alimentado pelo fetch online dos
+        # PDFs anuais do SSP-GO. ``transform`` usa pra carimbar
+        # ``source_snapshot_uri`` em cada row cujo ``periodo`` (formato
+        # ``YYYY-MM``) casa com um PDF arquivado. Vazio no caminho offline
+        # (fixture/local CSV sem HTTP) — consistente com o contrato
+        # opt-in do campo.
+        self._pdf_snapshot_uris: dict[str, str] = {}
 
     def _read_csv_optional(self, path: Path) -> pd.DataFrame:
         if not path.exists() or path.stat().st_size == 0:
@@ -275,6 +345,69 @@ class SspGoPipeline(Pipeline):
             logger.warning("[ssp_go] failed to read %s: %s", path, exc)
             return pd.DataFrame()
 
+    def _archive_pdf_bulletins_online(self) -> dict[str, str]:
+        """Baixa e arquiva os PDFs anuais de estatisticas (online-only).
+
+        Retorna ``{YYYY: snapshot_uri}`` — chave é o ano extraído do nome
+        do arquivo, valor é a URI relativa devolvida por
+        :func:`bracc_etl.archival.archive_fetch`. PDFs cujo nome não tem
+        ano reconhecível são arquivados mas ficam fora do dict (nenhuma
+        row consegue casar com eles via ``periodo``).
+
+        Falhas de HTTP são logadas e engolidas: o pipeline continua com
+        o CSV offline mesmo se o portal do SSP estiver fora do ar.
+        """
+        uris: dict[str, str] = {}
+        try:
+            with httpx.Client(timeout=60, follow_redirects=True) as client:
+                try:
+                    index = client.get(_ESTATISTICAS_INDEX_URL)
+                    index.raise_for_status()
+                    pdf_urls = _extract_pdf_links(index.text)
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "[ssp_go] could not fetch estatisticas index %s: %s",
+                        _ESTATISTICAS_INDEX_URL,
+                        exc,
+                    )
+                    return uris
+
+                if self.limit is not None and self.limit >= 0:
+                    pdf_urls = pdf_urls[: self.limit]
+
+                for url in pdf_urls:
+                    try:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                    except httpx.HTTPError as exc:
+                        logger.warning(
+                            "[ssp_go] failed to download %s: %s", url, exc,
+                        )
+                        continue
+                    content_type = resp.headers.get(
+                        "content-type", _PDF_CONTENT_TYPE,
+                    )
+                    uri = archive_fetch(
+                        url=url,
+                        content=resp.content,
+                        content_type=content_type,
+                        run_id=self.run_id,
+                        source_id=self.source_id,
+                    )
+                    slug = _slug_from_pdf_url(url)
+                    year = _year_from_pdf_slug(slug)
+                    if year is not None:
+                        # PDFs mais recentes sobrescrevem os antigos pra
+                        # um mesmo ano — consistente com a ordem "newest
+                        # first" do índice HTML.
+                        uris.setdefault(year, uri)
+                    logger.info(
+                        "[ssp_go] archived PDF %s -> %s", slug, uri,
+                    )
+        except httpx.HTTPError as exc:
+            logger.warning("[ssp_go] online archival aborted: %s", exc)
+        return uris
+
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "ssp_go"
         if not src_dir.exists():
@@ -288,6 +421,16 @@ class SspGoPipeline(Pipeline):
         if self.limit:
             self._raw_stats = self._raw_stats.head(self.limit)
         self.rows_in = len(self._raw_stats)
+
+        # Online archival dos PDFs anuais do SSP. Rodando produção com
+        # ``archive_pdfs=True`` (default), tenta scrape do índice HTML +
+        # download de cada PDF pra gerar snapshot via
+        # :func:`archive_fetch`. Falhas de HTTP são absorvidas — se o
+        # portal estiver fora, o dict fica vazio e rows não ganham
+        # ``source_snapshot_uri`` (opt-in preservado). Testes offline
+        # passam ``archive_pdfs=False`` pra evitar network.
+        if self._archive_pdfs_enabled:
+            self._pdf_snapshot_uris = self._archive_pdf_bulletins_online()
 
     def transform(self) -> None:
         for _, row in self._raw_stats.iterrows():
@@ -310,6 +453,14 @@ class SspGoPipeline(Pipeline):
                 continue
             stat_id = _hash_id(cod_ibge, municipio, crime_type, periodo)
             stat_record_id = f"{cod_ibge}|{crime_type}|{periodo}"
+            # Resolve snapshot URI pela coluna ``periodo``: o bulletin do
+            # SSP é anual, então usamos o prefixo ``YYYY`` pra casar com
+            # o PDF arquivado. Sem PDF pro ano da row → ``None`` →
+            # ``attach_provenance`` não injeta a chave (opt-in).
+            snapshot_uri: str | None = None
+            if self._pdf_snapshot_uris and periodo:
+                year_prefix = str(periodo)[:4]
+                snapshot_uri = self._pdf_snapshot_uris.get(year_prefix)
             self.stats.append(self.attach_provenance(
                 {
                     "stat_id": stat_id,
@@ -322,6 +473,7 @@ class SspGoPipeline(Pipeline):
                     "source": "ssp_go",
                 },
                 record_id=stat_record_id,
+                snapshot_uri=snapshot_uri,
             ))
 
         self.stats = deduplicate_rows(self.stats, ["stat_id"])
