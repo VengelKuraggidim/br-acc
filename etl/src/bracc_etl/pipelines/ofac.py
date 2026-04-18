@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -17,6 +18,87 @@ from bracc_etl.transforms import (
 )
 
 logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------
+# Module-level constants + fetch_to_disk (public bulk download).
+# --------------------------------------------------------------------------
+#
+# The US Treasury OFAC Specially Designated Nationals list is published as
+# a header-less CSV at a legacy URL that 302-redirects to the current
+# sanctionslistservice.ofac.treas.gov endpoint. No authentication required.
+#
+# Primary URL (redirects to the live export):
+#   https://www.treasury.gov/ofac/downloads/sdn.csv
+# Authoritative (post-redirect) endpoint:
+#   https://sanctionslistservice.ofac.treas.gov/api/publicationpreview/exports/sdn.csv
+#
+# The file is ~7-10 MB (~11k rows) and has no header row; OfacPipeline
+# assigns column names positionally from SDN_COLUMNS above.
+
+OFAC_SDN_URL = "https://www.treasury.gov/ofac/downloads/sdn.csv"
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    limit: int | None = None,
+    url: str = OFAC_SDN_URL,
+    timeout: float = 120.0,
+) -> list[Path]:
+    """Download the OFAC SDN CSV to ``output_dir/sdn.csv``.
+
+    The file is header-less; OfacPipeline.extract() reads it with
+    positional column names from SDN_COLUMNS. fetch_to_disk therefore
+    preserves the raw bytes when possible, and only rewrites the file
+    line-by-line when ``limit`` is set (to preserve the header-less
+    layout exactly).
+
+    Parameters
+    ----------
+    output_dir:
+        Destination directory. Created if missing.
+    limit:
+        If set, truncate the downloaded CSV to the first N data lines.
+        Useful for smoke tests.
+    url:
+        Override the source URL (default: OFAC_SDN_URL).
+    timeout:
+        HTTP timeout in seconds.
+
+    Returns
+    -------
+    List with the absolute path of the CSV written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    csv_path = output_dir / "sdn.csv"
+
+    logger.info("[ofac.fetch_to_disk] GET %s", url)
+    with httpx.Client(
+        follow_redirects=True,
+        headers={"User-Agent": "br-acc/bracc-etl download_ofac (httpx)"},
+    ) as client:
+        resp = client.get(url, timeout=timeout)
+        resp.raise_for_status()
+        body = resp.content
+
+    if limit is not None:
+        # SDN is header-less, so the first `limit` lines ARE data rows.
+        text = body.decode("latin-1", errors="replace")
+        lines = text.splitlines(keepends=True)
+        kept = "".join(lines[:limit])
+        csv_path.write_bytes(kept.encode("latin-1", errors="replace"))
+        logger.info(
+            "[ofac.fetch_to_disk] wrote %d lines (limit=%d) to %s",
+            min(len(lines), limit), limit, csv_path,
+        )
+    else:
+        csv_path.write_bytes(body)
+        logger.info(
+            "[ofac.fetch_to_disk] wrote %d bytes to %s", len(body), csv_path,
+        )
+
+    return [csv_path.resolve()]
 
 # OFAC SDN CSV has no header row. Column names assigned positionally.
 SDN_COLUMNS = [

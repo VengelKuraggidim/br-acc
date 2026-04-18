@@ -185,12 +185,15 @@
     },
     {
       "pipeline_id": "eu_sanctions",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/eu_sanctions/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_eu_sanctions.py --output-dir ../data/eu_sanctions"
+      ]
     },
     {
       "pipeline_id": "folha_go",
@@ -215,12 +218,15 @@
     },
     {
       "pipeline_id": "ibama",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/ibama/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_ibama.py --output-dir ../data/ibama"
+      ]
     },
     {
       "pipeline_id": "icij",
@@ -263,30 +269,39 @@
     },
     {
       "pipeline_id": "ofac",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/ofac/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_ofac.py --output-dir ../data/ofac"
+      ]
     },
     {
       "pipeline_id": "opensanctions",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/opensanctions/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_opensanctions.py --output-dir ../data/opensanctions"
+      ]
     },
     {
       "pipeline_id": "pep_cgu",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/pep_cgu/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_pep_cgu.py --output-dir ../data/pep_cgu"
+      ]
     },
     {
       "pipeline_id": "pgfn",
@@ -530,12 +545,15 @@
     },
     {
       "pipeline_id": "un_sanctions",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/un_sanctions/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_un_sanctions.py --output-dir ../data/un_sanctions"
+      ]
     },
     {
       "pipeline_id": "viagens",

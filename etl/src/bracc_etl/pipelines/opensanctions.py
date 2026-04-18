@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
+
 from bracc_etl.base import Pipeline
 
 if TYPE_CHECKING:
@@ -18,6 +20,134 @@ from bracc_etl.transforms import (
 )
 
 logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------
+# Module-level constants + fetch_to_disk (public bulk download).
+# --------------------------------------------------------------------------
+#
+# OpenSanctions publishes its collections as FollowTheMoney JSONL bulk
+# feeds under https://data.opensanctions.org/datasets/latest/<dataset>/.
+# No authentication required.
+#
+# The `default` collection aggregates every dataset (~2.7 GB) and is too
+# heavy to ship in a smoke-test / demo bootstrap. Since OpenSanctionsPipeline
+# hard-filters to Brazilian-connected entities (_is_brazilian_entity), the
+# pragmatic default for the br/acc fork is the Brazil-scoped `br_pep`
+# dataset (~110 MB, 250k entities). Callers can override with --dataset
+# to pull any other OpenSanctions collection (e.g. `peps`, `sanctions`,
+# `default`).
+
+OPENSANCTIONS_BASE = "https://data.opensanctions.org/datasets/latest"
+OPENSANCTIONS_DEFAULT_DATASET = "br_pep"
+# Upper bound on entities written when caller passes no explicit --limit.
+# Keeps smoke-runs snappy while still exercising the FtM JSONL parser at
+# realistic volume; operators who want the full dataset pass --limit 0.
+OPENSANCTIONS_DEFAULT_LIMIT = 50_000
+
+
+def _dataset_ftm_url(dataset: str, base: str = OPENSANCTIONS_BASE) -> str:
+    return f"{base}/{dataset}/entities.ftm.json"
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    dataset: str = OPENSANCTIONS_DEFAULT_DATASET,
+    limit: int | None = OPENSANCTIONS_DEFAULT_LIMIT,
+    url: str | None = None,
+    timeout: float = 300.0,
+    base: str = OPENSANCTIONS_BASE,
+) -> list[Path]:
+    """Download OpenSanctions FtM JSONL to ``output_dir/entities.ftm.json``.
+
+    OpenSanctionsPipeline.extract() reads one JSON object per line, so
+    the file is streamed line-by-line; a ``limit`` caps the number of
+    lines kept (applied before any entity-level filtering so caller
+    always sees deterministic byte counts).
+
+    Parameters
+    ----------
+    output_dir:
+        Destination directory. Created if missing.
+    dataset:
+        OpenSanctions dataset slug. Defaults to ``br_pep`` (Brazilian
+        PEPs only, ~110 MB) since the pipeline discards non-Brazilian
+        entities. Pass ``default``, ``peps``, etc. for wider scopes.
+    limit:
+        Max number of JSONL lines to write. ``None`` or ``0`` keeps the
+        full stream (multi-GB for the aggregate ``default`` dataset).
+        Defaults to 50 000 lines — enough to smoke-test the pipeline
+        while keeping disk/network modest.
+    url:
+        Explicit URL override. When set, supersedes ``dataset`` / ``base``.
+    timeout:
+        HTTP timeout in seconds.
+    base:
+        Override OpenSanctions base URL (default: OPENSANCTIONS_BASE).
+
+    Returns
+    -------
+    List with the absolute path of the JSONL file written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    ftm_path = output_dir / "entities.ftm.json"
+    source_url = url or _dataset_ftm_url(dataset, base=base)
+
+    # Treat 0 / negative limit as "no cap" for CLI ergonomics.
+    effective_limit: int | None = limit if limit and limit > 0 else None
+
+    logger.info(
+        "[opensanctions.fetch_to_disk] GET %s (dataset=%s, limit=%s)",
+        source_url, dataset, effective_limit,
+    )
+
+    written_lines = 0
+    bytes_written = 0
+    with httpx.Client(
+        follow_redirects=True,
+        headers={"User-Agent": "br-acc/bracc-etl download_opensanctions (httpx)"},
+    ) as client, client.stream("GET", source_url, timeout=timeout) as resp:
+        resp.raise_for_status()
+        with open(ftm_path, "wb") as fh:
+            buf = b""
+            done = False
+            for chunk in resp.iter_bytes(chunk_size=65_536):
+                if not chunk:
+                    continue
+                buf += chunk
+                # Only split on newlines so partial JSON objects never hit disk.
+                while True:
+                    nl = buf.find(b"\n")
+                    if nl < 0:
+                        break
+                    line = buf[: nl + 1]
+                    buf = buf[nl + 1 :]
+                    fh.write(line)
+                    bytes_written += len(line)
+                    written_lines += 1
+                    if (
+                        effective_limit is not None
+                        and written_lines >= effective_limit
+                    ):
+                        done = True
+                        break
+                if done:
+                    break
+            # Flush any trailing partial line only when we are NOT in limit
+            # mode — a half-line would break JSONL parsing downstream.
+            if not done and buf:
+                fh.write(buf)
+                bytes_written += len(buf)
+                if not buf.endswith(b"\n"):
+                    written_lines += 1
+
+    logger.info(
+        "[opensanctions.fetch_to_disk] wrote %d lines (%d bytes) to %s",
+        written_lines, bytes_written, ftm_path,
+    )
+
+    return [ftm_path.resolve()]
 
 # Brazilian-related terms for filtering
 BRAZIL_COUNTRY_CODES = {"br", "bra", "brazil", "brasil"}

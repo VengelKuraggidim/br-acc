@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -18,6 +19,111 @@ from bracc_etl.transforms import (
 )
 
 logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------
+# Module-level constants + fetch_to_disk (public bulk feed, token-gated).
+# --------------------------------------------------------------------------
+#
+# The EU Financial Sanctions Database (FSD) publishes the consolidated
+# list via a public download endpoint that requires a static query-string
+# token (``dG9rZW4tMjAxNw``). The token is publicly documented on the
+# EEAS "Consolidated list of financial sanctions" page and has been the
+# same since 2017 — there is no rotation.
+#
+# Two formats are published under the same token:
+#   * CSV — ``csvFullSanctionsList/content`` — ``;`` delimited, UTF-8
+#     with BOM, one row per (entity x alias) pair. Matches the "new EU
+#     consolidated format" branch in :meth:`EuSanctionsPipeline.transform`
+#     (columns ``Naal_wholename``, ``Subject_type``, ``Programme``,
+#     ``Entity_logical_id``, ``Leba_publication_date``, ``Entity_remark``).
+#   * XML — ``xmlFullSanctionsList_1_1/content`` — structured, richer;
+#     kept verbatim as an audit artefact only.
+#
+# ``EuSanctionsPipeline.extract()`` reads ``eu_sanctions.csv`` directly,
+# so ``fetch_to_disk`` writes exactly that file plus the raw XML for
+# traceability.
+
+EU_PUBLIC_TOKEN = "dG9rZW4tMjAxNw"
+EU_FSD_CSV_URL = (
+    "https://webgate.ec.europa.eu/fsd/fsf/public/files/"
+    f"csvFullSanctionsList/content?token={EU_PUBLIC_TOKEN}"
+)
+EU_FSD_XML_URL = (
+    "https://webgate.ec.europa.eu/fsd/fsf/public/files/"
+    f"xmlFullSanctionsList_1_1/content?token={EU_PUBLIC_TOKEN}"
+)
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    csv_url: str = EU_FSD_CSV_URL,
+    xml_url: str | None = EU_FSD_XML_URL,
+    timeout: float = 120.0,
+) -> list[Path]:
+    """Download the EU consolidated sanctions list (CSV + XML).
+
+    Writes to ``output_dir``:
+
+    * ``eu_sanctions.csv`` — the primary file consumed by
+      :class:`EuSanctionsPipeline`. ``;`` delimited, UTF-8 with BOM,
+      matching the legacy file-manifest drop.
+    * ``eu_sanctions.xml`` — raw structured XML (audit copy; skipped
+      when ``xml_url`` is None).
+
+    Parameters
+    ----------
+    output_dir:
+        Destination. Created if missing.
+    csv_url:
+        Override for the upstream CSV endpoint. Must include the public
+        ``token=`` query string; the FSD gateway returns 403 without it.
+    xml_url:
+        Override for the upstream XML endpoint. Pass ``None`` to skip
+        the XML download (useful in smoke tests where the extra ~24 MB
+        is wasted bandwidth).
+    timeout:
+        httpx request timeout in seconds. The full CSV is ~18 MB.
+
+    Returns
+    -------
+    List of absolute paths written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    written: list[Path] = []
+    with httpx.Client(
+        follow_redirects=True,
+        headers={
+            "User-Agent": "br-acc/bracc-etl download_eu_sanctions (httpx)",
+        },
+    ) as client:
+        logger.info("[eu_sanctions.fetch_to_disk] GET %s", csv_url)
+        resp = client.get(csv_url, timeout=timeout)
+        resp.raise_for_status()
+        csv_bytes = resp.content
+        csv_path = output_dir / "eu_sanctions.csv"
+        csv_path.write_bytes(csv_bytes)
+        written.append(csv_path.resolve())
+        logger.info(
+            "[eu_sanctions.fetch_to_disk] wrote %s (%d bytes)",
+            csv_path, len(csv_bytes),
+        )
+
+        if xml_url:
+            logger.info("[eu_sanctions.fetch_to_disk] GET %s", xml_url)
+            resp_xml = client.get(xml_url, timeout=timeout)
+            resp_xml.raise_for_status()
+            xml_bytes = resp_xml.content
+            xml_path = output_dir / "eu_sanctions.xml"
+            xml_path.write_bytes(xml_bytes)
+            written.append(xml_path.resolve())
+            logger.info(
+                "[eu_sanctions.fetch_to_disk] wrote %s (%d bytes)",
+                xml_path, len(xml_bytes),
+            )
+
+    return written
 
 # EU subject types we care about (full word or single-letter code)
 EU_TYPE_PERSON = "person"
