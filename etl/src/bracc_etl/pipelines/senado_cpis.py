@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import csv
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import defusedxml.ElementTree as ET  # type: ignore[import-untyped]  # noqa: N817
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -55,6 +59,333 @@ def _temporal_status(event_date: str, start_date: str, end_date: str) -> str:
     if end_date and event_date > end_date:
         return "invalid"
     return "valid"
+
+
+# --------------------------------------------------------------------------
+# fetch_to_disk — Senado Open Data (unauthenticated XML endpoints).
+# --------------------------------------------------------------------------
+# Active-commission coverage comes from
+# ``https://legis.senado.leg.br/dadosabertos/comissao/lista/{CPI|CPMI}``
+# (returns XML). For each commission, per-sigla requirements live at
+# ``/comissao/cpi/{sigla}/requerimentos`` (returns JSON). Historical
+# (pre-Open-Data) commissions need the PDF archive path implemented in
+# ``etl/scripts/download_senado_cpi_archive.py`` — that remains a separate
+# CLI because it requires optional PDF-parsing deps and is brittle enough
+# that a smoke run shouldn't depend on it. This helper covers the
+# always-available, credential-free slice; operators who want the 1946-2015
+# archive run the archive CLI in addition.
+
+_SENADO_OPEN_DATA = "https://legis.senado.leg.br/dadosabertos"
+_SENADO_HTTP_TIMEOUT = 60.0
+_SENADO_REQ_PAGE_SIZE = 20  # endpoint rejects larger values
+
+
+def _senado_slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "unknown"
+
+
+def _senado_make_inquiry_id(kind: str, code: str, sigla: str, name: str) -> str:
+    anchor = sigla or code or name
+    return f"senado-{_senado_slugify(kind)}-{_senado_slugify(anchor)}"
+
+
+def _senado_parse_date(value: str) -> str:
+    raw = value.strip()
+    if not raw:
+        return ""
+    if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+        return raw[:10]
+    if len(raw) >= 10 and raw[2] == "/" and raw[5] == "/":
+        try:
+            import datetime as _dt
+            return _dt.datetime.strptime(raw[:10], "%d/%m/%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            return ""
+    return ""
+
+
+def _senado_text(node: Any) -> str:
+    if node is None:
+        return ""
+    text = getattr(node, "text", "")
+    return (text or "").strip()
+
+
+def _senado_dedupe(
+    rows: list[dict[str, Any]], key: str,
+) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        value = str(row.get(key, "")).strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(row)
+    return out
+
+
+def _senado_fetch_active_inquiries(
+    client: httpx.Client,
+    timeout: float,
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Parse the CPI/CPMI active-commission XML endpoint.
+
+    Returns (inquiry rows, sigla -> inquiry_id map).
+    """
+    inquiries: list[dict[str, Any]] = []
+    sigla_to_inquiry_id: dict[str, str] = {}
+
+    for kind in ("CPI", "CPMI"):
+        url = f"{_SENADO_OPEN_DATA}/comissao/lista/{kind}"
+        try:
+            resp = client.get(url, timeout=timeout)
+            resp.raise_for_status()
+            raw = resp.content
+            xml_start = raw.find(b"<")
+            if xml_start > 0:
+                raw = raw[xml_start:]
+            root = ET.fromstring(raw)
+        except (httpx.HTTPError, ET.ParseError) as exc:
+            logger.warning(
+                "[senado_cpis] active-inquiries endpoint failed for kind=%s: %s",
+                kind, exc,
+            )
+            continue
+
+        colegiados = root.findall(".//Colegiado") + root.findall(".//colegiado")
+        for com in colegiados:
+            code = _senado_text(com.find("CodigoColegiado")) or _senado_text(
+                com.find("Codigo"),
+            )
+            sigla = _senado_text(com.find("SiglaColegiado")) or _senado_text(
+                com.find("Sigla"),
+            )
+            name = _senado_text(com.find("NomeColegiado")) or _senado_text(
+                com.find("Nome"),
+            )
+            if not name:
+                continue
+
+            inquiry_id = _senado_make_inquiry_id(kind, code, sigla, name)
+            if sigla:
+                sigla_to_inquiry_id[sigla.upper()] = inquiry_id
+
+            inquiries.append({
+                "inquiry_id": inquiry_id,
+                "inquiry_code": code or sigla,
+                "name": name,
+                "kind": kind,
+                "house": "congresso" if kind == "CPMI" else "senado",
+                "status": "em atividade",
+                "subject": (
+                    _senado_text(com.find("TextoFinalidade"))
+                    or _senado_text(com.find("DescricaoSubtitulo"))
+                ),
+                "date_start": _senado_parse_date(
+                    _senado_text(com.find("DataInicio")),
+                ),
+                "date_end": _senado_parse_date(_senado_text(com.find("DataFim"))),
+                "source_url": url,
+                "source_system": "senado_open_data",
+                "extraction_method": "comissao_lista_tipo",
+                "source_ref": sigla or code,
+                "date_precision": "day",
+            })
+
+    return _senado_dedupe(inquiries, "inquiry_id"), sigla_to_inquiry_id
+
+
+def _senado_fetch_requirements_for_sigla(
+    client: httpx.Client,
+    sigla: str,
+    inquiry_id: str,
+    max_pages: int,
+    run_id: str,
+    timeout: float,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    endpoint = f"{_SENADO_OPEN_DATA}/comissao/cpi/{sigla}/requerimentos"
+
+    for page in range(max_pages):
+        params = {"pagina": page, "tamanho": _SENADO_REQ_PAGE_SIZE}
+        try:
+            resp = client.get(endpoint, params=params, timeout=timeout)
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "[senado_cpis] requerimentos endpoint failed sigla=%s: %s",
+                sigla, exc,
+            )
+            break
+        if resp.status_code in (400, 404):
+            break
+        if resp.status_code != 200 or not resp.content.strip():
+            break
+        try:
+            payload = resp.json()
+        except ValueError:
+            logger.warning(
+                "[senado_cpis] non-JSON requirements page sigla=%s page=%d",
+                sigla, page,
+            )
+            break
+        if not isinstance(payload, list) or not payload:
+            break
+
+        for req in payload:
+            if not isinstance(req, dict):
+                continue
+            code = str(req.get("codigo", "")).strip()
+            number = str(req.get("numero", "")).strip()
+            year = str(req.get("ano", "")).strip()
+            requirement_id = (
+                f"senado-req-{_senado_slugify(sigla)}-{_senado_slugify(number)}-"
+                f"{year or 'na'}-{code or 'na'}"
+            )
+            author_raw = req.get("autor")
+            author_obj: dict[str, Any] = author_raw if isinstance(author_raw, dict) else {}
+            author_name = (
+                str(author_obj.get("nomeParlamentar", "")).strip()
+                or str(author_obj.get("nome", "")).strip()
+                or str(req.get("autoria", "")).strip()
+            )
+            doc_raw = req.get("documento")
+            doc_obj: dict[str, Any] = doc_raw if isinstance(doc_raw, dict) else {}
+            source_ref = str(doc_obj.get("linkDownload", "")).strip() if doc_obj else ""
+            date_value = _senado_parse_date(
+                str(req.get("dataApresentacao", "")).strip()
+                or str(req.get("dataApreciacao", "")).strip(),
+            )
+            rows.append({
+                "requirement_id": requirement_id,
+                "inquiry_id": inquiry_id,
+                "type": str(req.get("tipoRequerimento", "")).strip() or "REQUERIMENTO",
+                "date": date_value,
+                "text": (
+                    str(req.get("ementa", "")).strip()
+                    or str(req.get("assunto", "")).strip()
+                ),
+                "status": str(req.get("situacao", "")).strip(),
+                "author_name": author_name,
+                "author_cpf": "",
+                "source_url": source_ref or endpoint,
+                "source_system": "senado_open_data",
+                "extraction_method": "comissao_cpi_requerimentos",
+                "source_ref": code or number or sigla,
+                "date_precision": "day" if date_value else "unknown",
+                "run_id": run_id,
+            })
+
+        if len(payload) < _SENADO_REQ_PAGE_SIZE:
+            break
+
+    return rows
+
+
+def _senado_write_csv(path: Path, rows: list[dict[str, Any]]) -> Path:
+    """Write ``rows`` to ``path`` matching SenadoCpisPipeline reader layout."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return path
+    fieldnames: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                seen.add(key)
+                fieldnames.append(key)
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    *,
+    date: str | None = None,  # noqa: ARG001 (unused — contract signature parity)
+    limit: int | None = None,
+    max_pages: int = 20,
+    timeout: float = _SENADO_HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download Senate CPI/CPMI metadata + requirements to ``output_dir``.
+
+    Writes the canonical files consumed by ``SenadoCpisPipeline.extract``:
+
+    * ``inquiries.csv`` — active CPIs/CPMIs from
+      ``/dadosabertos/comissao/lista/{CPI|CPMI}``.
+    * ``requirements.csv`` — per-sigla requirements from
+      ``/comissao/cpi/{sigla}/requerimentos``.
+    * ``sessions.csv`` — empty from this endpoint set (no reunião metadata
+      exposed; historical sessions require the archive PDF path).
+    * ``members.csv`` — empty (members appear in the richer BigQuery
+      ``br_senado_federal_dados_abertos`` dataset, not Open Data).
+    * ``history_sources.csv`` — empty (populated by the archive CLI when
+      the operator runs it in addition).
+
+    The empty CSVs are still written so the pipeline's ``_read_csv_optional``
+    sees consistent paths and downstream presence checks pass.
+
+    Args:
+        output_dir: Directory to write the CSVs into. Created if missing.
+        date: Accepted for signature parity; the Senado registry is
+            cumulative (no date-window filter).
+        limit: Optional cap on the number of commissions probed for
+            requirements (useful for smoke tests). ``None`` = all.
+        max_pages: Per-sigla pagination ceiling for requirements
+            (``REQ_PAGE_SIZE``=20 per page).
+        timeout: Per-request HTTP timeout in seconds.
+
+    Returns:
+        Sorted list of files written (5 entries, some may be empty).
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    run_id = f"senado_cpis_{pd.Timestamp.utcnow().strftime('%Y%m%d%H%M%S')}"
+
+    inquiries: list[dict[str, Any]] = []
+    requirements: list[dict[str, Any]] = []
+
+    with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+        inquiries, sigla_map = _senado_fetch_active_inquiries(
+            client=client, timeout=timeout,
+        )
+
+        iterator: list[tuple[str, str]] = sorted(sigla_map.items())
+        if limit is not None:
+            iterator = iterator[:limit]
+
+        for sigla, inquiry_id in iterator:
+            requirements.extend(
+                _senado_fetch_requirements_for_sigla(
+                    client=client,
+                    sigla=sigla,
+                    inquiry_id=inquiry_id,
+                    max_pages=max_pages,
+                    run_id=run_id,
+                    timeout=timeout,
+                ),
+            )
+
+    requirements = _senado_dedupe(requirements, "requirement_id")
+
+    written = [
+        _senado_write_csv(output_path / "inquiries.csv", inquiries),
+        _senado_write_csv(output_path / "requirements.csv", requirements),
+        _senado_write_csv(output_path / "sessions.csv", []),
+        _senado_write_csv(output_path / "members.csv", []),
+        _senado_write_csv(output_path / "history_sources.csv", []),
+    ]
+
+    logger.info(
+        "[senado_cpis] fetch_to_disk wrote %d inquiries, %d requirements "
+        "(sessions/members/history_sources empty — archive CLI needed for "
+        "historical PDF coverage)",
+        len(inquiries), len(requirements),
+    )
+    return sorted(written)
 
 
 class SenadoCpisPipeline(Pipeline):
