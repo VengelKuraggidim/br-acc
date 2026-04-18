@@ -69,10 +69,24 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 
+_cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+# Match any localhost/127.0.0.1 dev origin (common when opening pwa/index.html
+# from a local static server or the dev `uvicorn` host). The regex avoids
+# having to enumerate every dev port explicitly while still rejecting
+# arbitrary public origins.
+_cors_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+# `allow_credentials=True` requires a specific list (spec forbids `*`), but
+# the bracc API does not rely on cookies for the PWA flow — the PWA fetches
+# public `/status`, `/buscar-tudo`, `/politico/{id}` without credentials. If
+# the operator explicitly opts into credential-bearing CORS by listing origins
+# we preserve that; otherwise we allow credentials off so `CORS_ORIGINS=*`
+# works (used by the container compose for dev).
+_cors_allow_credentials = _cors_origins != ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_origin_regex=_cors_origin_regex,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
