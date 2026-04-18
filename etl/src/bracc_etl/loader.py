@@ -119,6 +119,11 @@ class Neo4jBatchLoader:
         rows = [r for r in rows if r.get("source_key") and r.get("target_key")]
         enforce_provenance(rows, context=f"relationships:{rel_type}")
         all_properties = list(properties or [])
+        # Auto-propaga os campos de proveniência presentes no primeiro row.
+        # Inclui o opt-in ``source_snapshot_uri`` quando o pipeline passou
+        # ``snapshot_uri=`` pra ``attach_provenance`` (ver docs/archival.md).
+        # Pipelines legados sem snapshot simplesmente não têm a chave no
+        # row, então o campo fica ausente do SET — nenhum NULL escrito.
         if rows:
             for field in PROVENANCE_FIELDS:
                 if field in rows[0] and field not in all_properties:

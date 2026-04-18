@@ -265,3 +265,53 @@ class TestLoaderIntegration:
         loader.load_relationships("REL", rows, "A", "id", "B", "id")
         query = session.run.call_args[0][0]
         assert "r.source_id = row.source_id" in query
+
+    def test_load_relationships_propagates_source_snapshot_uri_when_present(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Pipelines novos que chamam attach_provenance(snapshot_uri=...) colocam
+        # source_snapshot_uri no row. O loader auto-propaga via PROVENANCE_FIELDS.
+        monkeypatch.setenv("BRACC_PROVENANCE_MODE", "strict")
+        loader, session = self._make_loader()
+        rows = [
+            self._stamped_row(
+                source_key="1",
+                target_key="2",
+                source_snapshot_uri="folha_go/2026-04/abc123def456.csv",
+            ),
+        ]
+        loader.load_relationships("REL", rows, "A", "id", "B", "id")
+        query = session.run.call_args[0][0]
+        assert "r.source_snapshot_uri = row.source_snapshot_uri" in query
+
+    def test_load_relationships_omits_source_snapshot_uri_for_legacy(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Pipelines legados: nenhum row tem source_snapshot_uri. O loader
+        # NÃO deve escrever r.source_snapshot_uri = row.source_snapshot_uri
+        # (geraria NULL no grafo).
+        monkeypatch.setenv("BRACC_PROVENANCE_MODE", "strict")
+        loader, session = self._make_loader()
+        rows = [self._stamped_row(source_key="1", target_key="2")]
+        loader.load_relationships("REL", rows, "A", "id", "B", "id")
+        query = session.run.call_args[0][0]
+        assert "source_snapshot_uri" not in query
+
+    def test_load_nodes_propagates_source_snapshot_uri_when_present(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # load_nodes discover keys via rows[r].keys() union, so snapshot URI
+        # é automaticamente emitido como propriedade quando presente.
+        monkeypatch.setenv("BRACC_PROVENANCE_MODE", "strict")
+        loader, session = self._make_loader()
+        rows = [
+            self._stamped_row(
+                cnpj="1",
+                name="A",
+                source_snapshot_uri="pncp_go/2026-04/feedface0001.json",
+            ),
+        ]
+        count = loader.load_nodes("Company", rows, "cnpj")
+        assert count == 1
+        query = session.run.call_args[0][0]
+        assert "n.source_snapshot_uri = row.source_snapshot_uri" in query
