@@ -17,6 +17,24 @@ from bracc_etl.transforms import deduplicate_rows, normalize_name
 
 logger = logging.getLogger(__name__)
 
+# Base dos Dados mirror of the STJ "Corte Aberta" decisions table.
+# Ingestion requires an authenticated GCP billing project — this is a hard
+# external requirement (not a bypassable paywall), so fetch_to_disk fails
+# open (returns []) when no project is available, letting public-mode
+# bootstrap skip gracefully.
+_BQ_TABLE = "basedosdados.br_stj_corte_aberta.decisoes"
+_BQ_COLUMNS = (
+    "ano",
+    "classe",
+    "numero",
+    "relator",
+    "tipo_decisao",
+    "data_decisao",
+    "assunto",
+    "uf_origem",
+)
+_BQ_PAGE_SIZE = 100_000
+
 
 def _generate_case_id(
     case_class: str, case_number: str, year: str,
@@ -149,3 +167,85 @@ class StjPipeline(Pipeline):
             loader.run_query_with_retry(
                 query, self.rapporteur_rels,
             )
+
+
+# ────────────────────────────────────────────────────────────────────
+# Acquisition helper — Base dos Dados (BigQuery) export to CSV
+# ────────────────────────────────────────────────────────────────────
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    *,
+    billing_project: str | None = None,
+    date: str | None = None,  # noqa: ARG001 — accepted for bootstrap symmetry
+    skip_existing: bool = True,
+) -> list[Path]:
+    """Download STJ decisions from Base dos Dados to
+    ``<output_dir>/decisoes.csv``.
+
+    Requires ``billing_project``. The STJ "Dados Abertos" portal publishes a
+    mixture of statistics PDFs and ad-hoc CSV snapshots whose schema shifts
+    between releases; the stable, column-consistent open source for the
+    decisions table consumed by ``StjPipeline`` is Base dos Dados' mirror on
+    BigQuery (``basedosdados.br_stj_corte_aberta.decisoes``). Without a
+    billing project the helper logs a clear skip message and returns ``[]``
+    so the bootstrap contract can proceed in public mode.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / "decisoes.csv"
+
+    if skip_existing and dest.exists() and dest.stat().st_size > 0:
+        logger.info("[stj_dados_abertos] skipping (exists): %s", dest)
+        return [dest]
+
+    if not billing_project:
+        logger.warning(
+            "[stj_dados_abertos] no --billing-project provided; STJ "
+            "decisions are only available (in a stable column-consistent "
+            "form) via Base dos Dados on BigQuery. Skipping. To ingest, "
+            "rerun with --billing-project <gcp-project-id>.",
+        )
+        return []
+
+    try:
+        from google.cloud import bigquery  # type: ignore[import-not-found]
+    except ImportError:
+        logger.warning(
+            "[stj_dados_abertos] google-cloud-bigquery not installed; "
+            "`pip install '.[bigquery]'` (in etl/) and pass --billing-project.",
+        )
+        return []
+
+    client = bigquery.Client(project=billing_project)
+    schema_fields = [bigquery.SchemaField(c, "STRING") for c in _BQ_COLUMNS]
+
+    logger.info(
+        "[stj_dados_abertos] streaming %s (%d columns, page_size=%d) -> %s",
+        _BQ_TABLE,
+        len(_BQ_COLUMNS),
+        _BQ_PAGE_SIZE,
+        dest,
+    )
+
+    if dest.exists():
+        dest.unlink()
+    rows_written = 0
+    for i, chunk_df in enumerate(
+        client.list_rows(
+            _BQ_TABLE,
+            selected_fields=schema_fields,
+            page_size=_BQ_PAGE_SIZE,
+        ).to_dataframe_iterable(),
+    ):
+        chunk_df.to_csv(dest, mode="a", header=(i == 0), index=False)
+        rows_written += len(chunk_df)
+        if i == 0 or rows_written % (_BQ_PAGE_SIZE * 5) == 0:
+            logger.info(
+                "[stj_dados_abertos]   rows written: %d", rows_written,
+            )
+
+    logger.info(
+        "[stj_dados_abertos] wrote %d rows → %s", rows_written, dest,
+    )
+    return [dest] if rows_written > 0 else []
