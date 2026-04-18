@@ -13,8 +13,12 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import httpx
 
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
@@ -30,6 +34,23 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
+
+# PNCP public consulta API — same base used by pncp_go but without the
+# UF filter so we cover every government level (federal/estadual/municipal).
+_PNCP_API_BASE = "https://pncp.gov.br/api/consulta/v1/"
+# tamanhoPagina: API rejects values < 10 and caps at ~500 in practice.
+# 50 keeps response payloads manageable while still being efficient.
+_PNCP_PAGE_SIZE = 50
+# API rejects date ranges > 365 days with HTTP 422.
+_PNCP_WINDOW_DAYS = 365
+_PNCP_HTTP_TIMEOUT = 60
+_PNCP_RATE_LIMIT_SLEEP = 0.3
+# Two retries — beyond that the modalidade is likely silently failing.
+_PNCP_MAX_RETRIES = 2
+_PNCP_RETRY_BACKOFF = 3.0
+# Skip the rest of a modalidade if the same window times out twice; the
+# server tends to stall instead of returning HTTP 0.
+_PNCP_SKIP_MODALIDADE_AFTER_TIMEOUT = True
 
 # PNCP modalidade IDs to human-readable labels
 _MODALIDADE_MAP: dict[int, str] = {
@@ -54,6 +75,249 @@ _ESFERA_MAP: dict[str, str] = {
     "M": "municipal",
     "D": "distrital",
 }
+
+
+def _split_date_windows(date_start: str, date_end: str) -> list[tuple[str, str]]:
+    """Split a date range into PNCP-API-compatible windows (<= 365 days).
+
+    Dates are YYYYMMDD strings — same format the PNCP endpoint expects.
+    """
+    start = datetime.strptime(date_start, "%Y%m%d")  # noqa: DTZ007
+    end = datetime.strptime(date_end, "%Y%m%d")  # noqa: DTZ007
+    windows: list[tuple[str, str]] = []
+    cursor = start
+    while cursor <= end:
+        window_end = min(cursor + timedelta(days=_PNCP_WINDOW_DAYS - 1), end)
+        windows.append(
+            (cursor.strftime("%Y%m%d"), window_end.strftime("%Y%m%d"))
+        )
+        cursor = window_end + timedelta(days=1)
+    return windows
+
+
+def _request_with_retry(
+    client: httpx.Client,
+    url: str,
+    params: dict[str, str | int],
+) -> httpx.Response | None:
+    """GET with retry + exponential backoff on timeouts and 5xx."""
+    for attempt in range(1, _PNCP_MAX_RETRIES + 1):
+        try:
+            resp = client.get(url, params=params)
+        except httpx.TimeoutException:
+            if attempt == _PNCP_MAX_RETRIES:
+                return None
+            time.sleep(_PNCP_RETRY_BACKOFF ** attempt)
+            continue
+        except httpx.HTTPError:
+            return None
+        if resp.status_code >= 500:
+            if attempt == _PNCP_MAX_RETRIES:
+                return resp
+            time.sleep(_PNCP_RETRY_BACKOFF ** attempt)
+            continue
+        return resp
+    return None
+
+
+def _iter_window(
+    client: httpx.Client,
+    modalidade_code: int,
+    win_start: str,
+    win_end: str,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Fetch all pages for a (modalidade, window) combo. Returns (records, timed_out)."""
+    url = f"{_PNCP_API_BASE}contratacoes/publicacao"
+    records: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        params: dict[str, str | int] = {
+            "dataInicial": win_start,
+            "dataFinal": win_end,
+            "codigoModalidadeContratacao": modalidade_code,
+            "pagina": page,
+            "tamanhoPagina": _PNCP_PAGE_SIZE,
+        }
+        resp = _request_with_retry(client, url, params)
+        if resp is None:
+            logger.warning(
+                "PNCP timeout after retries (modalidade=%d window=%s-%s page=%d)",
+                modalidade_code, win_start, win_end, page,
+            )
+            return records, True
+
+        # 204 No Content for empty windows is success.
+        if resp.status_code == 204 or not resp.content:
+            break
+
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "PNCP HTTP error (modalidade=%d window=%s-%s page=%d): %s",
+                modalidade_code, win_start, win_end, page, exc,
+            )
+            break
+
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "PNCP non-JSON response (modalidade=%d window=%s-%s page=%d): %s",
+                modalidade_code, win_start, win_end, page, exc,
+            )
+            break
+
+        if isinstance(payload, dict) and "data" in payload:
+            page_records = payload["data"]
+        elif isinstance(payload, list):
+            page_records = payload
+        else:
+            logger.warning(
+                "Unexpected PNCP response shape (modalidade=%d window=%s-%s page=%d)",
+                modalidade_code, win_start, win_end, page,
+            )
+            break
+
+        if not page_records:
+            break
+
+        records.extend(page_records)
+
+        pages_remaining = 0
+        if isinstance(payload, dict):
+            pages_remaining = payload.get("paginasRestantes", 0)
+        if pages_remaining <= 0:
+            break
+
+        page += 1
+        time.sleep(_PNCP_RATE_LIMIT_SLEEP)
+
+    return records, False
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    *,
+    date: str | None = None,
+    start_year: int | None = None,
+    end_year: int | None = None,
+    modalidades: list[int] | None = None,
+    limit: int | None = None,
+) -> list[Path]:
+    """Download PNCP procurement records (national scope) to disk.
+
+    The :class:`PncpPipeline` extract step globs ``pncp_*.json`` under
+    ``data/pncp/``; this writer produces one file per (year, modalidade)
+    combination (``pncp_<modalidade>_<year>.json``) when records exist.
+
+    Parameters
+    ----------
+    output_dir:
+        Destination directory. Created if missing.
+    date:
+        Accepted for API symmetry; if provided as ``YYYY-MM-DD``/``YYYYMMDD``
+        and ``start_year``/``end_year`` are unset, the year portion seeds a
+        single-year fetch.
+    start_year, end_year:
+        Inclusive year range to iterate. Defaults to the previous two
+        calendar years (PNCP populated steadily since 2021; recent windows
+        usually have the freshest data).
+    modalidades:
+        List of PNCP modalidade codes (1-13) to iterate. Defaults to the
+        full set defined by :data:`_MODALIDADE_MAP`.
+    limit:
+        Optional cap on total records fetched across the whole run. Useful
+        for smoke tests; ``None`` means no cap.
+
+    Returns
+    -------
+    Sorted list of JSON paths written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    today = datetime.now()  # noqa: DTZ005
+    if start_year is None and end_year is None and date:
+        token = date.replace("-", "")
+        if len(token) >= 4:
+            try:
+                year = int(token[:4])
+                start_year = year
+                end_year = year
+            except ValueError:
+                pass
+    if end_year is None:
+        end_year = today.year
+    if start_year is None:
+        start_year = max(2021, today.year - 1)
+
+    mod_codes: list[int] = list(modalidades) if modalidades else list(_MODALIDADE_MAP.keys())
+
+    written: list[Path] = []
+    total_records = 0
+
+    headers = {"User-Agent": "BR-ACC-ETL/1.0 (pncp)"}
+    with httpx.Client(timeout=_PNCP_HTTP_TIMEOUT, headers=headers) as client:
+        for year in range(start_year, end_year + 1):
+            if limit is not None and total_records >= limit:
+                break
+            win_start = f"{year:04d}0101"
+            win_end_full = f"{year:04d}1231"
+            # Cap to today for the current year (PNCP rejects future dates
+            # silently with empty windows).
+            if year == today.year:
+                win_end_full = today.strftime("%Y%m%d")
+            windows = _split_date_windows(win_start, win_end_full)
+
+            for modalidade_code in mod_codes:
+                if limit is not None and total_records >= limit:
+                    break
+                year_records: list[dict[str, Any]] = []
+                skip = False
+                for w_start, w_end in windows:
+                    if skip:
+                        break
+                    if limit is not None and total_records + len(year_records) >= limit:
+                        break
+                    records, timed_out = _iter_window(
+                        client, modalidade_code, w_start, w_end,
+                    )
+                    if records:
+                        year_records.extend(records)
+                    if timed_out and _PNCP_SKIP_MODALIDADE_AFTER_TIMEOUT:
+                        skip = True
+
+                if not year_records:
+                    continue
+
+                if limit is not None:
+                    remaining = limit - total_records
+                    if remaining <= 0:
+                        break
+                    if len(year_records) > remaining:
+                        year_records = year_records[:remaining]
+
+                out_path = output_dir / f"pncp_{modalidade_code:02d}_{year}.json"
+                out_path.write_text(
+                    json.dumps({"data": year_records}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                written.append(out_path)
+                total_records += len(year_records)
+                logger.info(
+                    "[pncp] wrote %s (%d records, modalidade %d/%s)",
+                    out_path.name,
+                    len(year_records),
+                    modalidade_code,
+                    _MODALIDADE_MAP.get(modalidade_code, "?"),
+                )
+
+    logger.info(
+        "[pncp] fetch complete: %d records across %d file(s)",
+        total_records, len(written),
+    )
+    return sorted(written)
 
 
 class PncpPipeline(Pipeline):
