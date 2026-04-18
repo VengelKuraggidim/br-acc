@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -78,6 +79,18 @@ _ENDPOINTS: dict[str, str] = {
     ),
 }
 
+# Fallback content-type when the ALEGO API omite o header (raro). A API
+# devolve sempre ``application/json`` na prática, mas archival é
+# content-addressed, então o único efeito seria a extensão do arquivo.
+_ALEGO_JSON_CONTENT_TYPE = "application/json"
+# Coluna privada nos DataFrames que carrega a URI do snapshot archival
+# por-linha (prefixo ``__`` não colide com campos reais da API). A
+# ``transform`` lê essa coluna pra popular ``source_snapshot_uri`` em
+# cada ``attach_provenance`` e a filtra de volta antes de chegar ao
+# Neo4jBatchLoader, porque archival é opt-in e não faz parte dos schemas
+# de StateLegislator/LegislativeExpense/LegislativeProposition.
+_SNAPSHOT_COLUMN = "__snapshot_uri"
+
 
 def _http_get_json(
     path: str,
@@ -91,6 +104,24 @@ def _http_get_json(
     own ``httpx.Client`` to reuse a single connection pool across many
     requests (important when iterating over all deputies x months).
     """
+    payload, _content, _ctype = _http_get_json_raw(path, params, client=client)
+    return payload
+
+
+def _http_get_json_raw(
+    path: str,
+    params: dict[str, Any] | None = None,
+    *,
+    client: httpx.Client | None = None,
+) -> tuple[Any, bytes | None, str | None]:
+    """Fetch a JSON endpoint, returning ``(payload, content_bytes, content_type)``.
+
+    Versão archival-aware de :func:`_http_get_json`. Quando a chamada falha
+    (HTTP ou JSON inválido), ``payload`` é ``None`` e ``content`` também —
+    nada pra arquivar nesses casos. Em sucesso, ``content`` carrega os bytes
+    crus exatamente como o servidor devolveu pra :func:`archive_fetch`
+    preservar sem reprocessamento.
+    """
     url = f"{_API_BASE}{path}"
     try:
         if client is not None:
@@ -99,12 +130,14 @@ def _http_get_json(
             with httpx.Client(timeout=_TIMEOUT) as one_shot:
                 resp = one_shot.get(url, params=params or None)
         resp.raise_for_status()
-        return resp.json()
+        content = resp.content
+        content_type = resp.headers.get("content-type", _ALEGO_JSON_CONTENT_TYPE)
+        return resp.json(), content, content_type
     except (httpx.HTTPError, json.JSONDecodeError) as exc:
         logger.warning(
             "[alego] API request failed (%s params=%s): %s", path, params, exc
         )
-        return None
+        return None, None, None
 
 
 def _iter_periodos(periods: Any) -> list[tuple[int, int]]:
@@ -407,6 +440,19 @@ def _hash_id(*parts: str, length: int = 20) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
+def _snapshot_from_row(row: pd.Series) -> str | None:
+    """Leitura defensiva do URI de snapshot presente numa linha do DataFrame.
+
+    Retorna ``None`` quando a coluna está ausente, vazia, ou não-string — o
+    caller decide o que fazer a partir daí (normalmente: não passar
+    ``snapshot_uri`` pro ``attach_provenance``).
+    """
+    raw = row.get(_SNAPSHOT_COLUMN)
+    if isinstance(raw, str) and raw:
+        return raw
+    return None
+
+
 class AlegoPipeline(Pipeline):
     """Scaffold pipeline for ALEGO transparency data."""
 
@@ -455,16 +501,32 @@ class AlegoPipeline(Pipeline):
 
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "alego"
-        if not src_dir.exists():
+        have_local = False
+        if src_dir.exists():
+            self._raw_deputados = self._read_csv_optional(src_dir / "deputados.csv")
+            self._raw_cota = self._read_csv_optional(src_dir / "cota_parlamentar.csv")
+            self._raw_propositions = self._read_csv_optional(
+                src_dir / "proposicoes.csv"
+            )
+            have_local = not (
+                self._raw_deputados.empty
+                and self._raw_cota.empty
+                and self._raw_propositions.empty
+            )
+        else:
             logger.warning(
-                "[alego] expected directory %s missing; export ALEGO transparency "
-                "portal CSVs there.",
+                "[alego] expected directory %s missing; will try ALEGO API.",
                 src_dir,
             )
-            return
-        self._raw_deputados = self._read_csv_optional(src_dir / "deputados.csv")
-        self._raw_cota = self._read_csv_optional(src_dir / "cota_parlamentar.csv")
-        self._raw_propositions = self._read_csv_optional(src_dir / "proposicoes.csv")
+
+        # Online fallback: se não achou CSVs locais, baixa direto da API de
+        # transparência gravando snapshots content-addressed pra cada
+        # endpoint consultado. Esse é o único caminho em que ``extract``
+        # fala com a rede — por isso também é o único que popula
+        # ``source_snapshot_uri`` (offline/fixture path preserva o
+        # contrato opt-in).
+        if not have_local:
+            self._fetch_from_api()
 
         if self.limit:
             self._raw_deputados = self._raw_deputados.head(self.limit)
@@ -477,7 +539,250 @@ class AlegoPipeline(Pipeline):
             + len(self._raw_propositions)
         )
 
+    def _fetch_from_api(
+        self, *, max_expense_months: int | None = 3
+    ) -> None:
+        """Online fallback: popula os DataFrames via transparência ALEGO.
+
+        Cada fetch HTTP é espelhado em :func:`archive_fetch` antes de
+        virar DataFrame, e a URI resultante vai na coluna
+        :data:`_SNAPSHOT_COLUMN` de cada linha derivada. Três "famílias"
+        de snapshot convivem:
+
+        * listagem de deputados (``/verbas_indenizatorias/deputados``) —
+          alimenta ``_raw_deputados``;
+        * ``/verbas_indenizatorias/exibir`` por (deputado, ano, mes) —
+          alimenta ``_raw_cota`` (um snapshot por chamada ``exibir``,
+          já que é essa a granularidade da fonte; a URI é replicada nos
+          ``lancamentos`` que saem dela);
+        * ``/processos/recentes`` + ``/processos/proposicoes-mais-votadas``
+          — alimenta ``_raw_propositions`` (item-level: URI do endpoint
+          que viu o ``numero`` pela primeira vez).
+        """
+        with httpx.Client(
+            timeout=_TIMEOUT,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "br-acc-etl/1.0",
+            },
+        ) as client:
+            periodos_payload, periodos_content, periodos_ctype = (
+                _http_get_json_raw(
+                    _ENDPOINTS["deputados_periodos"], client=client,
+                )
+            )
+            if periodos_content is not None and periodos_ctype is not None:
+                archive_fetch(
+                    url=f"{_API_BASE}{_ENDPOINTS['deputados_periodos']}",
+                    content=periodos_content,
+                    content_type=periodos_ctype,
+                    run_id=self.run_id,
+                    source_id=self.source_id,
+                )
+            periodos = _iter_periodos(periodos_payload)
+            if not periodos:
+                logger.warning(
+                    "[alego] /verbas_indenizatorias/periodos vazio; "
+                    "abortando fallback online."
+                )
+                return
+
+            # ---- deputados listing (newest period with data) -------------
+            deputy_rows: list[dict[str, Any]] = []
+            deputy_uris: list[str | None] = []
+            listing_uri: str | None = None
+            for ano, mes in periodos:
+                payload, content, ctype = _http_get_json_raw(
+                    _ENDPOINTS["deputados_listing"],
+                    params={"ano": ano, "mes": mes},
+                    client=client,
+                )
+                if (
+                    isinstance(payload, list)
+                    and payload
+                    and content is not None
+                    and ctype is not None
+                ):
+                    listing_uri = archive_fetch(
+                        url=f"{_API_BASE}{_ENDPOINTS['deputados_listing']}",
+                        content=content,
+                        content_type=ctype,
+                        run_id=self.run_id,
+                        source_id=self.source_id,
+                    )
+                    raw_deputies = [p for p in payload if isinstance(p, dict)]
+                    break
+            else:
+                raw_deputies = []
+
+            if self.limit is not None:
+                raw_deputies = raw_deputies[: self.limit]
+
+            # ---- expenses + party enrichment ------------------------------
+            cota_rows: list[dict[str, Any]] = []
+            cota_uris: list[str | None] = []
+            target_periods = (
+                periodos[:max_expense_months] if max_expense_months else periodos
+            )
+
+            for dep in raw_deputies:
+                dep_id = dep.get("id")
+                dep_name = str(dep.get("nome") or "").strip()
+                if not isinstance(dep_id, int) or not dep_name:
+                    continue
+
+                party = ""
+                for ano, mes in target_periods:
+                    payload, content, ctype = _http_get_json_raw(
+                        _ENDPOINTS["deputado_exibir"],
+                        params={
+                            "deputado_id": dep_id,
+                            "ano": ano,
+                            "mes": mes,
+                        },
+                        client=client,
+                    )
+                    time.sleep(_RATE_LIMIT_SECONDS)
+                    if not isinstance(payload, dict):
+                        continue
+                    exibir_uri: str | None = None
+                    if content is not None and ctype is not None:
+                        exibir_uri = archive_fetch(
+                            url=(
+                                f"{_API_BASE}{_ENDPOINTS['deputado_exibir']}"
+                            ),
+                            content=content,
+                            content_type=ctype,
+                            run_id=self.run_id,
+                            source_id=self.source_id,
+                        )
+                    if not party:
+                        dep_block = payload.get("deputado") or {}
+                        if isinstance(dep_block, dict):
+                            party = str(
+                                dep_block.get("partido") or "",
+                            ).strip()
+                    lancamentos = _flatten_cota_lancamentos(
+                        dep_name, ano, mes, payload,
+                    )
+                    cota_rows.extend(lancamentos)
+                    cota_uris.extend([exibir_uri] * len(lancamentos))
+
+                deputy_rows.append({
+                    "nome": dep_name,
+                    "cpf": "",
+                    "partido": party,
+                    "legislatura": "",
+                    "deputado_id_alego": dep_id,
+                })
+                deputy_uris.append(listing_uri)
+
+            # ---- proposicoes ----------------------------------------------
+            prop_rows, prop_uris = self._fetch_proposicoes_with_archival(client)
+
+        self._raw_deputados = pd.DataFrame(deputy_rows, dtype=str)
+        if not self._raw_deputados.empty:
+            self._raw_deputados[_SNAPSHOT_COLUMN] = pd.array(
+                deputy_uris, dtype="object",
+            )
+        self._raw_cota = pd.DataFrame(cota_rows, dtype=str)
+        if not self._raw_cota.empty:
+            self._raw_cota[_SNAPSHOT_COLUMN] = pd.array(
+                cota_uris, dtype="object",
+            )
+        self._raw_propositions = pd.DataFrame(prop_rows, dtype=str)
+        if not self._raw_propositions.empty:
+            self._raw_propositions[_SNAPSHOT_COLUMN] = pd.array(
+                prop_uris, dtype="object",
+            )
+
+    def _fetch_proposicoes_with_archival(
+        self, client: httpx.Client,
+    ) -> tuple[list[dict[str, Any]], list[str | None]]:
+        """Fetch ``processos/recentes`` + ``proposicoes-mais-votadas`` com
+        archival, tracking por-``numero`` a URI do payload que o viu primeiro.
+        """
+        seen: dict[str, dict[str, Any]] = {}
+        seen_uri: dict[str, str | None] = {}
+
+        recentes, rec_content, rec_ctype = _http_get_json_raw(
+            _ENDPOINTS["processos_recentes"], client=client,
+        )
+        recentes_uri: str | None = None
+        if rec_content is not None and rec_ctype is not None:
+            recentes_uri = archive_fetch(
+                url=f"{_API_BASE}{_ENDPOINTS['processos_recentes']}",
+                content=rec_content,
+                content_type=rec_ctype,
+                run_id=self.run_id,
+                source_id=self.source_id,
+            )
+        if isinstance(recentes, list):
+            for group in recentes:
+                if isinstance(group, list):
+                    for item in group:
+                        if isinstance(item, dict) and item.get("numero"):
+                            key = str(item["numero"])
+                            if key not in seen:
+                                seen[key] = item
+                                seen_uri[key] = recentes_uri
+                elif isinstance(group, dict) and group.get("numero"):
+                    key = str(group["numero"])
+                    if key not in seen:
+                        seen[key] = group
+                        seen_uri[key] = recentes_uri
+
+        mais_votadas, mv_content, mv_ctype = _http_get_json_raw(
+            _ENDPOINTS["proposicoes_mais_votadas"], client=client,
+        )
+        mais_votadas_uri: str | None = None
+        if mv_content is not None and mv_ctype is not None:
+            mais_votadas_uri = archive_fetch(
+                url=f"{_API_BASE}{_ENDPOINTS['proposicoes_mais_votadas']}",
+                content=mv_content,
+                content_type=mv_ctype,
+                run_id=self.run_id,
+                source_id=self.source_id,
+            )
+        if isinstance(mais_votadas, dict):
+            for item in mais_votadas.get("processos") or []:
+                if isinstance(item, dict) and item.get("numero"):
+                    key = str(item["numero"])
+                    if key not in seen:
+                        seen[key] = item
+                        seen_uri[key] = mais_votadas_uri
+
+        rows: list[dict[str, Any]] = []
+        uris: list[str | None] = []
+        for key, item in seen.items():
+            autores = item.get("autores") or []
+            autor = (
+                "; ".join(a for a in autores if isinstance(a, str))
+                if isinstance(autores, list)
+                else str(autores or "")
+            )
+            rows.append({
+                "numero": str(item.get("numero") or "").strip(),
+                "titulo": str(item.get("assunto") or "").strip(),
+                "ementa": str(item.get("ementa") or "").strip(),
+                "autor": autor,
+                "data": str(item.get("data_autuacao") or "").strip(),
+                "situacao": str(item.get("situacao") or "").strip(),
+                "a_favor": item.get("a_favor"),
+                "contra": item.get("contra"),
+            })
+            uris.append(seen_uri.get(key))
+        return rows, uris
+
     def transform(self) -> None:
+        # Snapshot URI por-linha só aparece quando ``extract`` caiu no
+        # fallback online (``_fetch_from_api``). Offline/fixture path →
+        # coluna ausente → ``snapshot_uri`` fica ``None`` e ``attach_provenance``
+        # não injeta o campo (compat com contrato opt-in).
+        has_dep_snapshot = _SNAPSHOT_COLUMN in self._raw_deputados.columns
+        has_cota_snapshot = _SNAPSHOT_COLUMN in self._raw_cota.columns
+        has_prop_snapshot = _SNAPSHOT_COLUMN in self._raw_propositions.columns
+
         for _, row in self._raw_deputados.iterrows():
             name = normalize_name(
                 row_pick(row, "nome", "deputado", "nome_parlamentar"),
@@ -487,6 +792,7 @@ class AlegoPipeline(Pipeline):
             legislature = row_pick(row, "legislatura", "mandato")
             if not name:
                 continue
+            snapshot_uri = _snapshot_from_row(row) if has_dep_snapshot else None
             cpf_digits = strip_document(cpf_raw)
             legislator_id = _hash_id(
                 name, cpf_digits[-4:] if cpf_digits else "", legislature,
@@ -503,6 +809,7 @@ class AlegoPipeline(Pipeline):
                     "source": "alego",
                 },
                 record_id=legislator_record_id,
+                snapshot_uri=snapshot_uri,
             ))
 
         for _, row in self._raw_cota.iterrows():
@@ -522,6 +829,7 @@ class AlegoPipeline(Pipeline):
             tipo = row_pick(row, "tipo_despesa", "natureza", "descricao")
             if not legislator_name and not fornecedor:
                 continue
+            snapshot_uri = _snapshot_from_row(row) if has_cota_snapshot else None
             expense_id = _hash_id(
                 legislator_name, cnpj_digits, tipo, data, str(amount or ""),
             )
@@ -543,6 +851,7 @@ class AlegoPipeline(Pipeline):
                     "source": "alego",
                 },
                 record_id=expense_record_id,
+                snapshot_uri=snapshot_uri,
             ))
             if legislator_name:
                 legislator_id = _hash_id(legislator_name, "", "")
@@ -552,6 +861,7 @@ class AlegoPipeline(Pipeline):
                         "target_key": expense_id,
                     },
                     record_id=expense_record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
         for _, row in self._raw_propositions.iterrows():
@@ -561,6 +871,7 @@ class AlegoPipeline(Pipeline):
             data = row_pick(row, "data", "data_apresentacao")
             if not numero and not titulo:
                 continue
+            snapshot_uri = _snapshot_from_row(row) if has_prop_snapshot else None
             prop_id = _hash_id(numero, titulo, data)
             # Prefer the ``numero`` field (natural key of the legislative
             # process at ALEGO) when available; fall back to the composite
@@ -580,6 +891,7 @@ class AlegoPipeline(Pipeline):
                     "source": "alego",
                 },
                 record_id=proposition_record_id,
+                snapshot_uri=snapshot_uri,
             ))
 
         self.legislators = deduplicate_rows(self.legislators, ["legislator_id"])
