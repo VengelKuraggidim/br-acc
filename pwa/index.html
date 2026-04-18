@@ -1051,7 +1051,14 @@
 </div>
 
 <script>
-const API = window.location.hostname === "localhost" ? "http://localhost:8001" : "/api";
+// API base: em localhost aponta direto pro FastAPI bracc (porta 8000,
+// default do `make api` / `uvicorn bracc.main:app`). Em produção (PWA servida
+// pelo mesmo host via nginx), `/api` é reescrito no reverse-proxy para o
+// serviço `bracc-api:8000`. Endpoints consumidos: `/status`, `/buscar-tudo`,
+// `/politico/{id}` — todos expostos na raiz por `bracc.routers.pwa_parity`.
+const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ? "http://localhost:8000"
+  : "/api";
 let buscaTimeout = null;
 
 // === NAVEGACAO ===
