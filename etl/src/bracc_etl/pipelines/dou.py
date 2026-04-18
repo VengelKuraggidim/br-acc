@@ -10,12 +10,15 @@ JSON files in data/dou/. See scripts/download_dou.py for acquisition.
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from defusedxml.ElementTree import ParseError as _XmlParseError  # type: ignore[import-untyped]
 from defusedxml.ElementTree import (
     parse as _safe_xml_parse,  # type: ignore[import-untyped,unused-ignore]
@@ -77,6 +80,200 @@ def _make_act_id(url_title: str, date: str) -> str:
     """Generate a stable act ID from URL title and date."""
     raw = f"dou_{url_title}_{date}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+# --------------------------------------------------------------------------
+# Module-level fetch_to_disk: Imprensa Nacional public leiturajornal pages.
+# --------------------------------------------------------------------------
+#
+# The in.gov.br "Leitura do Jornal" page renders a per-day, per-secao HTML
+# page and embeds a ``<script id="params" type="application/json">``
+# payload containing a ``jsonArray`` field — one element per published act
+# for that day/section, with fields: ``urlTitle, title, pubDate, pubName,
+# hierarchyStr, content`` plus a few others. The sections published are
+# ``DO1`` (executive/legislative), ``DO2`` (personnel), ``DO3`` (contracts)
+# and — rarely — ``DO1E`` / ``DO2E`` / ``DO3E`` (extra editions).
+#
+# ``fetch_to_disk`` walks a date range, issues one GET per (day, section),
+# extracts the embedded JSON and writes ``<YYYY-MM-DD>_<section>.json``
+# files in the shape the pipeline's ``_extract_json`` already consumes
+# (``{"jsonArray": [...]}``). The upstream ``content`` field is remapped to
+# ``abstract`` so downstream CPF/CNPJ extraction finds the full text.
+#
+# Upstream hierarchy: no auth, no API key. The page sits behind a
+# TLS-terminating edge that sometimes 403s requests without a User-Agent;
+# we always send one.
+
+_DOU_LEITURAJORNAL_URL = "https://www.in.gov.br/leiturajornal"
+_DOU_SECTIONS_DEFAULT: tuple[str, ...] = ("do1", "do2", "do3")
+_DOU_PARAMS_RE = re.compile(
+    r'<script id="params" type="application/json">\s*(\{.*?\})\s*</script>',
+    re.DOTALL,
+)
+_DOU_HTTP_TIMEOUT = 60.0
+
+
+def _parse_date(value: str) -> _dt.date:
+    """Parse YYYY-MM-DD or DD-MM-YYYY into a date."""
+    value = value.strip()
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+        try:
+            return _dt.datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"unparseable date {value!r} (expected YYYY-MM-DD)")
+
+
+def _fetch_dou_day_section(
+    client: httpx.Client, day: _dt.date, section: str,
+) -> list[dict[str, Any]]:
+    """Fetch one DOU day+section page and return its ``jsonArray`` items.
+
+    Returns an empty list when the day has no edition (weekends/holidays or
+    sections without a publication that day).
+    """
+    params = {"data": day.strftime("%d-%m-%Y"), "secao": section}
+    resp = client.get(_DOU_LEITURAJORNAL_URL, params=params)
+    resp.raise_for_status()
+    match = _DOU_PARAMS_RE.search(resp.text)
+    if not match:
+        logger.debug(
+            "[dou.fetch_to_disk] %s %s: no params script (unexpected layout)",
+            day, section,
+        )
+        return []
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        logger.warning(
+            "[dou.fetch_to_disk] %s %s: failed to parse params JSON (%s)",
+            day, section, exc,
+        )
+        return []
+    return list(payload.get("jsonArray", []) or [])
+
+
+def _remap_item(raw: dict[str, Any]) -> dict[str, str]:
+    """Map an Imprensa Nacional item to the pipeline's JSON schema."""
+    # Prefer 'title' over 'titulo'; 'content' is the full text body and
+    # serves as the pipeline's ``abstract`` (downstream extracts CPFs/CNPJs).
+    return {
+        "urlTitle": str(raw.get("urlTitle", "") or ""),
+        "title": str(raw.get("title") or raw.get("titulo") or ""),
+        "abstract": str(raw.get("content") or raw.get("abstract") or ""),
+        "pubDate": str(raw.get("pubDate") or ""),
+        "pubName": str(raw.get("pubName") or ""),
+        "artCategory": str(raw.get("artType") or raw.get("artCategory") or ""),
+        "hierarchyStr": str(raw.get("hierarchyStr") or ""),
+    }
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    start_date: str | _dt.date | None = None,
+    end_date: str | _dt.date | None = None,
+    sections: list[str] | tuple[str, ...] | None = None,
+    timeout: float = _DOU_HTTP_TIMEOUT,
+    max_days: int | None = 30,
+) -> list[Path]:
+    """Download DOU acts for a date range into ``output_dir`` as JSON files.
+
+    One file per (day, section) combination is written with the shape
+    ``{"jsonArray": [...]}``, matching the pipeline's legacy JSON loader.
+    The upstream ``content`` string is remapped to ``abstract`` so the
+    pipeline's CPF/CNPJ extractors see the full act text.
+
+    Args:
+        output_dir: Destination directory. Created if missing.
+        start_date: First day to fetch (``YYYY-MM-DD`` or ``date``).
+            Defaults to ``end_date - (max_days - 1)`` so a bare call grabs
+            the trailing window.
+        end_date: Last day to fetch (inclusive). Defaults to today (UTC).
+        sections: Sections to request (default ``('do1','do2','do3')``).
+            Case-insensitive; lowercased on the wire.
+        timeout: Per-request HTTP timeout.
+        max_days: Soft cap on the span to prevent runaway loops. ``None``
+            disables the cap.
+
+    Returns:
+        Sorted list of paths to every non-empty JSON file written. Empty
+        (day, section) pairs are skipped silently (no file is produced).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    today = _dt.date.today()
+    end = (
+        _parse_date(end_date) if isinstance(end_date, str)
+        else (end_date or today)
+    )
+    if start_date is None:
+        span = (max_days or 30) - 1
+        start = end - _dt.timedelta(days=max(span, 0))
+    elif isinstance(start_date, str):
+        start = _parse_date(start_date)
+    else:
+        start = start_date
+    if start > end:
+        raise ValueError(f"start_date {start} is after end_date {end}")
+    if max_days is not None and (end - start).days + 1 > max_days:
+        raise ValueError(
+            f"date range {start}..{end} spans {(end - start).days + 1} days, "
+            f"exceeds max_days={max_days}. Raise --max-days to proceed."
+        )
+
+    secs = tuple((s.lower() for s in (sections or _DOU_SECTIONS_DEFAULT)))
+
+    logger.info(
+        "[dou.fetch_to_disk] Fetching DOU %s..%s sections=%s -> %s",
+        start, end, secs, output_dir,
+    )
+
+    written: list[Path] = []
+    with httpx.Client(
+        timeout=timeout,
+        follow_redirects=True,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (br-acc/bracc-etl download_dou; httpx)"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    ) as client:
+        day = start
+        while day <= end:
+            for section in secs:
+                try:
+                    items = _fetch_dou_day_section(client, day, section)
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "[dou.fetch_to_disk] %s %s: HTTP error (%s) -- skipping",
+                        day, section, exc,
+                    )
+                    continue
+                if not items:
+                    logger.debug(
+                        "[dou.fetch_to_disk] %s %s: no acts", day, section,
+                    )
+                    continue
+                mapped = [_remap_item(it) for it in items]
+                out_path = (
+                    output_dir / f"{day.isoformat()}_{section}.json"
+                )
+                with open(out_path, "w", encoding="utf-8") as fh:
+                    json.dump({"jsonArray": mapped}, fh, ensure_ascii=False)
+                written.append(out_path.resolve())
+                logger.info(
+                    "[dou.fetch_to_disk] %s %s: wrote %d acts (%s)",
+                    day, section, len(mapped), out_path.name,
+                )
+            day += _dt.timedelta(days=1)
+
+    logger.info(
+        "[dou.fetch_to_disk] Done: %d file(s) across %d day(s)",
+        len(written), (end - start).days + 1,
+    )
+    return sorted(written)
 
 
 class DouPipeline(Pipeline):

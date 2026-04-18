@@ -14,12 +14,15 @@
   "sources": [
     {
       "pipeline_id": "bcb",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/bcb/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_bcb.py --output-dir ../data/bcb"
+      ]
     },
     {
       "pipeline_id": "bndes",
@@ -170,14 +173,14 @@
     },
     {
       "pipeline_id": "dou",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/dou/*"
       ],
       "blocking_reason_if_any": "-",
       "core": false,
-      "credential_env": [
-        "GOOGLE_APPLICATION_CREDENTIALS"
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_dou.py --output-dir ../data/dou"
       ]
     },
     {
@@ -545,12 +548,15 @@
     },
     {
       "pipeline_id": "world_bank",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/world_bank/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_world_bank.py --output-dir ../data/world_bank"
+      ]
     },
     {
       "pipeline_id": "alego",
