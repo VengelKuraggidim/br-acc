@@ -60,6 +60,7 @@ from bracc_etl.pipelines.transparencia import TransparenciaPipeline
 from bracc_etl.pipelines.tse import TSEPipeline
 from bracc_etl.pipelines.tse_bens import TseBensPipeline
 from bracc_etl.pipelines.tse_filiados import TseFiliadosPipeline
+from bracc_etl.pipelines.tse_prestacao_contas_go import TsePrestacaoContasGoPipeline
 from bracc_etl.pipelines.un_sanctions import UnSanctionsPipeline
 from bracc_etl.pipelines.viagens import ViagensPipeline
 from bracc_etl.pipelines.world_bank import WorldBankPipeline
@@ -124,6 +125,7 @@ PIPELINES: dict[str, type] = {
     "tcmgo_sancoes": TcmgoSancoesPipeline,
     "ssp_go": SspGoPipeline,
     "camara_politicos_go": CamaraPoliticosGoPipeline,
+    "tse_prestacao_contas_go": TsePrestacaoContasGoPipeline,
 }
 
 
