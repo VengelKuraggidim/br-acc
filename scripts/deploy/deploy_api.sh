@@ -49,6 +49,10 @@ ENV_VARS="${ENV_VARS},NEO4J_DATABASE=${NEO4J_DATABASE}"
 ENV_VARS="${ENV_VARS},PUBLIC_MODE=true"
 ENV_VARS="${ENV_VARS},PUBLIC_ALLOW_PERSON=true"
 ENV_VARS="${ENV_VARS},PUBLIC_ALLOW_ENTITY_LOOKUP=true"
+# CORS liberado — PWA roda em storage.googleapis.com, app eh publico
+# (--allow-unauthenticated), sem cookies. Restringir quando dominio
+# custom for registrado (ex: https://fiscalcidadao.org.br).
+ENV_VARS="${ENV_VARS},CORS_ORIGINS=*"
 
 echo "==> Deployando ${SERVICE} em ${REGION} (imagem: ${IMAGE})..."
 gcloud run deploy "$SERVICE" \
