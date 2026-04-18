@@ -77,21 +77,27 @@
     },
     {
       "pipeline_id": "ceaf",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
-        "data/ceaf/*"
+        "data/ceaf/ceaf.csv"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_ceaf.py --output-dir ../data/ceaf"
+      ]
     },
     {
       "pipeline_id": "cepim",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
-        "data/cepim/*"
+        "data/cepim/cepim.csv"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_cepim.py --output-dir ../data/cepim"
+      ]
     },
     {
       "pipeline_id": "cnpj",
@@ -119,12 +125,15 @@
     },
     {
       "pipeline_id": "cpgf",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/cpgf/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_cpgf.py --output-dir ../data/cpgf"
+      ]
     },
     {
       "pipeline_id": "cvm",
@@ -239,12 +248,15 @@
     },
     {
       "pipeline_id": "inep",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
-        "data/inep/*"
+        "data/inep/microdados_ed_basica_2022.csv"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_inep.py --output-dir ../data/inep"
+      ]
     },
     {
       "pipeline_id": "leniency",
@@ -386,12 +398,15 @@
     },
     {
       "pipeline_id": "sanctions",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/sanctions/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_sanctions.py --output-dir ../data/sanctions"
+      ]
     },
     {
       "pipeline_id": "senado",
@@ -494,12 +509,15 @@
     },
     {
       "pipeline_id": "transferegov",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/transferegov/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_transferegov.py --output-dir ../data/transferegov"
+      ]
     },
     {
       "pipeline_id": "transparencia",

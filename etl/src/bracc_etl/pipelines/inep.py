@@ -98,7 +98,7 @@ def fetch_to_disk(
     insecure:
         When ``True`` (default), disables TLS verification because the
         INEP cert chain fails default-bundle verification. ZIP integrity
-        catches corruption regardless.
+        catches tampering regardless.
     timeout:
         Per-request HTTP timeout in seconds.
     url:
