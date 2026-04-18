@@ -219,10 +219,10 @@ CREATE (po1:PublicOffice {
 MATCH (p1:Person {cpf: '11111111111'}), (po1:PublicOffice {cpf: '11111111111'})
 CREATE (p1)-[:RECEBEU_SALARIO]->(po1);
 
-// ── Goias-specific fixtures (Fiscal Cidadao backend) ─────
-// The Fiscal Cidadao wrapper (/status, /buscar, /municipios, /licitacoes,
-// /vereadores, /nomeacoes, /servidores) expects these GO-scoped node types
-// with uf='GO' so the landing page shows non-zero counts in dev.
+// ── Goias-specific fixtures (Fiscal Cidadao PWA parity) ─────
+// The FastAPI PWA parity router (`bracc.routers.pwa_parity`: /status,
+// /buscar-tudo, /politico/{id}) expects these GO-scoped node types with
+// uf='GO' so the landing page shows non-zero counts in dev.
 
 // GO politicians + Election records (for /api/v1/meta/person-count)
 CREATE (pgo1:Person {

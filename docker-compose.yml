@@ -52,22 +52,11 @@ services:
       retries: 8
       start_period: 20s
 
-  # Fiscal Cidadao Backend (FastAPI que traduz bracc-api pro PWA + serve o PWA)
-  backend:
-    container_name: fiscal-backend
-    build: ./backend
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    environment:
-      BRACC_API_URL: http://bracc-api:8000
-      TRANSPARENCIA_API_KEY: ${TRANSPARENCIA_API_KEY:-}
-      PWA_DIR: /srv/pwa
-    volumes:
-      - ./pwa:/srv/pwa:ro
-    depends_on:
-      bracc-api:
-        condition: service_healthy
+  # Nota historica: o service `backend` (Flask em :8001) foi removido em
+  # 2026-04-18 (Fase 04.G). O FastAPI `bracc-api` agora expõe os endpoints
+  # consumidos pela PWA (`/status`, `/buscar-tudo`, `/politico/{id}`) via
+  # `bracc.routers.pwa_parity`. Serve o PWA via nginx em prod (ver
+  # `docker-compose.prod.yml`) ou abra `pwa/index.html` direto em dev.
 
   # ETL - todos os pipelines (run manualmente)
   etl:

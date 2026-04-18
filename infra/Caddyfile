@@ -1,8 +1,11 @@
 {$DOMAIN} {
     # Note: this legacy infra/ deployment no longer ships a web UI.
-    # The Fiscal Cidadao PWA is now served by the Fiscal Cidadao backend
-    # (backend/app.py) in the root docker-compose.yml topology. Keep this
-    # file only if you are deploying the bracc-api alone behind Caddy.
+    # The Fiscal Cidadao PWA is now served by nginx (see
+    # docker-compose.prod.yml) which reverse-proxies /api/* directly to
+    # the FastAPI `bracc-api` service. The Flask `backend/` intermediate
+    # was deleted in 2026-04-18 (Fase 04.G) — see `git log -- backend/`
+    # for historical reference. Keep this file only if you are deploying
+    # the bracc-api alone behind Caddy.
     handle /api/* {
         reverse_proxy api:8000
     }

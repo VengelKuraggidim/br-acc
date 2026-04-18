@@ -115,7 +115,7 @@ docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml restart
 
 # Ver logs de um servico
-docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f bracc-api
 
 # Atualizar (apos git pull)
 docker compose -f docker-compose.prod.yml up -d --build
