@@ -23,6 +23,7 @@ from bracc.routers import (
     graph,
     investigation,
     meta,
+    pwa_parity,
     search,
 )
 from bracc.services.neo4j_service import ensure_schema
@@ -88,6 +89,10 @@ app.include_router(investigation.router)
 app.include_router(investigation.shared_router)
 app.include_router(emendas.router)
 app.include_router(go.router)
+# PWA parity facade (root paths /status and /buscar-tudo). Mirrors the
+# shapes expected by pwa/index.html today so the client-side migration
+# can be staged. See api/src/bracc/routers/pwa_parity.py.
+app.include_router(pwa_parity.router)
 
 # Gated federal-scope routers. Default OFF — Fiscal Cidadao serves Goias
 # only. Set ENABLE_FEDERAL_ROUTES=true to mount the preserved federal
