@@ -97,14 +97,41 @@ def _extension_for(content_type: str) -> str:
 def _month_bucket(run_id: str) -> str:
     """Derive ``YYYY-MM`` bucket from ``run_id`` (``{source}_YYYYMMDDHHMMSS``).
 
-    Falls back to ``unknown`` if the run_id does not carry a recognizable
-    timestamp — keeps the archive writable even for ad-hoc manual runs.
+    Mechanics
+    ---------
+    O ``run_id`` canônico é produzido pelo runner com o formato
+    ``{source_id}_YYYYMMDDHHMMSS`` (ex.: ``folha_go_20240518093021``).
+    Esta função faz ``rsplit("_", 1)`` pra pegar o sufixo de timestamp
+    e extrai ``YYYY`` (4 primeiros dígitos) + ``MM`` (2 seguintes) pra
+    formar o bucket mensal usado no caminho de armazenamento. O bucket
+    é consumido em :func:`archive_fetch` pra montar o caminho
+    ``{source_id}/{YYYY-MM}/{hash12}.{ext}``.
+
+    Fallback ``unknown``
+    --------------------
+    Quando o ``run_id`` não carrega timestamp reconhecível (suffix
+    < 6 dígitos ou não-numérico — ex.: runs manuais, IDs legados, uso
+    ad-hoc em testes), caímos em ``"unknown"`` pra manter o archive
+    gravável. Isso não bloqueia o pipeline, mas polui o bucket — por
+    isso emitimos ``logging.warning`` no caminho de fallback pra o
+    operador perceber em dashboards de log e corrigir o gerador do
+    ``run_id``.
+
+    Consulte também
+    ---------------
+    :func:`archive_fetch` — único caller em produção; usa o bucket pra
+    compor a URI relativa persistida em ``source_snapshot_uri``.
     """
     # run_id shape: "{source_id}_YYYYMMDDHHMMSS". We just need the first
     # 6 digits of the timestamp suffix.
     suffix = run_id.rsplit("_", 1)[-1] if "_" in run_id else run_id
     if len(suffix) >= 6 and suffix[:6].isdigit():
         return f"{suffix[:4]}-{suffix[4:6]}"
+    logger.warning(
+        "[archival] run_id malformado — usando bucket 'unknown' (run_id=%r). "
+        "Esperado formato '{source_id}_YYYYMMDDHHMMSS'.",
+        run_id,
+    )
     return "unknown"
 
 
