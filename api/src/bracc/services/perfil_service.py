@@ -201,6 +201,7 @@ def _build_politico_resumo(
     cpf_raw = props.get("cpf")
     partido_raw = props.get("partido")
     uf_raw = props.get("uf")
+    foto_raw = props.get("foto_url") or props.get("url_foto")
 
     return PoliticoResumo(
         id=entity_id,
@@ -212,6 +213,7 @@ def _build_politico_resumo(
         partido=str(partido_raw) if partido_raw else None,
         cargo=cargo_txt,
         uf=str(uf_raw) if uf_raw else None,
+        foto_url=str(foto_raw) if foto_raw else None,
     )
 
 
