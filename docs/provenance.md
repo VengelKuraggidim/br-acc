@@ -1,14 +1,15 @@
 # Provenance contract
 
 Every node and relationship persisted to Neo4j by a Fiscal Cidadão pipeline
-must carry five fields so an end-user can trace any fact back to its
-origin in the source system.
+must carry five required fields (plus one optional sixth) so an end-user
+can trace any fact back to its origin in the source system — and, when
+available, to an immutable raw-payload snapshot.
 
 This is a product requirement: Fiscal Cidadão surfaces connections between
 public entities and must not show data without a verifiable path back to
 the official dump or portal that produced it.
 
-## The five fields
+## The five required fields
 
 | Field | Type | Nullable | Purpose |
 | --- | --- | --- | --- |
@@ -17,6 +18,18 @@ the official dump or portal that produced it.
 | `source_url` | `str` | no | Deep-link to the record, or a hierarchical fallback. Must start with `http`. |
 | `ingested_at` | `str` | no | ISO 8601 UTC timestamp of the ingestion run (e.g. `2026-04-17T12:34:56+00:00`). |
 | `run_id` | `str` | no | Correlates with `IngestionRun` nodes. Typically `f"{source_id}_{YYYYMMDDHHMMSS}"`. |
+
+## The optional sixth field — `source_snapshot_uri`
+
+| Field | Type | Nullable | Purpose |
+| --- | --- | --- | --- |
+| `source_snapshot_uri` | `str \| None` | yes | URI relativa de um snapshot content-addressed do payload bruto que produziu o row. Preenchido via `bracc_etl.archival.archive_fetch`. Ver [`archival.md`](archival.md). |
+
+Opt-in: pipelines novos **devem** popular via `attach_provenance(snapshot_uri=…)`;
+os 10 pipelines GO legados foram retrofitados em 2026-04-18 e também o populam
+(ver tabela em `archival.md`). Não entra em `_REQUIRED_PROVENANCE_FIELDS`,
+então pipelines pré-archival que não conseguem snapshot (ex.: dumps multi-GB
+servidos via `script_download` direto pra disco) continuam válidos sem o campo.
 
 ## Rules for `source_record_id`
 
@@ -76,24 +89,28 @@ negligible at 10M-scale.
 
 ## API surface
 
-- `api/src/bracc/models/entity.py` exposes `ProvenanceBlock` with the
-  same five fields on every `EntityResponse` and `ConnectionResponse`.
-- The legacy `SourceAttribution` (`database` / `record_id` /
-  `extracted_at`) stays for backwards compatibility; new clients
-  should read the richer `provenance` block.
+- `api/src/bracc/models/entity.py` exposes `ProvenanceBlock` com os
+  cinco campos requeridos + `snapshot_url` (nullable) em todo
+  `EntityResponse` e `ConnectionResponse`.
+- O legacy `SourceAttribution` (`database` / `record_id` /
+  `extracted_at`) permanece por compatibilidade; novos clientes devem
+  ler o bloco `provenance` mais rico.
 
-## Migration
+## Migration — status 2026-04-18
 
-Pipelines already loaded into Neo4j do not carry the five fields.
-Strategy:
+Os 10 pipelines GO legados (`folha_go`, `pncp_go`, `alego`, `ssp_go`,
+`tcmgo_sancoes`, `state_portal_go`, `querido_diario_go`, `camara_goiania`,
+`tce_go`, `tcm_go`) já foram migrados em duas ondas:
 
-1. Re-run each pipeline (MERGE is idempotent) ordered by business
-   value: `folha_go`, `pncp_go`, `dou` first.
-2. Loader runs in `BRACC_PROVENANCE_MODE=warn` during rollout so
-   legacy data keeps loading while new data is validated.
-3. Once `MATCH (n) WHERE n.source_id IS NULL` hits zero, flip to
-   `strict`.
+1. **Provenance básica** (commit `d4a0a56` + restos do contrato) — os
+   cinco campos requeridos.
+2. **Archival snapshot** (2026-04-18) — `source_snapshot_uri` adicionado
+   via `archive_fetch`. Ver tabela completa em
+   [`archival.md`](archival.md#retrofit-nos-10-pipelines-go-legados--concluído-2026-04-18).
 
-Provenance is never back-filled with placeholder values — a missing
-`source_url` or `source_record_id` would be worse than no claim at
-all, because it would falsely imply traceability.
+`Neo4jBatchLoader` continua suportando `BRACC_PROVENANCE_MODE=warn|strict`
+(default `warn`) para futuras migrações de pipelines federais (DOU etc.).
+
+Provenance é **nunca** back-filled com placeholders — um `source_url` ou
+`source_record_id` ausente vira string vazia (ou `None` no opt-in), nunca
+um valor sintético. Falsa rastreabilidade é pior que ausência de claim.
