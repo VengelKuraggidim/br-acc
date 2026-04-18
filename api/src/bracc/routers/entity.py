@@ -39,21 +39,30 @@ _PROVENANCE_FIELDS = (
     "source_url",
     "ingested_at",
     "run_id",
+    # Opt-in: URI do snapshot archival (content-addressed raw copy).
+    # Presente só quando o pipeline carimbou source_snapshot_uri via
+    # archive_fetch. Ver docs/archival.md.
+    "source_snapshot_uri",
 )
 
 
 def _extract_provenance(props: dict[str, Any]) -> ProvenanceBlock | None:
-    """Pop the five provenance fields off ``props`` and return them as a block.
+    """Pop the provenance fields off ``props`` and return them as a block.
 
     Returns ``None`` when any required field (source_id, source_url,
     ingested_at, run_id) is missing or empty — which means the node/rel was
     loaded before the provenance contract was in force. Legacy rows keep
     flowing without a provenance block instead of raising.
+
+    ``source_snapshot_uri`` is optional — when present on the graph node,
+    it surfaces as ``snapshot_url`` on the block so clients can pedir a
+    cópia imutável da fonte (hooked later via archival serving endpoint).
     """
     popped = {field: props.pop(field, None) for field in _PROVENANCE_FIELDS}
     for required in ("source_id", "source_url", "ingested_at", "run_id"):
         if not popped.get(required):
             return None
+    snapshot_uri = popped.get("source_snapshot_uri")
     return ProvenanceBlock(
         source_id=str(popped["source_id"]),
         source_record_id=(
@@ -64,6 +73,7 @@ def _extract_provenance(props: dict[str, Any]) -> ProvenanceBlock | None:
         source_url=str(popped["source_url"]),
         ingested_at=str(popped["ingested_at"]),
         run_id=str(popped["run_id"]),
+        snapshot_url=str(snapshot_uri) if snapshot_uri else None,
     )
 
 

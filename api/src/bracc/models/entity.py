@@ -15,6 +15,11 @@ class ProvenanceBlock(BaseModel):
     Present on every node/relationship persisted under the current
     contract. May be absent for legacy data loaded before the contract
     was in force, in which case the field is ``None``.
+
+    ``snapshot_url`` is the opt-in archival snapshot URI (content-addressed
+    raw copy of the source payload at ingestion time). Present when the
+    pipeline carimbou ``source_snapshot_uri`` via ``archive_fetch``. Ver
+    ``docs/archival.md``. ``None`` para dados legados sem archival.
     """
 
     source_id: str
@@ -22,6 +27,7 @@ class ProvenanceBlock(BaseModel):
     source_url: str
     ingested_at: str
     run_id: str
+    snapshot_url: str | None = None
 
 
 class EntityResponse(BaseModel):

@@ -57,6 +57,33 @@ class TestExtractProvenance:
         assert "cnpj" in props
         assert "razao_social" in props
 
+    def test_block_without_snapshot_has_null_snapshot_url(self) -> None:
+        # Pipelines legados não gravam source_snapshot_uri — API deve
+        # serializar snapshot_url=None mas seguir retornando o bloco.
+        props = _stamped_props()
+        assert "source_snapshot_uri" not in props
+        block = _extract_provenance(props)
+        assert block is not None
+        assert block.snapshot_url is None
+        # O modelo serializa o campo (explicitamente) como None.
+        assert block.model_dump()["snapshot_url"] is None
+
+    def test_block_with_snapshot_uri_surfaces_as_snapshot_url(self) -> None:
+        props = _stamped_props(source_snapshot_uri="pncp_go/2026-04/abcdef123456.json")
+        block = _extract_provenance(props)
+        assert block is not None
+        assert block.snapshot_url == "pncp_go/2026-04/abcdef123456.json"
+        # source_snapshot_uri popped off properties dict
+        assert "source_snapshot_uri" not in props
+        assert block.model_dump()["snapshot_url"] == "pncp_go/2026-04/abcdef123456.json"
+
+    def test_empty_source_snapshot_uri_treated_as_none(self) -> None:
+        # Se alguém gravou string vazia por engano, tratamos como ausência.
+        props = _stamped_props(source_snapshot_uri="")
+        block = _extract_provenance(props)
+        assert block is not None
+        assert block.snapshot_url is None
+
 
 class TestNodeToEntityProvenance:
     def test_entity_carries_provenance(self) -> None:
