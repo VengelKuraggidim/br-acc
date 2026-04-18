@@ -48,7 +48,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -364,11 +363,15 @@ class EmendasParlamentaresGoPipeline(Pipeline):
         return pages
 
     def extract(self) -> None:
-        api_key = os.environ.get(_ENV_VAR, "").strip()
-        if not api_key:
+        from bracc_etl.secrets import SecretNotFoundError, load_secret
+
+        try:
+            api_key = load_secret("transparencia-key", env_fallback=_ENV_VAR)
+        except SecretNotFoundError as exc:
             raise ValueError(
-                f"{_ENV_VAR} obrigatoria para emendas_parlamentares_go",
-            )
+                f"{_ENV_VAR} obrigatoria para emendas_parlamentares_go "
+                "(ou configure GCP_PROJECT_ID + Secret Manager)",
+            ) from exc
 
         self._targets = self._discover_targets()
         if not self._targets:

@@ -27,6 +27,9 @@ dev = [
     "ruff>=0.15.2",
     "testcontainers[neo4j]>=4.0",
 ]
+gcp = [
+    "google-cloud-secret-manager>=2.20.0",
+]
 
 [build-system]
 requires = ["hatchling"]

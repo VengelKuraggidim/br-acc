@@ -34,6 +34,9 @@ bigquery = [
     "db-dtypes>=1.3.0",
     "pyarrow>=17.0.0",
 ]
+gcp = [
+    "google-cloud-secret-manager>=2.20.0",
+]
 
 [project.scripts]
 bracc-etl = "bracc_etl.runner:cli"

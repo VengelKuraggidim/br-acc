@@ -401,11 +401,17 @@ def sources(show_status: bool, neo4j_uri: str, neo4j_user: str, neo4j_password: 
         return
 
     if not neo4j_password:
-        neo4j_password = os.environ.get("NEO4J_PASSWORD", "")
-    if not neo4j_password:
-        raise click.ClickException(
-            "--neo4j-password or NEO4J_PASSWORD env var required for --status"
-        )
+        from bracc_etl.secrets import SecretNotFoundError, load_secret
+
+        try:
+            neo4j_password = load_secret(
+                "neo4j-password", env_fallback="NEO4J_PASSWORD"
+            )
+        except SecretNotFoundError:
+            raise click.ClickException(
+                "--neo4j-password ausente: defina via CLI, NEO4J_PASSWORD env "
+                "var, ou GCP_PROJECT_ID + Secret Manager 'fiscal-cidadao-neo4j-password'"
+            ) from None
 
     driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     try:

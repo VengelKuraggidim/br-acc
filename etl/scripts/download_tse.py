@@ -144,13 +144,7 @@ def _find_receita_files(extracted: list[Path]) -> list[Path]:
         if f.is_dir():
             continue
         # Match 2002-2006 format: ReceitaCandidato.csv
-        if name_lower == "receitacandidato.csv":
-            result.append(f)
-        # Match nested format: ReceitasCandidatos.txt
-        elif name_lower == "receitascandidatos.txt":
-            result.append(f)
-        # Match flat format: receitas_candidatos_*
-        elif name_lower.startswith("receitas_candidatos"):
+        if name_lower == "receitacandidato.csv" or name_lower == "receitascandidatos.txt" or name_lower.startswith("receitas_candidatos"):
             result.append(f)
     return result
 
