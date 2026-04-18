@@ -36,11 +36,14 @@ fi
 # Password vem do Secret Manager (fiscal-cidadao-neo4j-password) —
 # carregada dentro do app via bracc.secrets.load_secret. Cloud Run so
 # precisa saber a URI e o user.
+# NEO4J_USER default 'neo4j' (padrao Aura); override via env var se o
+# Aura gerou username customizado.
+NEO4J_USER="${NEO4J_USER:-neo4j}"
 ENV_VARS="GCP_PROJECT_ID=${PROJECT_ID}"
 ENV_VARS="${ENV_VARS},APP_ENV=prod"
 ENV_VARS="${ENV_VARS},LOG_LEVEL=warning"
 ENV_VARS="${ENV_VARS},NEO4J_URI=${NEO4J_URI}"
-ENV_VARS="${ENV_VARS},NEO4J_USER=neo4j"
+ENV_VARS="${ENV_VARS},NEO4J_USER=${NEO4J_USER}"
 ENV_VARS="${ENV_VARS},PUBLIC_MODE=true"
 ENV_VARS="${ENV_VARS},PUBLIC_ALLOW_PERSON=true"
 ENV_VARS="${ENV_VARS},PUBLIC_ALLOW_ENTITY_LOOKUP=true"
