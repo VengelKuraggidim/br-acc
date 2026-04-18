@@ -222,7 +222,7 @@ def fetch_to_disk(
             f"exceeds max_days={max_days}. Raise --max-days to proceed."
         )
 
-    secs = tuple((s.lower() for s in (sections or _DOU_SECTIONS_DEFAULT)))
+    secs = tuple(s.lower() for s in (sections or _DOU_SECTIONS_DEFAULT))
 
     logger.info(
         "[dou.fetch_to_disk] Fetching DOU %s..%s sections=%s -> %s",

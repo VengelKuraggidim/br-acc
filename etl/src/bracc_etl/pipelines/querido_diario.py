@@ -14,6 +14,8 @@ from bracc_etl.transforms import (
     deduplicate_rows,
     extract_cnpjs_with_spans,
     parse_date,
+)
+from bracc_etl.transforms import (
     stable_id as _stable_id,
 )
 

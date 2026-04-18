@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -60,7 +60,7 @@ def _previous_month(yyyymm: str) -> str:
 
 
 def _current_yyyymm() -> str:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     return f"{now.year:04d}{now.month:02d}"
 
 

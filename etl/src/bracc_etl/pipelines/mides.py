@@ -16,8 +16,10 @@ from bracc_etl.transforms import (
     parse_date,
     parse_number_smart,
     row_pick,
-    stable_id as _stable_id,
     strip_document,
+)
+from bracc_etl.transforms import (
+    stable_id as _stable_id,
 )
 
 if TYPE_CHECKING:
