@@ -123,14 +123,8 @@ def _nome_empresa(props: dict[str, Any]) -> str:
 
 # Tradução leiga pras 5 situações cadastrais RFB. Exibida direto no card
 # de doadores/sócios; `situacao_fmt` vai pro UI, `situacao` bruto fica
-# pras buscas/filtros.
-_SITUACAO_LEIGA: dict[str, str] = {
-    "ATIVA": "Ativa",
-    "BAIXADA": "Baixada",
-    "SUSPENSA": "Suspensa",
-    "INAPTA": "Inapta",
-    "NULA": "Nula",
-}
+# pras buscas/filtros. Constantes centralizadas em `rfb_status`.
+from bracc.services.rfb_status import LABEL_LEIGA as _SITUACAO_LEIGA  # noqa: E402
 
 
 def _situacao_from_props(

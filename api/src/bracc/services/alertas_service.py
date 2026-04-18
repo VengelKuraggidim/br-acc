@@ -44,12 +44,9 @@ class _PerfilComEmpresas(Protocol):
     doadores_empresa: list[DoadorEmpresa]
     socios: list[SocioConectado]
 
-# Situações RFB que caracterizam empresa não-operacional. Alerta grave
-# quando aparecem em doadores OU sócios — são os sinais mais fortes de
-# laranja, caixa 2 ou fraude documentados pelos auditores eleitorais.
-_SITUACOES_GRAVES: frozenset[str] = frozenset({
-    "BAIXADA", "SUSPENSA", "INAPTA",
-})
+# Situações RFB não-operacionais levantam alerta grave em doadores/sócios.
+# Constantes canônicas centralizadas em `rfb_status`.
+from bracc.services.rfb_status import SITUACOES_GRAVES as _SITUACOES_GRAVES  # noqa: E402
 
 # --- Constantes de análise ---------------------------------------------------
 
