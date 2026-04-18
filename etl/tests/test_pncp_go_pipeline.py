@@ -347,6 +347,54 @@ class TestLoad:
         session_mock = mock_session(pipeline)
         assert session_mock.run.call_count == 0
 
+    def test_provenance_stamped_on_procurement_nodes(self) -> None:
+        """load() stamps the 5 provenance fields on each GoProcurement dict."""
+        pipeline = _make_pipeline()
+        _load_fixture(pipeline)
+        pipeline.transform()
+        pipeline.load()
+
+        session_mock = mock_session(pipeline)
+        # Find the UNWIND/MERGE call for GoProcurement and inspect the rows.
+        procurement_calls = [
+            call for call in session_mock.run.call_args_list
+            if "MERGE (n:GoProcurement" in str(call)
+        ]
+        assert procurement_calls
+        _, kwargs = procurement_calls[0][0], procurement_calls[0][1]
+        # session.run(query, {"rows": batch}) -> batch is the 2nd positional.
+        params = procurement_calls[0][0][1] if len(procurement_calls[0][0]) > 1 else kwargs
+        rows = params["rows"]
+        assert rows
+        for r in rows:
+            assert r["source_id"] == "pncp_go"
+            # record_id is cnpj_digits|year|sequential (raw composite).
+            assert "|" in r["source_record_id"]
+            assert r["source_url"].startswith("http")
+            assert r["ingested_at"].startswith("20")
+            assert r["run_id"].startswith("pncp_go_")
+
+    def test_provenance_stamped_on_forneceu_rels(self) -> None:
+        """load() stamps provenance on FORNECEU_GO relationship rows."""
+        pipeline = _make_pipeline()
+        _load_fixture(pipeline)
+        pipeline.transform()
+        pipeline.load()
+
+        session_mock = mock_session(pipeline)
+        rel_calls = [
+            call for call in session_mock.run.call_args_list
+            if "FORNECEU_GO" in str(call)
+        ]
+        assert rel_calls
+        params = rel_calls[0][0][1]
+        rows = params["rows"]
+        assert rows
+        for r in rows:
+            assert r["source_id"] == "pncp_go"
+            assert "|" in r["source_record_id"]
+            assert r["source_url"].startswith("http")
+
     def test_load_calls_correct_number_of_batches(self) -> None:
         """Should call session.run for GoProcurement, Company (agency), CONTRATOU_GO,
         Company (supplier), and FORNECEU_GO."""

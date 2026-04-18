@@ -379,13 +379,16 @@ class TcmGoPipeline(Pipeline):
                 str(row.get("ente", "") or row.get("instituicao", "") or row.get("nome", ""))
             )
             population = row.get("populacao", "")
-            municipalities.append({
-                "municipality_id": cod_ibge,
-                "name": name,
-                "uf": "GO",
-                "population": str(population).strip() if population else "",
-                "source": "tcm_go",
-            })
+            municipalities.append(self.attach_provenance(
+                {
+                    "municipality_id": cod_ibge,
+                    "name": name,
+                    "uf": "GO",
+                    "population": str(population).strip() if population else "",
+                    "source": "tcm_go",
+                },
+                record_id=cod_ibge,
+            ))
 
         # Process fiscal records into revenues and expenditures
         for row in self._raw_fiscal:
@@ -424,36 +427,49 @@ class TcmGoPipeline(Pipeline):
             id_source = f"{cod_ibge}_{exercicio}_{conta}_{coluna}"
             stable_id = hashlib.sha256(id_source.encode()).hexdigest()[:16]
 
+            record_id = f"{cod_ibge}|{exercicio}|{conta}|{coluna}"
             if is_revenue:
-                revenues.append({
-                    "revenue_id": stable_id,
-                    "municipality_id": cod_ibge,
-                    "year": exercicio,
-                    "account": conta,
-                    "column": coluna,
-                    "description": descricao,
-                    "amount": amount,
-                    "source": "tcm_go",
-                })
-                revenue_rels.append({
-                    "source_key": cod_ibge,
-                    "target_key": stable_id,
-                })
+                revenues.append(self.attach_provenance(
+                    {
+                        "revenue_id": stable_id,
+                        "municipality_id": cod_ibge,
+                        "year": exercicio,
+                        "account": conta,
+                        "column": coluna,
+                        "description": descricao,
+                        "amount": amount,
+                        "source": "tcm_go",
+                    },
+                    record_id=record_id,
+                ))
+                revenue_rels.append(self.attach_provenance(
+                    {
+                        "source_key": cod_ibge,
+                        "target_key": stable_id,
+                    },
+                    record_id=record_id,
+                ))
             else:
-                expenditures.append({
-                    "expenditure_id": stable_id,
-                    "municipality_id": cod_ibge,
-                    "year": exercicio,
-                    "account": conta,
-                    "column": coluna,
-                    "description": descricao,
-                    "amount": amount,
-                    "source": "tcm_go",
-                })
-                expenditure_rels.append({
-                    "source_key": cod_ibge,
-                    "target_key": stable_id,
-                })
+                expenditures.append(self.attach_provenance(
+                    {
+                        "expenditure_id": stable_id,
+                        "municipality_id": cod_ibge,
+                        "year": exercicio,
+                        "account": conta,
+                        "column": coluna,
+                        "description": descricao,
+                        "amount": amount,
+                        "source": "tcm_go",
+                    },
+                    record_id=record_id,
+                ))
+                expenditure_rels.append(self.attach_provenance(
+                    {
+                        "source_key": cod_ibge,
+                        "target_key": stable_id,
+                    },
+                    record_id=record_id,
+                ))
 
         self.municipalities = deduplicate_rows(municipalities, ["municipality_id"])
         self.revenues = deduplicate_rows(revenues, ["revenue_id"])

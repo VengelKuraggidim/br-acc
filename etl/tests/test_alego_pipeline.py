@@ -67,6 +67,43 @@ class TestTransform:
         ):
             assert r["source"] == "alego"
 
+    def test_provenance_stamped_on_legislators(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.legislators
+        for r in pipeline.legislators:
+            assert r["source_id"] == "alego"
+            # record_id is name|party|legislature.
+            assert r["source_record_id"].count("|") == 2
+            assert r["source_url"].startswith("http")
+            assert r["ingested_at"].startswith("20")
+            assert r["run_id"].startswith("alego_")
+
+    def test_provenance_stamped_on_expenses_and_rels(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.expenses
+        for r in pipeline.expenses:
+            assert r["source_id"] == "alego"
+            # legislator_name|date|supplier|amount composite.
+            assert r["source_record_id"].count("|") == 3
+            assert r["source_url"].startswith("http")
+        for rel in pipeline.expense_rels:
+            assert rel["source_id"] == "alego"
+            assert rel["source_record_id"]
+            assert rel["run_id"].startswith("alego_")
+
+    def test_provenance_stamped_on_propositions(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        for r in pipeline.propositions:
+            assert r["source_id"] == "alego"
+            assert r["source_record_id"]
+            assert r["source_url"].startswith("http")
+
 
 class TestLoad:
     def test_load_calls_session(self) -> None:

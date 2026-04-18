@@ -266,23 +266,30 @@ class TcmgoSancoesPipeline(Pipeline):
             elif len(doc_digits) == 11:
                 doc_kind = "CPF"
                 doc_fmt = mask_cpf(doc_raw)
-            self.impedidos.append({
-                "impedido_id": record_id,
-                "document": doc_fmt,
-                "document_kind": doc_kind,
-                "name": name,
-                "motivo": motivo,
-                "processo": processo,
-                "data_inicio": parse_date(inicio) if inicio else "",
-                "data_fim": parse_date(fim) if fim else "",
-                "uf": "GO",
-                "source": "tcmgo_sancoes",
-            })
+            impedido_record_id = f"{doc_fmt}|{processo}"
+            self.impedidos.append(self.attach_provenance(
+                {
+                    "impedido_id": record_id,
+                    "document": doc_fmt,
+                    "document_kind": doc_kind,
+                    "name": name,
+                    "motivo": motivo,
+                    "processo": processo,
+                    "data_inicio": parse_date(inicio) if inicio else "",
+                    "data_fim": parse_date(fim) if fim else "",
+                    "uf": "GO",
+                    "source": "tcmgo_sancoes",
+                },
+                record_id=impedido_record_id,
+            ))
             if doc_kind == "CNPJ":
-                self.impedido_rels.append({
-                    "source_key": doc_fmt,
-                    "target_key": record_id,
-                })
+                self.impedido_rels.append(self.attach_provenance(
+                    {
+                        "source_key": doc_fmt,
+                        "target_key": record_id,
+                    },
+                    record_id=impedido_record_id,
+                ))
 
         for _, row in self._raw_rejeitados.iterrows():
             municipio = normalize_name(
@@ -296,17 +303,21 @@ class TcmgoSancoesPipeline(Pipeline):
             if not municipio and not processo:
                 continue
             record_id = _hash_id(cod_ibge, municipio, exercicio, processo)
-            self.rejected_accounts.append({
-                "account_id": record_id,
-                "cod_ibge": cod_ibge,
-                "municipality": municipio,
-                "exercicio": exercicio,
-                "processo": processo,
-                "parecer": parecer,
-                "relator": relator,
-                "uf": "GO",
-                "source": "tcmgo_sancoes",
-            })
+            account_record_id = f"{cod_ibge}|{exercicio}|{processo}"
+            self.rejected_accounts.append(self.attach_provenance(
+                {
+                    "account_id": record_id,
+                    "cod_ibge": cod_ibge,
+                    "municipality": municipio,
+                    "exercicio": exercicio,
+                    "processo": processo,
+                    "parecer": parecer,
+                    "relator": relator,
+                    "uf": "GO",
+                    "source": "tcmgo_sancoes",
+                },
+                record_id=account_record_id,
+            ))
 
         self.impedidos = deduplicate_rows(self.impedidos, ["impedido_id"])
         self.rejected_accounts = deduplicate_rows(
@@ -326,9 +337,15 @@ class TcmgoSancoesPipeline(Pipeline):
             loader.load_nodes(
                 "TcmGoImpedido", self.impedidos, key_field="impedido_id",
             )
+            # Company nodes derived from impedidos need provenance too. The
+            # raw CNPJ digits are the natural record_id (deep-link is the
+            # registry primary_url; no per-record URL available here).
             companies = deduplicate_rows(
                 [
-                    {"cnpj": r["document"], "razao_social": r["name"]}
+                    self.attach_provenance(
+                        {"cnpj": r["document"], "razao_social": r["name"]},
+                        record_id=strip_document(str(r["document"])),
+                    )
                     for r in self.impedidos
                     if r["document_kind"] == "CNPJ"
                 ],

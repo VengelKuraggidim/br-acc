@@ -309,16 +309,20 @@ class SspGoPipeline(Pipeline):
             if not municipio and not cod_ibge:
                 continue
             stat_id = _hash_id(cod_ibge, municipio, crime_type, periodo)
-            self.stats.append({
-                "stat_id": stat_id,
-                "cod_ibge": cod_ibge,
-                "municipality": municipio,
-                "crime_type": crime_type,
-                "period": periodo,
-                "count": count,
-                "uf": "GO",
-                "source": "ssp_go",
-            })
+            stat_record_id = f"{cod_ibge}|{crime_type}|{periodo}"
+            self.stats.append(self.attach_provenance(
+                {
+                    "stat_id": stat_id,
+                    "cod_ibge": cod_ibge,
+                    "municipality": municipio,
+                    "crime_type": crime_type,
+                    "period": periodo,
+                    "count": count,
+                    "uf": "GO",
+                    "source": "ssp_go",
+                },
+                record_id=stat_record_id,
+            ))
 
         self.stats = deduplicate_rows(self.stats, ["stat_id"])
         self.rows_loaded = len(self.stats)

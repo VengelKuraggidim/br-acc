@@ -172,17 +172,21 @@ class TceGoPipeline(Pipeline):
             if not numero and not ementa:
                 continue
             decision_id = _hash_id(numero, data, tipo)
-            self.decisions.append({
-                "decision_id": decision_id,
-                "numero": numero,
-                "tipo": tipo,
-                "orgao": orgao,
-                "relator": relator,
-                "ementa": ementa,
-                "published_at": parse_date(data) if data else "",
-                "uf": "GO",
-                "source": "tce_go",
-            })
+            decision_record_id = f"{numero}|{data}"
+            self.decisions.append(self.attach_provenance(
+                {
+                    "decision_id": decision_id,
+                    "numero": numero,
+                    "tipo": tipo,
+                    "orgao": orgao,
+                    "relator": relator,
+                    "ementa": ementa,
+                    "published_at": parse_date(data) if data else "",
+                    "uf": "GO",
+                    "source": "tce_go",
+                },
+                record_id=decision_record_id,
+            ))
 
     def _transform_irregular(self) -> None:
         for _, row in self._raw_irregular.iterrows():
@@ -198,21 +202,35 @@ class TceGoPipeline(Pipeline):
                 continue
             account_id = _hash_id(cnpj_digits, name, processo, julgamento)
             cnpj_fmt = format_cnpj(cnpj_raw) if len(cnpj_digits) == 14 else ""
-            self.irregular_accounts.append({
-                "account_id": account_id,
-                "cnpj": cnpj_fmt,
-                "name": name,
-                "processo": processo,
-                "motivo": motivo,
-                "julgamento": parse_date(julgamento) if julgamento else "",
-                "uf": "GO",
-                "source": "tce_go",
-            })
+            # Use the TCE-GO processo number as the natural record_id when
+            # present; fall back to the composite of source fields when
+            # the row lacks a numbered process (rare).
+            account_record_id = (
+                str(processo)
+                if processo
+                else f"{cnpj_digits}|{name}|{julgamento}"
+            )
+            self.irregular_accounts.append(self.attach_provenance(
+                {
+                    "account_id": account_id,
+                    "cnpj": cnpj_fmt,
+                    "name": name,
+                    "processo": processo,
+                    "motivo": motivo,
+                    "julgamento": parse_date(julgamento) if julgamento else "",
+                    "uf": "GO",
+                    "source": "tce_go",
+                },
+                record_id=account_record_id,
+            ))
             if cnpj_fmt:
-                self.impedido_rels.append({
-                    "source_key": cnpj_fmt,
-                    "target_key": account_id,
-                })
+                self.impedido_rels.append(self.attach_provenance(
+                    {
+                        "source_key": cnpj_fmt,
+                        "target_key": account_id,
+                    },
+                    record_id=account_record_id,
+                ))
 
     def _transform_audits(self) -> None:
         for _, row in self._raw_audits.iterrows():
@@ -224,16 +242,22 @@ class TceGoPipeline(Pipeline):
             if not numero and not titulo:
                 continue
             audit_id = _hash_id(numero, titulo, inicio)
-            self.audits.append({
-                "audit_id": audit_id,
-                "numero": numero,
-                "titulo": titulo,
-                "orgao": orgao,
-                "status": status,
-                "data_inicio": parse_date(inicio) if inicio else "",
-                "uf": "GO",
-                "source": "tce_go",
-            })
+            audit_record_id = (
+                str(numero) if numero else f"{titulo}|{inicio}"
+            )
+            self.audits.append(self.attach_provenance(
+                {
+                    "audit_id": audit_id,
+                    "numero": numero,
+                    "titulo": titulo,
+                    "orgao": orgao,
+                    "status": status,
+                    "data_inicio": parse_date(inicio) if inicio else "",
+                    "uf": "GO",
+                    "source": "tce_go",
+                },
+                record_id=audit_record_id,
+            ))
 
     # ------------------------------------------------------------------
     # Load
@@ -256,9 +280,14 @@ class TceGoPipeline(Pipeline):
                 self.irregular_accounts,
                 key_field="account_id",
             )
+            # Company nodes carry the raw CNPJ digits as record_id (natural
+            # key for the cross-source Company entity).
             companies = deduplicate_rows(
                 [
-                    {"cnpj": r["cnpj"], "razao_social": r["name"]}
+                    self.attach_provenance(
+                        {"cnpj": r["cnpj"], "razao_social": r["name"]},
+                        record_id=strip_document(str(r["cnpj"])),
+                    )
                     for r in self.irregular_accounts
                     if r["cnpj"]
                 ],

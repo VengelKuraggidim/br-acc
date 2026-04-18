@@ -544,31 +544,46 @@ class PncpGoPipeline(Pipeline):
 
         loader = Neo4jBatchLoader(self.driver)
 
+        # Per PNCP's natural composite key: cnpj|ano|sequencial. We strip
+        # the agency CNPJ back to digits so the record_id matches the raw
+        # PNCP API shape (``orgaoEntidade.cnpj``) and is not affected by
+        # the 14-digit masking applied for display.
+        def _record_id_for(p: dict[str, Any]) -> str:
+            cnpj_digits = strip_document(str(p.get("cnpj_agency", "")))
+            return f"{cnpj_digits}|{p.get('year', '')}|{p.get('sequential', '')}"
+
         # GoProcurement nodes
         procurement_nodes = [
-            {
-                "procurement_id": p["procurement_id"],
-                "cnpj_agency": p["cnpj_agency"],
-                "agency_name": p["agency_name"],
-                "year": p["year"],
-                "sequential": p["sequential"],
-                "object": p["object"],
-                "modality": p["modality"],
-                "amount_estimated": p["amount_estimated"],
-                "published_at": p["published_at"],
-                "uf": p["uf"],
-                "municipality": p["municipality"],
-                "source": p["source"],
-            }
+            self.attach_provenance(
+                {
+                    "procurement_id": p["procurement_id"],
+                    "cnpj_agency": p["cnpj_agency"],
+                    "agency_name": p["agency_name"],
+                    "year": p["year"],
+                    "sequential": p["sequential"],
+                    "object": p["object"],
+                    "modality": p["modality"],
+                    "amount_estimated": p["amount_estimated"],
+                    "published_at": p["published_at"],
+                    "uf": p["uf"],
+                    "municipality": p["municipality"],
+                    "source": p["source"],
+                },
+                record_id=_record_id_for(p),
+            )
             for p in self.procurements
         ]
         count = loader.load_nodes("GoProcurement", procurement_nodes, key_field="procurement_id")
         logger.info("Loaded %d GoProcurement nodes", count)
 
-        # Ensure Company nodes exist for contracting agencies
+        # Ensure Company nodes exist for contracting agencies. Use the raw
+        # CNPJ digits as record_id (natural key for the Company entity).
         agencies = deduplicate_rows(
             [
-                {"cnpj": p["cnpj_agency"], "razao_social": p["agency_name"]}
+                self.attach_provenance(
+                    {"cnpj": p["cnpj_agency"], "razao_social": p["agency_name"]},
+                    record_id=strip_document(str(p["cnpj_agency"])),
+                )
                 for p in self.procurements
             ],
             ["cnpj"],
@@ -578,7 +593,10 @@ class PncpGoPipeline(Pipeline):
 
         # CONTRATOU_GO: Company (agency) -> GoProcurement
         agency_rels = [
-            {"source_key": p["cnpj_agency"], "target_key": p["procurement_id"]}
+            self.attach_provenance(
+                {"source_key": p["cnpj_agency"], "target_key": p["procurement_id"]},
+                record_id=_record_id_for(p),
+            )
             for p in self.procurements
         ]
         count = loader.load_relationships(
@@ -595,15 +613,22 @@ class PncpGoPipeline(Pipeline):
         supplier_company_rows: list[dict[str, Any]] = []
         supplier_rels: list[dict[str, Any]] = []
         for p in self.procurements:
+            record_id = _record_id_for(p)
             for forn in p.get("fornecedores", []):
-                supplier_company_rows.append({
-                    "cnpj": forn["cnpj"],
-                    "razao_social": forn["razao_social"],
-                })
-                supplier_rels.append({
-                    "source_key": forn["cnpj"],
-                    "target_key": p["procurement_id"],
-                })
+                supplier_company_rows.append(self.attach_provenance(
+                    {
+                        "cnpj": forn["cnpj"],
+                        "razao_social": forn["razao_social"],
+                    },
+                    record_id=strip_document(str(forn["cnpj"])),
+                ))
+                supplier_rels.append(self.attach_provenance(
+                    {
+                        "source_key": forn["cnpj"],
+                        "target_key": p["procurement_id"],
+                    },
+                    record_id=record_id,
+                ))
 
         if supplier_company_rows:
             deduped_suppliers = deduplicate_rows(supplier_company_rows, ["cnpj"])

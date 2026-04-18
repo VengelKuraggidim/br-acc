@@ -301,26 +301,33 @@ class StatePortalGoPipeline(Pipeline):
             amount = parse_brl_flexible(valor_raw, default=None)
             amount = cap_contract_value(amount) if amount is not None else None
 
-            self.contracts.append({
-                "contract_id": contract_id,
-                "contract_number": numero,
-                "agency": orgao,
-                "cnpj_supplier": cnpj_fmt,
-                "supplier_name": supplier_name,
-                "object": objeto,
-                "amount": amount,
-                "published_at": parse_date(published) if published else "",
-                "vigencia_inicio": parse_date(vigencia_inicio) if vigencia_inicio else "",
-                "vigencia_fim": parse_date(vigencia_fim) if vigencia_fim else "",
-                "uf": "GO",
-                "source": "state_portal_go",
-            })
+            contract_record_id = f"{numero}|{cnpj_fmt}|{published}"
+            self.contracts.append(self.attach_provenance(
+                {
+                    "contract_id": contract_id,
+                    "contract_number": numero,
+                    "agency": orgao,
+                    "cnpj_supplier": cnpj_fmt,
+                    "supplier_name": supplier_name,
+                    "object": objeto,
+                    "amount": amount,
+                    "published_at": parse_date(published) if published else "",
+                    "vigencia_inicio": parse_date(vigencia_inicio) if vigencia_inicio else "",
+                    "vigencia_fim": parse_date(vigencia_fim) if vigencia_fim else "",
+                    "uf": "GO",
+                    "source": "state_portal_go",
+                },
+                record_id=contract_record_id,
+            ))
 
             if cnpj_fmt:
-                self.contract_rels.append({
-                    "source_key": cnpj_fmt,
-                    "target_key": contract_id,
-                })
+                self.contract_rels.append(self.attach_provenance(
+                    {
+                        "source_key": cnpj_fmt,
+                        "target_key": contract_id,
+                    },
+                    record_id=contract_record_id,
+                ))
 
     def _transform_suppliers(self) -> None:
         if self._raw_suppliers.empty:
@@ -341,14 +348,17 @@ class StatePortalGoPipeline(Pipeline):
                 row, "data_cadastro", "dt_cadastro", "data_inscricao",
             )
             cnpj_fmt = format_cnpj(cnpj_raw)
-            self.suppliers.append({
-                "cnpj": cnpj_fmt,
-                "name": name,
-                "situacao": situacao,
-                "registered_at": parse_date(registered_at) if registered_at else "",
-                "uf": "GO",
-                "source": "state_portal_go",
-            })
+            self.suppliers.append(self.attach_provenance(
+                {
+                    "cnpj": cnpj_fmt,
+                    "name": name,
+                    "situacao": situacao,
+                    "registered_at": parse_date(registered_at) if registered_at else "",
+                    "uf": "GO",
+                    "source": "state_portal_go",
+                },
+                record_id=cnpj_fmt,
+            ))
 
     def _transform_sanctions(self) -> None:
         if self._raw_sanctions.empty:
@@ -379,23 +389,30 @@ class StatePortalGoPipeline(Pipeline):
             sanction_id = _hash_id(cnpj_digits, name, tipo, processo, inicio)
             cnpj_fmt = format_cnpj(cnpj_raw) if len(cnpj_digits) == 14 else ""
 
-            self.sanctions.append({
-                "sanction_id": sanction_id,
-                "cnpj": cnpj_fmt,
-                "name": name,
-                "tipo": tipo,
-                "orgao": orgao,
-                "processo": processo,
-                "data_inicio": parse_date(inicio) if inicio else "",
-                "data_fim": parse_date(fim) if fim else "",
-                "uf": "GO",
-                "source": "state_portal_go",
-            })
+            sanction_record_id = f"{cnpj_fmt}|{tipo}|{processo}"
+            self.sanctions.append(self.attach_provenance(
+                {
+                    "sanction_id": sanction_id,
+                    "cnpj": cnpj_fmt,
+                    "name": name,
+                    "tipo": tipo,
+                    "orgao": orgao,
+                    "processo": processo,
+                    "data_inicio": parse_date(inicio) if inicio else "",
+                    "data_fim": parse_date(fim) if fim else "",
+                    "uf": "GO",
+                    "source": "state_portal_go",
+                },
+                record_id=sanction_record_id,
+            ))
             if cnpj_fmt:
-                self.sanction_rels.append({
-                    "source_key": cnpj_fmt,
-                    "target_key": sanction_id,
-                })
+                self.sanction_rels.append(self.attach_provenance(
+                    {
+                        "source_key": cnpj_fmt,
+                        "target_key": sanction_id,
+                    },
+                    record_id=sanction_record_id,
+                ))
 
     # ------------------------------------------------------------------
     # Load
@@ -416,12 +433,15 @@ class StatePortalGoPipeline(Pipeline):
             loader.load_nodes(
                 "Company",
                 [
-                    {
-                        "cnpj": s["cnpj"],
-                        "razao_social": s["name"],
-                        "uf": s["uf"],
-                        "source": s["source"],
-                    }
+                    self.attach_provenance(
+                        {
+                            "cnpj": s["cnpj"],
+                            "razao_social": s["name"],
+                            "uf": s["uf"],
+                            "source": s["source"],
+                        },
+                        record_id=strip_document(str(s["cnpj"])),
+                    )
                     for s in self.suppliers
                 ],
                 key_field="cnpj",
@@ -434,10 +454,14 @@ class StatePortalGoPipeline(Pipeline):
             loader.load_nodes(
                 "GoStateSanction", self.sanctions, key_field="sanction_id",
             )
-            # Ensure Company nodes exist for sanctioned entities.
+            # Ensure Company nodes exist for sanctioned entities. Raw CNPJ
+            # digits are the natural record_id for the Company entity.
             sanctioned_companies = deduplicate_rows(
                 [
-                    {"cnpj": s["cnpj"], "razao_social": s["name"]}
+                    self.attach_provenance(
+                        {"cnpj": s["cnpj"], "razao_social": s["name"]},
+                        record_id=strip_document(str(s["cnpj"])),
+                    )
                     for s in self.sanctions
                     if s["cnpj"]
                 ],
@@ -452,7 +476,10 @@ class StatePortalGoPipeline(Pipeline):
         if self.contracts:
             contract_companies = deduplicate_rows(
                 [
-                    {"cnpj": c["cnpj_supplier"], "razao_social": c["supplier_name"]}
+                    self.attach_provenance(
+                        {"cnpj": c["cnpj_supplier"], "razao_social": c["supplier_name"]},
+                        record_id=strip_document(str(c["cnpj_supplier"])),
+                    )
                     for c in self.contracts
                     if c["cnpj_supplier"]
                 ],

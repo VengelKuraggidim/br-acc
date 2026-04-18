@@ -160,6 +160,47 @@ class TestTransform:
         assert len(pipeline.municipalities) == 0
         assert len(pipeline.revenues) == 0
 
+    def test_provenance_stamped_on_municipalities(
+        self, pipeline: TcmGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.municipalities
+        for m in pipeline.municipalities:
+            assert m["source_id"] == "tcm_go"
+            # record_id is the natural IBGE code.
+            assert m["source_record_id"] == m["municipality_id"]
+            assert m["source_url"].startswith("http")
+            assert m["ingested_at"].startswith("20")
+            assert m["run_id"].startswith("tcm_go_")
+
+    def test_provenance_stamped_on_revenues_and_rels(
+        self, pipeline: TcmGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.revenues
+        for r in pipeline.revenues:
+            assert r["source_id"] == "tcm_go"
+            # Composite raw cod_ibge|exercicio|conta|coluna.
+            assert r["source_record_id"].count("|") == 3
+            assert r["source_url"].startswith("http")
+        for rel in pipeline.revenue_rels:
+            assert rel["source_id"] == "tcm_go"
+            assert "|" in rel["source_record_id"]
+            assert rel["run_id"].startswith("tcm_go_")
+
+    def test_provenance_stamped_on_expenditures(
+        self, pipeline: TcmGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.expenditures
+        for e in pipeline.expenditures:
+            assert e["source_id"] == "tcm_go"
+            assert e["source_record_id"].count("|") == 3
+            assert e["source_url"].startswith("http")
+
     def test_is_revenue_classification(self) -> None:
         assert TcmGoPipeline._is_revenue("Receita Corrente Liquida") is True
         assert TcmGoPipeline._is_revenue("Receita Tributaria") is True
@@ -186,28 +227,37 @@ class TestLoad:
 
     def test_load_calls_loader(self, pipeline: TcmGoPipeline) -> None:
         pipeline.municipalities = [
-            {
-                "municipality_id": "5208707",
-                "name": "GOIANIA",
-                "uf": "GO",
-                "population": "1555626",
-                "source": "tcm_go",
-            }
+            pipeline.attach_provenance(
+                {
+                    "municipality_id": "5208707",
+                    "name": "GOIANIA",
+                    "uf": "GO",
+                    "population": "1555626",
+                    "source": "tcm_go",
+                },
+                record_id="5208707",
+            )
         ]
         pipeline.revenues = [
-            {
-                "revenue_id": "abc123",
-                "municipality_id": "5208707",
-                "year": "2023",
-                "account": "Receita Corrente Liquida",
-                "description": "Valor",
-                "amount": 8923456000.50,
-                "source": "tcm_go",
-            }
+            pipeline.attach_provenance(
+                {
+                    "revenue_id": "abc123",
+                    "municipality_id": "5208707",
+                    "year": "2023",
+                    "account": "Receita Corrente Liquida",
+                    "description": "Valor",
+                    "amount": 8923456000.50,
+                    "source": "tcm_go",
+                },
+                record_id="5208707|2023|Receita Corrente Liquida|Valor",
+            )
         ]
         pipeline.expenditures = []
         pipeline.revenue_rels = [
-            {"source_key": "5208707", "target_key": "abc123"},
+            pipeline.attach_provenance(
+                {"source_key": "5208707", "target_key": "abc123"},
+                record_id="5208707|2023|Receita Corrente Liquida|Valor",
+            ),
         ]
         pipeline.expenditure_rels = []
         pipeline.load()

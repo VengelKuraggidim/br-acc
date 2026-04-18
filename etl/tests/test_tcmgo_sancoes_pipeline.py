@@ -68,6 +68,32 @@ class TestTransform:
             assert r["uf"] == "GO"
             assert r["source"] == "tcmgo_sancoes"
 
+    def test_provenance_stamped_on_impedidos(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.impedidos
+        for r in pipeline.impedidos:
+            assert r["source_id"] == "tcmgo_sancoes"
+            # document|processo composite.
+            assert "|" in r["source_record_id"]
+            assert r["source_url"].startswith("http")
+            assert r["ingested_at"].startswith("20")
+            assert r["run_id"].startswith("tcmgo_sancoes_")
+        for rel in pipeline.impedido_rels:
+            assert rel["source_id"] == "tcmgo_sancoes"
+            assert "|" in rel["source_record_id"]
+
+    def test_provenance_stamped_on_rejected_accounts(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        for r in pipeline.rejected_accounts:
+            assert r["source_id"] == "tcmgo_sancoes"
+            # cod_ibge|exercicio|processo composite.
+            assert r["source_record_id"].count("|") == 2
+            assert r["source_url"].startswith("http")
+
 
 class TestLoad:
     def test_load_runs(self) -> None:

@@ -45,6 +45,43 @@ class TestTransform:
         pipeline.transform()
         assert all(s["uf"] == "GO" for s in pipeline.stats)
 
+    def test_provenance_stamped_on_stats(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.stats
+        for s in pipeline.stats:
+            assert s["source_id"] == "ssp_go"
+            # cod_ibge|crime_type|periodo composite.
+            assert s["source_record_id"].count("|") == 2
+            assert s["source_url"].startswith("http")
+            assert s["ingested_at"].startswith("20")
+            assert s["run_id"].startswith("ssp_go_")
+
+    def test_provenance_stamped_unit(self) -> None:
+        """Unit-level test so the scaffold is covered even without fixture."""
+        pipeline = _make_pipeline()
+        # Directly build a single raw row matching the shape ``transform``
+        # expects. This exercises attach_provenance on the scaffold path
+        # regardless of whether operator-provided CSVs exist.
+        import pandas as pd
+
+        pipeline._raw_stats = pd.DataFrame([
+            {
+                "cod_ibge": "5208707",
+                "municipio": "Goiania",
+                "natureza": "Roubo",
+                "periodo": "2024-01",
+                "quantidade": "128",
+            },
+        ])
+        pipeline.transform()
+        assert len(pipeline.stats) == 1
+        stat = pipeline.stats[0]
+        assert stat["source_id"] == "ssp_go"
+        assert stat["source_record_id"] == "5208707|ROUBO|2024-01"
+        assert stat["source_url"].startswith("http")
+
 
 class TestLoad:
     def test_load_creates_nodes(self) -> None:

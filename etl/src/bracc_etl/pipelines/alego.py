@@ -491,15 +491,19 @@ class AlegoPipeline(Pipeline):
             legislator_id = _hash_id(
                 name, cpf_digits[-4:] if cpf_digits else "", legislature,
             )
-            self.legislators.append({
-                "legislator_id": legislator_id,
-                "name": name,
-                "cpf": mask_cpf(cpf_raw) if cpf_digits else "",
-                "party": party,
-                "legislature": legislature,
-                "uf": "GO",
-                "source": "alego",
-            })
+            legislator_record_id = f"{name}|{party}|{legislature}"
+            self.legislators.append(self.attach_provenance(
+                {
+                    "legislator_id": legislator_id,
+                    "name": name,
+                    "cpf": mask_cpf(cpf_raw) if cpf_digits else "",
+                    "party": party,
+                    "legislature": legislature,
+                    "uf": "GO",
+                    "source": "alego",
+                },
+                record_id=legislator_record_id,
+            ))
 
         for _, row in self._raw_cota.iterrows():
             legislator_name = normalize_name(
@@ -521,25 +525,34 @@ class AlegoPipeline(Pipeline):
             expense_id = _hash_id(
                 legislator_name, cnpj_digits, tipo, data, str(amount or ""),
             )
-            self.expenses.append({
-                "expense_id": expense_id,
-                "legislator": legislator_name,
-                "supplier": fornecedor,
-                "cnpj_supplier": (
-                    format_cnpj(cnpj_raw) if len(cnpj_digits) == 14 else ""
-                ),
-                "tipo": tipo,
-                "amount": amount,
-                "date": parse_date(data) if data else "",
-                "uf": "GO",
-                "source": "alego",
-            })
+            expense_record_id = (
+                f"{legislator_name}|{data}|{fornecedor}|{amount}"
+            )
+            self.expenses.append(self.attach_provenance(
+                {
+                    "expense_id": expense_id,
+                    "legislator": legislator_name,
+                    "supplier": fornecedor,
+                    "cnpj_supplier": (
+                        format_cnpj(cnpj_raw) if len(cnpj_digits) == 14 else ""
+                    ),
+                    "tipo": tipo,
+                    "amount": amount,
+                    "date": parse_date(data) if data else "",
+                    "uf": "GO",
+                    "source": "alego",
+                },
+                record_id=expense_record_id,
+            ))
             if legislator_name:
                 legislator_id = _hash_id(legislator_name, "", "")
-                self.expense_rels.append({
-                    "source_key": legislator_id,
-                    "target_key": expense_id,
-                })
+                self.expense_rels.append(self.attach_provenance(
+                    {
+                        "source_key": legislator_id,
+                        "target_key": expense_id,
+                    },
+                    record_id=expense_record_id,
+                ))
 
         for _, row in self._raw_propositions.iterrows():
             numero = row_pick(row, "numero", "nr_proposicao", "identificacao")
@@ -549,15 +562,25 @@ class AlegoPipeline(Pipeline):
             if not numero and not titulo:
                 continue
             prop_id = _hash_id(numero, titulo, data)
-            self.propositions.append({
-                "proposition_id": prop_id,
-                "numero": numero,
-                "titulo": titulo,
-                "autor": autor,
-                "date": parse_date(data) if data else "",
-                "uf": "GO",
-                "source": "alego",
-            })
+            # Prefer the ``numero`` field (natural key of the legislative
+            # process at ALEGO) when available; fall back to the composite
+            # that generated the stable ID so rows without a numbered
+            # proposition are still uniquely traceable.
+            proposition_record_id = (
+                str(numero) if numero else f"{titulo}|{data}"
+            )
+            self.propositions.append(self.attach_provenance(
+                {
+                    "proposition_id": prop_id,
+                    "numero": numero,
+                    "titulo": titulo,
+                    "autor": autor,
+                    "date": parse_date(data) if data else "",
+                    "uf": "GO",
+                    "source": "alego",
+                },
+                record_id=proposition_record_id,
+            ))
 
         self.legislators = deduplicate_rows(self.legislators, ["legislator_id"])
         self.expenses = deduplicate_rows(self.expenses, ["expense_id"])

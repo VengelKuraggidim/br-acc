@@ -72,6 +72,57 @@ class TestTransform:
         for r in pipeline.decisions + pipeline.irregular_accounts + pipeline.audits:
             assert r["source"] == "tce_go"
 
+    def test_provenance_stamped_on_decisions(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.decisions
+        for r in pipeline.decisions:
+            assert r["source_id"] == "tce_go"
+            assert r["source_record_id"]  # numero|published_at composite
+            assert r["source_url"].startswith("http")
+            assert r["ingested_at"].startswith("20")
+            assert r["run_id"].startswith("tce_go_")
+
+    def test_provenance_stamped_on_irregular_and_audits(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        for r in pipeline.irregular_accounts:
+            assert r["source_id"] == "tce_go"
+            assert r["source_record_id"]
+            assert r["source_url"].startswith("http")
+        for rel in pipeline.impedido_rels:
+            assert rel["source_id"] == "tce_go"
+            assert rel["source_record_id"]
+        for a in pipeline.audits:
+            assert a["source_id"] == "tce_go"
+            assert a["source_record_id"]
+            assert a["source_url"].startswith("http")
+
+    def test_provenance_stamped_unit(self) -> None:
+        """Scaffold coverage without relying on fixture presence."""
+        import pandas as pd
+
+        pipeline = _make_pipeline()
+        pipeline._raw_decisions = pd.DataFrame([
+            {
+                "numero": "2024/1234",
+                "tipo": "acordao",
+                "data": "2024-05-01",
+                "orgao": "Secretaria X",
+                "ementa": "ementa teste",
+                "relator": "Conselheiro A",
+            },
+        ])
+        pipeline._raw_irregular = pd.DataFrame()
+        pipeline._raw_audits = pd.DataFrame()
+        pipeline.transform()
+        d = pipeline.decisions[0]
+        assert d["source_id"] == "tce_go"
+        assert d["source_record_id"] == "2024/1234|2024-05-01"
+        assert d["source_url"].startswith("http")
+
 
 class TestLoad:
     def test_load_creates_nodes(self) -> None:

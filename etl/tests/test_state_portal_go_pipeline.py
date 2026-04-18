@@ -96,6 +96,47 @@ class TestTransform:
         for record in pipeline.contracts + pipeline.suppliers + pipeline.sanctions:
             assert record["source"] == "state_portal_go"
 
+    def test_provenance_stamped_on_contracts_and_rels(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.contracts
+        for c in pipeline.contracts:
+            assert c["source_id"] == "state_portal_go"
+            # numero|cnpj_fmt|published composite.
+            assert c["source_record_id"].count("|") == 2
+            assert c["source_url"].startswith("http")
+            assert c["ingested_at"].startswith("20")
+            assert c["run_id"].startswith("state_portal_go_")
+        for rel in pipeline.contract_rels:
+            assert rel["source_id"] == "state_portal_go"
+            assert rel["source_record_id"].count("|") == 2
+
+    def test_provenance_stamped_on_suppliers(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.suppliers
+        for s in pipeline.suppliers:
+            assert s["source_id"] == "state_portal_go"
+            # Natural record_id is cnpj_fmt.
+            assert s["source_record_id"] == s["cnpj"]
+            assert s["source_url"].startswith("http")
+
+    def test_provenance_stamped_on_sanctions_and_rels(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.sanctions
+        for s in pipeline.sanctions:
+            assert s["source_id"] == "state_portal_go"
+            # cnpj|tipo|processo composite.
+            assert s["source_record_id"].count("|") == 2
+            assert s["source_url"].startswith("http")
+        for rel in pipeline.sanction_rels:
+            assert rel["source_id"] == "state_portal_go"
+            assert "|" in rel["source_record_id"]
+
     def test_hash_id_is_stable(self) -> None:
         assert _hash_id("a", "b") == _hash_id("a", "b")
         assert _hash_id("a", "b") != _hash_id("b", "a")
