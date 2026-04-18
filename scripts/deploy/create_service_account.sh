@@ -26,6 +26,19 @@ else
   gcloud iam service-accounts create "$SA_NAME" \
     --project="$PROJECT_ID" \
     --display-name="Fiscal Cidadao API (Cloud Run)"
+
+  # IAM propagation tem latencia — sem essa espera, o primeiro
+  # add-iam-policy-binding logo abaixo retorna 400 'SA does not exist'.
+  # Poll ate 30s pra SA aparecer no lookup.
+  echo "    aguardando propagacao IAM (ate 30s)..."
+  for i in $(seq 1 15); do
+    if gcloud iam service-accounts describe "$SA_EMAIL" \
+      --project="$PROJECT_ID" >/dev/null 2>&1; then
+      sleep 2  # margem extra
+      break
+    fi
+    sleep 2
+  done
 fi
 
 echo "==> Concedendo secretAccessor aos 3 secrets..."
