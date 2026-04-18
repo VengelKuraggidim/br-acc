@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from typing import Any
@@ -151,6 +152,7 @@ class PerfilPolitico(BaseModel):
     total_doacoes_fmt: str = "R$ 0,00"
     socios: list[SocioConectado] = []
     familia: list[FamiliarConectado] = []
+    aviso_despesas: str = ""
 
 
 class ServidorResumo(BaseModel):
@@ -832,6 +834,20 @@ async def perfil_politico(entity_id: str):
     if len(alertas) > 1:
         alertas = [a for a in alertas if a["tipo"] != "ok"]
 
+    # Se achamos qualquer dado util sobre o politico, nao mostrar o alerta
+    # generico "Avaliacao indisponivel" — ele soh faz sentido se o perfil
+    # esta completamente vazio.
+    tem_dados = bool(
+        emendas or doadores_empresa or doadores_pessoa
+        or socios or familia or empresas or contratos
+        or despesas_gabinete
+    )
+    if tem_dados:
+        alertas = [
+            a for a in alertas
+            if "Avaliação indisponível" not in a.get("texto", "")
+        ]
+
     # Gerar resumo em linguagem simples
     resumo = gerar_resumo_politico(
         nome=politico.nome,
@@ -863,6 +879,18 @@ async def perfil_politico(entity_id: str):
     else:
         descricao_conexoes = ""
 
+    # Aviso explicando pq nao tem despesas CEAP quando o politico nao e
+    # deputado federal (so a Camara Federal tem essa cota com dados publicos).
+    aviso_despesas = ""
+    if not despesas_gabinete and not deputado:
+        aviso_despesas = (
+            "Este(a) politico(a) nao e deputado(a) federal. "
+            "A cota parlamentar (CEAP) — com gastos de gabinete, telefone, "
+            "combustivel e aluguel de escritorio — so existe na Camara Federal. "
+            "Deputados estaduais e vereadores tem verbas parecidas, mas ainda "
+            "nao temos esses dados no sistema."
+        )
+
     return PerfilPolitico(
         politico=politico,
         resumo=resumo,
@@ -886,6 +914,7 @@ async def perfil_politico(entity_id: str):
         total_doacoes_fmt=fmt_brl(total_doacoes),
         socios=socios,
         familia=familia,
+        aviso_despesas=aviso_despesas,
     )
 
 
@@ -895,15 +924,29 @@ async def buscar_tudo(
     page: int = Query(default=1, ge=1),
 ):
     """Busca geral - politicos, empresas, contratos."""
+    # BRACC ranqueia empresas primeiro por fulltext; precisamos buscar
+    # pessoas separadamente pra que politicos de GO nao sejam soterrados.
     try:
-        resultado = await bracc.buscar(q, page=page)
+        pessoas_res, outros_res = await asyncio.gather(
+            bracc.buscar(q, tipo="person", page=page, size=30),
+            bracc.buscar(q, page=page, size=20),
+        )
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Erro: {e}") from e
 
     go_types = {"state_employee", "go_procurement", "go_appointment", "go_vereador"}
 
+    # Unir mantendo dedup por id e preservando a maior score
+    combined: dict[str, dict] = {}
+    for r in pessoas_res.get("results", []) + outros_res.get("results", []):
+        existing = combined.get(r["id"])
+        if not existing or (r.get("score", 0) > existing.get("score", 0)):
+            combined[r["id"]] = r
+
+    total = max(pessoas_res.get("total", 0), outros_res.get("total", 0))
+
     items = []
-    for r in resultado.get("results", []):
+    for r in sorted(combined.values(), key=lambda x: -x.get("score", 0)):
         props = r.get("properties", {})
         tipo = r.get("type", "")
 
@@ -963,7 +1006,7 @@ async def buscar_tudo(
 
     return {
         "resultados": items,
-        "total": resultado.get("total", 0),
+        "total": total,
         "pagina": page,
     }
 

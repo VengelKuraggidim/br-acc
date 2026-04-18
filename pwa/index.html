@@ -1358,6 +1358,18 @@ function renderPerfil(d) {
       </div>`;
     });
     html += '</div>';
+  } else if (d.aviso_despesas) {
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(249,115,22,0.15);">&#128179;</span>
+          Gastos com a política
+        </div>
+      </div>
+      <div style="padding:10px 14px; background:rgba(249,115,22,0.08); border-left:3px solid #f97316; border-radius:6px; font-size:13px; line-height:1.55; color:var(--text-secondary);">
+        ${d.aviso_despesas}
+      </div>
+    </div>`;
   }
 
   // Comparacao Cidada - gastos vs pessoa comum
