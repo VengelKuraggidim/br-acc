@@ -9,13 +9,22 @@ existe. Quando o pipeline voltar, reintroduzir os campos sem breaking change
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from bracc.models.entity import ProvenanceBlock  # noqa: TC001 (pydantic runtime annotation)
 
 
+_PERFIL_MODEL_CONFIG = ConfigDict(
+    extra="forbid",
+    str_strip_whitespace=True,
+)
+
+
 class PoliticoResumo(BaseModel):
     """Identificação básica de um político para exibição em card/resumo."""
+
+    model_config = _PERFIL_MODEL_CONFIG
+
 
     id: str
     nome: str
@@ -32,6 +41,8 @@ class PoliticoResumo(BaseModel):
 
 class Emenda(BaseModel):
     """Emenda parlamentar (individual, bancada, comissão, relator, pix)."""
+
+    model_config = _PERFIL_MODEL_CONFIG
 
     id: str
     tipo: str
@@ -56,6 +67,8 @@ class EmpresaConectada(BaseModel):
     leiga pra exibir (Ativa / Baixada / etc.).
     """
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     nome: str
     cnpj: str | None = None
     relacao: str
@@ -71,6 +84,8 @@ class DoadorEmpresa(BaseModel):
     (pipeline ``brasilapi_cnpj_status``). Quando a empresa está
     BAIXADA/SUSPENSA/INAPTA, o ``alertas_service`` levanta alerta grave.
     """
+
+    model_config = _PERFIL_MODEL_CONFIG
 
     nome: str
     cnpj: str | None = None
@@ -89,6 +104,8 @@ class DoadorPessoa(BaseModel):
     de entrar aqui — CPF pleno é violação LGPD.
     """
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     nome: str
     cpf_mascarado: str | None = None
     valor_total: float
@@ -106,6 +123,8 @@ class SocioConectado(BaseModel):
     também alimenta o alerta grave de ``alertas_service``.
     """
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     nome: str
     cnpj: str | None = None
     situacao: str | None = None
@@ -116,6 +135,8 @@ class SocioConectado(BaseModel):
 class FamiliarConectado(BaseModel):
     """Familiar ligado ao político (cônjuge/parente) com CPF mascarado."""
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     nome: str
     cpf_mascarado: str | None = None
     relacao: str
@@ -123,6 +144,8 @@ class FamiliarConectado(BaseModel):
 
 class ValidacaoTSE(BaseModel):
     """Cross-check entre o valor declarado ao TSE e o que BRACC ingeriu."""
+
+    model_config = _PERFIL_MODEL_CONFIG
 
     ano_eleicao: int
     total_declarado_tse: float
@@ -139,6 +162,8 @@ class ValidacaoTSE(BaseModel):
 class ContratoConectado(BaseModel):
     """Contrato ou licitação (federal ou GO) ligado ao político."""
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     objeto: str
     valor: float
     valor_fmt: str
@@ -149,6 +174,8 @@ class ContratoConectado(BaseModel):
 class DespesaGabinete(BaseModel):
     """Despesa CEAP agregada por tipo (combustível, telefone, etc)."""
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     tipo: str
     total: float
     total_fmt: str
@@ -156,6 +183,8 @@ class DespesaGabinete(BaseModel):
 
 class ComparacaoCidada(BaseModel):
     """Comparação de uma categoria CEAP contra a referência do cidadão comum."""
+
+    model_config = _PERFIL_MODEL_CONFIG
 
     categoria: str
     total_politico_fmt: str
@@ -181,6 +210,8 @@ class TetoGastos(BaseModel):
     * ``ultrapassou`` — >100% do teto (vermelho — infração eleitoral grave)
     """
 
+    model_config = _PERFIL_MODEL_CONFIG
+
     valor_limite: float
     valor_limite_fmt: str
     valor_gasto: float
@@ -200,6 +231,8 @@ class PerfilPolitico(BaseModel):
     conforme `docs/provenance.md`. `None` para agregações que ainda não
     carimbam a origem — será preenchido em fases posteriores.
     """
+
+    model_config = _PERFIL_MODEL_CONFIG
 
     provenance: ProvenanceBlock | None = None
     politico: PoliticoResumo
