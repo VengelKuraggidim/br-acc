@@ -105,10 +105,13 @@
       "required_inputs": [
         "data/tse_filiados/*"
       ],
-      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror); wrapper exits 0 and skips in public mode.",
-      "core": true,
+      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror). Skipped cleanly when GCP_BILLING_PROJECT env is absent.",
+      "core": false,
+      "credential_env": [
+        "GCP_BILLING_PROJECT"
+      ],
       "download_commands": [
-        "cd /workspace/etl && uv run python ../scripts/download_tse_filiados.py --output-dir ../data/tse_filiados --uf GO"
+        "cd /workspace/etl && uv run python ../scripts/download_tse_filiados.py --output-dir ../data/tse_filiados --uf GO --billing-project $GCP_BILLING_PROJECT"
       ]
     }
   ],

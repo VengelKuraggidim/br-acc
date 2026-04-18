@@ -58,15 +58,14 @@ htmlcov/
 *.gz
 !etl/tests/fixtures/**/*.csv
 
-# CNPJ data directories (keep .gitkeep only)
-data/cnpj/raw/*
-data/cnpj/extracted/*
-data/cnpj/reference/*
-!data/cnpj/**/.gitkeep
-
-# PNCP GO downloads (reproducible via scripts/download_pncp_go.py)
-data/pncp_go/*.json
-!data/pncp_go/.gitkeep
+# Pipeline data — all `data/<pipeline>/` contents are reproducible
+# outputs of `scripts/download_*.py` and must never be committed.
+# `.gitkeep` files are whitelisted to preserve directory structure
+# after a fresh clone. `data/demo/` is whitelisted as the only in-repo
+# dataset (synthetic fixtures for tests and offline demos).
+data/*/**
+!data/**/.gitkeep
+!data/demo/**
 
 # Audit artifacts
 audit-results/
@@ -85,11 +84,6 @@ scripts/audit-prompts/
 # Claude plans
 .claude/plans/
 .claude/*.lock
-
-# Data directories (downloaded datasets)
-data/comprasnet/
-data/rais/
-data/tse/
 
 # Local MCP runtime config (keep example only)
 .mcp.json
