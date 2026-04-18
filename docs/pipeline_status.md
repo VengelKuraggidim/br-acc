@@ -131,4 +131,5 @@ Status buckets:
 | tse_prestacao_contas | tse_prestacao_contas_go | implemented_partial | partial | file_batch | data/tse_prestacao_contas_go/* | Receitas + despesas + bens de candidatos GO (CSV anual pos-eleicao); popula validacao_tse do Flask |
 | un_sanctions | un_sanctions | implemented_loaded | loaded | file_batch | data/un_sanctions/* | - |
 | viagens | viagens | implemented_loaded | loaded | file_batch | data/viagens/* | - |
+| wikidata_politicos_foto | wikidata_politicos_foto | implemented_partial | partial | api_json | API payload from https://query.wikidata.org/sparql | Fallback universal de fotos pra ex-politicos GO via Wikidata SPARQL + Commons FilePath; pula em ambiguidade |
 | world_bank | world_bank | implemented_loaded | loaded | file_batch | data/world_bank/* | - |

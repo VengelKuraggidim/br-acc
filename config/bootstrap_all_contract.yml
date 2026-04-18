@@ -1,7 +1,7 @@
 {
-  "contract_version": "2026-04-17",
+  "contract_version": "2026-04-18",
   "full_historical_default": true,
-  "expected_implemented_count": 62,
+  "expected_implemented_count": 63,
   "core_sources": [
     "camara",
     "cnpj",
@@ -727,12 +727,21 @@
       "core": false
     },
     {
+<<<<<<< HEAD
       "pipeline_id": "alego_deputados_foto",
       "acquisition_mode": "api_call",
       "required_inputs": [
         "data/alego_deputados_foto/*"
       ],
       "blocking_reason_if_any": "HTML scraping do portal.al.go.leg.br/deputados — selector img.foto pode quebrar se Rails template mudar; cadência mensal porque fotos quase nunca mudam.",
+=======
+      "pipeline_id": "wikidata_politicos_foto",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/wikidata_politicos_foto/*"
+      ],
+      "blocking_reason_if_any": "graph-dependent: needs FederalLegislator/StateLegislator/Person GO populated first; throttled 1s/req per Wikidata UA policy; quarterly cadence",
+>>>>>>> 26ff313 (feat(etl): wikidata como fallback de fotos pra ex-politicos GO)
       "core": false
     }
   ]

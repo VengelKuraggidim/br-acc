@@ -75,6 +75,9 @@ from bracc_etl.pipelines.tse_filiados import TseFiliadosPipeline
 from bracc_etl.pipelines.tse_prestacao_contas_go import TsePrestacaoContasGoPipeline
 from bracc_etl.pipelines.un_sanctions import UnSanctionsPipeline
 from bracc_etl.pipelines.viagens import ViagensPipeline
+from bracc_etl.pipelines.wikidata_politicos_foto import (
+    WikidataPoliticosFotoPipeline,
+)
 from bracc_etl.pipelines.world_bank import WorldBankPipeline
 
 PIPELINES: dict[str, type] = {
@@ -141,6 +144,7 @@ PIPELINES: dict[str, type] = {
     "tse_prestacao_contas_go": TsePrestacaoContasGoPipeline,
     "emendas_parlamentares_go": EmendasParlamentaresGoPipeline,
     "brasilapi_cnpj_status": BrasilapiCnpjStatusPipeline,
+    "wikidata_politicos_foto": WikidataPoliticosFotoPipeline,
 }
 
 
