@@ -269,7 +269,7 @@ def fetch_to_disk(
         return []
 
     try:
-        from google.cloud import bigquery
+        from google.cloud import bigquery  # type: ignore[import-not-found]
     except ImportError:
         logger.warning(
             "[tse_filiados] google-cloud-bigquery not installed; "

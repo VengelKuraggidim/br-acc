@@ -189,7 +189,10 @@ def _download_ceap_csv(
         keep_default_na=False,
     )
     before = len(df)
-    df = df[df.get("sgUF", "").str.upper() == uf.upper()]
+    uf_series = df.get("sgUF")
+    if not isinstance(uf_series, pd.Series):
+        uf_series = pd.Series([""] * len(df), index=df.index)
+    df = df[uf_series.astype(str).str.upper() == uf.upper()]
     if df.empty:
         logger.warning(
             "[camara] CEAP %d: zero rows after UF=%s filter (had %d)",

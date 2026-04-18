@@ -350,7 +350,8 @@ def _http_get_json(url: str, *, timeout: float = 60.0, retries: int = 3) -> dict
                 resp = client.get(url, headers=headers)
             if resp.status_code == 200:
                 try:
-                    return resp.json()
+                    payload: dict[str, Any] = resp.json()
+                    return payload
                 except ValueError as exc:  # malformed JSON
                     logger.warning("[senado] non-JSON response from %s: %s", url, exc)
                     return None

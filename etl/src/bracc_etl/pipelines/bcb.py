@@ -149,7 +149,11 @@ def fetch_to_disk(
 
         skip = 0
         while True:
-            params = {"$format": "json", "$top": page_size, "$skip": skip}
+            params = {
+                "$format": "json",
+                "$top": str(page_size),
+                "$skip": str(skip),
+            }
             resp = client.get(url, params=params)
             resp.raise_for_status()
             payload = resp.json()
