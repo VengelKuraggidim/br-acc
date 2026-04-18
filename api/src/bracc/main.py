@@ -1,4 +1,5 @@
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -22,7 +23,6 @@ from bracc.routers import (
     graph,
     investigation,
     meta,
-    patterns,
     public,
     search,
 )
@@ -85,12 +85,20 @@ app.include_router(auth.router)
 app.include_router(entity.router)
 app.include_router(search.router)
 app.include_router(graph.router)
-app.include_router(patterns.router)
 app.include_router(baseline.router)
 app.include_router(investigation.router)
 app.include_router(investigation.shared_router)
 app.include_router(emendas.router)
 app.include_router(go.router)
+
+# Gated federal-scope routers. Default OFF — Fiscal Cidadao serves Goias
+# only. Set ENABLE_FEDERAL_ROUTES=true to mount the preserved federal
+# endpoints from api/src/bracc/_federal/. See docs/_federal_gating.md.
+if os.getenv("ENABLE_FEDERAL_ROUTES", "false").strip().lower() == "true":
+    from bracc._federal.routers import patterns as _federal_patterns  # noqa: E402
+
+    app.include_router(_federal_patterns.router)
+    _logger.info("ENABLE_FEDERAL_ROUTES=true: mounted _federal/ routers")
 
 
 @app.get("/health")
