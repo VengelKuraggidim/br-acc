@@ -1,201 +1,152 @@
-"""Unit tests for the PWA ``/politico/{entity_id}`` endpoint.
+"""Integration tests do endpoint ``GET /politico/{entity_id}``.
 
-Covers:
-* happy path — FederalLegislator + CEAP agregado + ProvenanceBlock com
-  ``snapshot_url``;
-* 404 — deputado não ingerido no grafo;
-* CEAP vazio — mesmo deputado, sem despesas (ainda retorna 200);
-* provenance ausente — nó sem carimbo (legados) não quebra o shape.
+Após Fase 04.F o endpoint devolve o shape completo de :class:`PerfilPolitico`
+(22 campos top-level), orquestrado por :mod:`bracc.services.perfil_service`.
+Estes testes mockam ``obter_perfil`` no nível do router pra validar:
+
+* happy path completo → shape PerfilPolitico integral;
+* 404 quando a entidade não existe ou não é político;
+* 502 quando o driver Neo4j quebra.
+
+Testes da lógica do service (fixtures de sub-services, assembly detalhado)
+ficam em ``tests/unit/test_perfil_service.py`` — aqui é só adapter/HTTP.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from bracc.models.perfil import (
+    Emenda,
+    PerfilPolitico,
+    PoliticoResumo,
+)
+from bracc.services.perfil_service import DriverError, EntityNotFoundError
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
 
-def _legislator_node(
-    *,
-    id_camara: str = "1001",
-    partido: str = "XYZ",
-    include_provenance: bool = True,
-) -> dict[str, Any]:
-    """Node props shape that ``pwa_politico`` consumes."""
-    base: dict[str, Any] = {
-        "id_camara": id_camara,
-        "legislator_id": f"camara_{id_camara}",
-        "name": "DEPUTADO EXEMPLO",
-        "cpf": "***.***.*33-44",
-        "partido": partido,
-        "uf": "GO",
-        "email": "ex@camara.leg.br",
-        "url_foto": "https://example.gov.br/foto.jpg",
-        "situacao": "Exercicio",
-        "legislatura_atual": 57,
-        "scope": "federal",
-        "source": "camara_deputados",
-    }
-    if include_provenance:
-        base.update(
-            {
-                "source_id": "camara_deputados",
-                "source_record_id": id_camara,
-                "source_url": (
-                    f"https://dadosabertos.camara.leg.br/api/v2/deputados/{id_camara}"
-                ),
-                "ingested_at": "2026-04-18T00:00:00+00:00",
-                "run_id": "camara_deputados_20260418000000",
-                "source_snapshot_uri": "camara_deputados/2026-04/aabbccddeeff.json",
-            },
-        )
-    return base
+def _perfil_fixture() -> PerfilPolitico:
+    """PerfilPolitico com os 22 campos preenchidos — happy path."""
+    politico = PoliticoResumo(
+        id="4:abc:1",
+        nome="Deputado Exemplo",
+        cpf=None,  # CPF pleno NUNCA aqui — mascarado upstream
+        patrimonio=1_500_000.0,
+        patrimonio_formatado="R$ 1.5 mil",
+        is_pep=False,
+        partido="ABC",
+        cargo="Deputado(a) Federal",
+        uf="GO",
+    )
+    emenda = Emenda(
+        id="EM-2024-001",
+        tipo="Emenda individual (feita por um unico parlamentar)",
+        funcao="Saude publica",
+        municipio="Goiania",
+        uf="GO",
+        valor_empenhado=100_000.0,
+        valor_empenhado_fmt="R$ 100.0 mil",
+        valor_pago=80_000.0,
+        valor_pago_fmt="R$ 80.0 mil",
+    )
+    return PerfilPolitico(
+        politico=politico,
+        resumo="Deputado Exemplo e Deputado(a) Federal.",
+        emendas=[emenda],
+        total_emendas_valor=80_000.0,
+        total_emendas_valor_fmt="R$ 80.0 mil",
+        empresas=[],
+        contratos=[],
+        despesas_gabinete=[],
+        total_despesas_gabinete=0.0,
+        total_despesas_gabinete_fmt="R$ 0,00",
+        comparacao_cidada=[],
+        comparacao_cidada_resumo="",
+        alertas=[{"tipo": "ok", "icone": "ok", "texto": "Tudo certo"}],
+        conexoes_total=1,
+        fonte_emendas="bracc",
+        descricao_conexoes="",
+        doadores_empresa=[],
+        doadores_pessoa=[],
+        total_doacoes=0.0,
+        total_doacoes_fmt="R$ 0,00",
+        socios=[],
+        familia=[],
+        aviso_despesas="",
+        validacao_tse=None,
+    )
 
 
 @pytest.mark.anyio
-async def test_politico_happy_path(client: AsyncClient) -> None:
-    record = {
-        "legislator": _legislator_node(),
-        "element_id": "4:abc:123",
-        "despesas": [
-            {"ano": 2024, "mes": 3, "valor": 500.0},
-            {"ano": 2024, "mes": 4, "valor": 1500.0},
-            {"ano": 2023, "mes": 2, "valor": 100.0},
-        ],
-    }
+async def test_politico_happy_path_devolve_perfil_completo(
+    client: AsyncClient,
+) -> None:
     with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
+        "bracc.routers.pwa_parity.perfil_service.obter_perfil",
         new_callable=AsyncMock,
-        return_value=record,
+        return_value=_perfil_fixture(),
     ):
-        response = await client.get("/politico/1001")
+        response = await client.get("/politico/4:abc:1")
 
     assert response.status_code == 200
     body = response.json()
-    # Shape básico
-    assert body["politico"]["id_camara"] == "1001"
-    assert body["politico"]["legislator_id"] == "camara_1001"
-    assert body["politico"]["nome"] == "DEPUTADO EXEMPLO"
+    # Shape básico — 22 campos top-level presentes.
+    assert body["politico"]["id"] == "4:abc:1"
+    assert body["politico"]["nome"] == "Deputado Exemplo"
     assert body["politico"]["uf"] == "GO"
-    assert body["politico"]["scope"] == "federal"
-    assert body["politico"]["partido"] == "XYZ"
-    assert body["politico"]["foto_url"].startswith("https://")
-    # CPF mascarado não quebra nada
-    assert body["politico"]["cpf"].startswith("***")
-    # CEAP agregado descrescente por ano
-    assert [d["ano"] for d in body["despesas_ceap"]] == [2024, 2023]
-    assert body["despesas_ceap"][0]["valor_total"] == 2000.0
-    assert body["despesas_ceap"][0]["n_despesas"] == 2
-    assert body["despesas_ceap"][1]["valor_total"] == 100.0
-    assert body["total_ceap"] == 2100.0
-    assert body["total_ceap_fmt"].startswith("R$")
-    # Provenance presente com snapshot_url
-    prov = body["provenance"]
-    assert prov is not None
-    assert prov["source_id"] == "camara_deputados"
-    assert prov["source_url"].startswith("https://dadosabertos.camara.leg.br")
-    assert prov["snapshot_url"] == "camara_deputados/2026-04/aabbccddeeff.json"
+    assert body["politico"]["cargo"] == "Deputado(a) Federal"
+    assert body["resumo"].startswith("Deputado Exemplo")
+    assert len(body["emendas"]) == 1
+    assert body["emendas"][0]["id"] == "EM-2024-001"
+    assert body["total_emendas_valor"] == 80_000.0
+    assert body["total_emendas_valor_fmt"].startswith("R$")
+    assert body["empresas"] == []
+    assert body["contratos"] == []
+    assert body["despesas_gabinete"] == []
+    assert body["total_despesas_gabinete"] == 0.0
+    assert body["comparacao_cidada"] == []
+    assert body["comparacao_cidada_resumo"] == ""
+    assert body["alertas"] == [{"tipo": "ok", "icone": "ok", "texto": "Tudo certo"}]
+    assert body["conexoes_total"] == 1
+    assert body["fonte_emendas"] == "bracc"
+    assert body["descricao_conexoes"] == ""
+    assert body["doadores_empresa"] == []
+    assert body["doadores_pessoa"] == []
+    assert body["total_doacoes"] == 0.0
+    assert body["socios"] == []
+    assert body["familia"] == []
+    assert body["aviso_despesas"] == ""
+    assert body["validacao_tse"] is None
 
 
 @pytest.mark.anyio
-async def test_politico_404_when_not_found(client: AsyncClient) -> None:
+async def test_politico_404_quando_nao_encontrado(
+    client: AsyncClient,
+) -> None:
     with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
+        "bracc.routers.pwa_parity.perfil_service.obter_perfil",
         new_callable=AsyncMock,
-        return_value=None,
+        side_effect=EntityNotFoundError("Politico 'xxx' nao encontrado"),
     ):
-        response = await client.get("/politico/9999")
+        response = await client.get("/politico/xxx")
+
     assert response.status_code == 404
-    assert response.json()["detail"] == "Politico nao encontrado"
+    assert "nao encontrado" in response.json()["detail"]
 
 
 @pytest.mark.anyio
-async def test_politico_empty_record_is_404(client: AsyncClient) -> None:
-    """Cypher devolveu algo mas sem o nó do legislador."""
+async def test_politico_502_em_driver_error(client: AsyncClient) -> None:
     with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
+        "bracc.routers.pwa_parity.perfil_service.obter_perfil",
         new_callable=AsyncMock,
-        return_value={"legislator": None, "element_id": None, "despesas": []},
+        side_effect=DriverError("neo4j down"),
     ):
-        response = await client.get("/politico/1001")
-    assert response.status_code == 404
+        response = await client.get("/politico/4:abc:1")
 
-
-@pytest.mark.anyio
-async def test_politico_without_ceap(client: AsyncClient) -> None:
-    """Sem CEAP ingerida, o endpoint ainda devolve perfil (200)."""
-    record = {
-        "legislator": _legislator_node(),
-        "element_id": "4:abc:123",
-        "despesas": [],
-    }
-    with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
-        new_callable=AsyncMock,
-        return_value=record,
-    ):
-        response = await client.get("/politico/1001")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["despesas_ceap"] == []
-    assert body["total_ceap"] == 0.0
-    assert body["total_ceap_fmt"] == "R$ 0,00"
-
-
-@pytest.mark.anyio
-async def test_politico_without_provenance_returns_null(client: AsyncClient) -> None:
-    """Legacy node sem provenance → ``provenance: null`` no response."""
-    record = {
-        "legislator": _legislator_node(include_provenance=False),
-        "element_id": "4:abc:123",
-        "despesas": [],
-    }
-    with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
-        new_callable=AsyncMock,
-        return_value=record,
-    ):
-        response = await client.get("/politico/1001")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["provenance"] is None
-
-
-@pytest.mark.anyio
-async def test_politico_502_on_driver_error(client: AsyncClient) -> None:
-    with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
-        new_callable=AsyncMock,
-        side_effect=RuntimeError("neo4j down"),
-    ):
-        response = await client.get("/politico/1001")
     assert response.status_code == 502
-
-
-@pytest.mark.anyio
-async def test_politico_filters_invalid_ceap_rows(client: AsyncClient) -> None:
-    """Rows sem ano/valor ou com valor <= 0 são descartados do agregado."""
-    record = {
-        "legislator": _legislator_node(),
-        "element_id": "4:abc:123",
-        "despesas": [
-            {"ano": 2024, "mes": 3, "valor": 500.0},
-            {"ano": None, "mes": 4, "valor": 100.0},
-            {"ano": 2024, "mes": 5, "valor": 0.0},     # zero ignorado
-            {"ano": 2024, "mes": 6, "valor": "bad"},    # bad value ignorado
-            {"ano": 2024, "mes": 7, "valor": 250.0},
-        ],
-    }
-    with patch(
-        "bracc.routers.pwa_parity.execute_query_single",
-        new_callable=AsyncMock,
-        return_value=record,
-    ):
-        response = await client.get("/politico/1001")
-    body = response.json()
-    assert body["total_ceap"] == 750.0
-    assert body["despesas_ceap"][0]["n_despesas"] == 2
+    assert "neo4j down" in response.json()["detail"]
