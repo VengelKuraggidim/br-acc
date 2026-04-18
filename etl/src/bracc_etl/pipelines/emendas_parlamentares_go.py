@@ -80,7 +80,6 @@ _ANOS_HISTORICO_DEFAULT = 3
 
 _TARGET_UF = "GO"
 _SOURCE_ID = "portal_transparencia_emendas"
-_ENV_VAR = "TRANSPARENCIA_API_KEY"
 
 
 def _amendment_id(
@@ -366,11 +365,11 @@ class EmendasParlamentaresGoPipeline(Pipeline):
         from bracc_etl.secrets import SecretNotFoundError, load_secret
 
         try:
-            api_key = load_secret("transparencia-key", env_fallback=_ENV_VAR)
+            api_key = load_secret("transparencia-key")
         except SecretNotFoundError as exc:
             raise ValueError(
-                f"{_ENV_VAR} obrigatoria para emendas_parlamentares_go "
-                "(ou configure GCP_PROJECT_ID + Secret Manager)",
+                "emendas_parlamentares_go requer GCP_PROJECT_ID + secret "
+                "'fiscal-cidadao-transparencia-key' no Secret Manager.",
             ) from exc
 
         self._targets = self._discover_targets()

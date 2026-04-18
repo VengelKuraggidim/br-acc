@@ -191,7 +191,16 @@ def archival_root(
 
 @pytest.fixture()
 def _api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TRANSPARENCIA_API_KEY", "test-key")
+    """Mocka ``load_secret`` pra tests que precisam da chave da API.
+
+    O helper real exige ``GCP_PROJECT_ID`` + Secret Manager — aqui
+    substituímos por um stub que devolve uma chave de teste.
+    """
+    from bracc_etl import secrets as secrets_module
+
+    monkeypatch.setattr(
+        secrets_module, "load_secret", lambda name: "test-key",
+    )
 
 
 def _make_pipeline(
@@ -243,25 +252,20 @@ class TestMetadata:
 # ---------------------------------------------------------------------------
 
 
-class TestExtractRequiresApiKey:
-    def test_missing_api_key_raises(
+class TestExtractRequiresSecret:
+    def test_missing_gcp_project_id_raises(
         self,
         archival_root: Path,  # noqa: ARG002
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.delenv("TRANSPARENCIA_API_KEY", raising=False)
-        pipeline = _make_pipeline()
-        with pytest.raises(ValueError, match="TRANSPARENCIA_API_KEY"):
-            pipeline.extract()
+        """Sem GCP_PROJECT_ID, o helper levanta SecretNotFoundError que
+        o pipeline converte em ValueError com mensagem acionável."""
+        from bracc_etl import secrets as secrets_module
 
-    def test_empty_api_key_raises(
-        self,
-        archival_root: Path,  # noqa: ARG002
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("TRANSPARENCIA_API_KEY", "   ")
+        monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+        secrets_module.load_secret.cache_clear()
         pipeline = _make_pipeline()
-        with pytest.raises(ValueError, match="TRANSPARENCIA_API_KEY"):
+        with pytest.raises(ValueError, match="transparencia-key"):
             pipeline.extract()
 
 

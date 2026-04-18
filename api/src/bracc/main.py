@@ -33,18 +33,13 @@ _logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # Em produção (GCP_PROJECT_ID setado), puxa secrets do Secret Manager
-    # sobrescrevendo os defaults lidos do .env / env vars. Dev local continua
-    # lendo direto do .env via pydantic-settings.
-    if os.environ.get("GCP_PROJECT_ID", "").strip():
-        from bracc.secrets import load_secret
+    # Secrets vem exclusivamente do GCP Secret Manager. Sem fallback pra
+    # env var — caminho duplo criaria pontos cegos (env var vazando em prod
+    # bypass-aria o Secret Manager silenciosamente).
+    from bracc.secrets import load_secret
 
-        settings.neo4j_password = load_secret(
-            "neo4j-password", env_fallback="NEO4J_PASSWORD"
-        )
-        settings.jwt_secret_key = load_secret(
-            "jwt-secret", env_fallback="JWT_SECRET_KEY"
-        )
+    settings.neo4j_password = load_secret("neo4j-password")
+    settings.jwt_secret_key = load_secret("jwt-secret")
 
     weak_or_default_jwt = (
         settings.jwt_secret_key == "change-me-in-production"

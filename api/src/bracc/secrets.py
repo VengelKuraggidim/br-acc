@@ -1,29 +1,27 @@
-"""Secret loading with GCP Secret Manager + .env fallback.
+"""Secret loading via GCP Secret Manager (caminho único).
 
-Dual-mode lookup para credenciais sensíveis:
+**Sem fallback pra env var.** Dois caminhos de leitura criam pontos cegos:
+se uma env var vazar em prod por acidente, o app pula o Secret Manager
+silenciosamente e usa o valor errado. Aqui só existe um caminho — se
+não está no Secret Manager, falha explícita.
 
-1. **Produção** (GCP): quando ``GCP_PROJECT_ID`` env var está setada,
-   busca de ``projects/{id}/secrets/fiscal-cidadao-{name}/versions/latest``
-   via ``google-cloud-secret-manager``. Dep opcional via extra ``[gcp]``.
+Layout de secrets (convenção):
 
-2. **Dev local**: se ``GCP_PROJECT_ID`` ausente, lê direto de
-   ``os.environ[env_var_fallback]`` (carregado de ``.env`` via
-   ``python-dotenv`` ou shell).
+    projects/{GCP_PROJECT_ID}/secrets/fiscal-cidadao-{name}/versions/latest
 
-Layout de secrets no GCP (convenção):
-
-    fiscal-cidadao-neo4j-password
-    fiscal-cidadao-transparencia-key
-    fiscal-cidadao-jwt-secret
-
+Nomes usados hoje: ``neo4j-password``, ``jwt-secret``, ``transparencia-key``.
 O prefixo ``fiscal-cidadao-`` é adicionado automaticamente por
-:func:`load_secret`. Chamadas usam só o sufixo (``"neo4j-password"``).
+:func:`load_secret`.
 
-Secrets são resolvidos **uma vez por processo** e cached em memory —
-mudanças no Secret Manager só aparecem depois de restart. Aceitável porque
-chaves rotacionam raramente e restart é barato.
+Dev local: definir ``GCP_PROJECT_ID`` (não é segredo — só o ID do projeto
+GCP) e rodar ``gcloud auth application-default login`` uma vez. O
+``.env`` não deve conter secrets.
 
-Ver ``docs/secrets.md`` (futuro) e ``README.md`` pra configuração GCP.
+Secrets são cached em memory por processo (``@cache``) — mudanças no
+Secret Manager só aparecem depois de restart. Aceitável porque rotação
+é rara e restart é barato.
+
+Requer dep opcional ``[gcp]`` (``google-cloud-secret-manager``).
 """
 
 from __future__ import annotations
@@ -38,25 +36,19 @@ _SECRET_PREFIX = "fiscal-cidadao-"
 
 
 class SecretNotFoundError(RuntimeError):
-    """Raised quando um secret obrigatório não foi encontrado.
-
-    Mensagem instruiu o caller sobre como configurar — tanto pro path
-    GCP (Secret Manager + IAM) quanto pro path local (``.env``).
-    """
+    """Raised quando um secret obrigatório não foi encontrado no Secret Manager."""
 
 
 @cache
-def load_secret(name: str, *, env_fallback: str) -> str:
-    """Busca secret pelo nome lógico, com fallback pra env var local.
+def load_secret(name: str) -> str:
+    """Busca secret pelo nome lógico no GCP Secret Manager.
 
     Parameters
     ----------
     name:
-        Sufixo do secret no GCP, sem o prefixo ``fiscal-cidadao-``.
+        Sufixo do secret, sem o prefixo ``fiscal-cidadao-``.
         Ex.: ``"neo4j-password"`` resolve pra
-        ``fiscal-cidadao-neo4j-password`` no Secret Manager.
-    env_fallback:
-        Nome da env var usada em dev local. Ex.: ``"NEO4J_PASSWORD"``.
+        ``fiscal-cidadao-neo4j-password``.
 
     Returns
     -------
@@ -66,22 +58,20 @@ def load_secret(name: str, *, env_fallback: str) -> str:
     Raises
     ------
     SecretNotFoundError
-        Quando nenhum dos dois paths retorna valor.
+        Quando ``GCP_PROJECT_ID`` ausente ou secret inexistente no
+        Secret Manager.
     RuntimeError
-        Se ``GCP_PROJECT_ID`` está setado mas dep ``[gcp]`` não instalada.
+        Se dep opcional ``[gcp]`` não está instalada.
     """
     project_id = os.environ.get("GCP_PROJECT_ID", "").strip()
-    if project_id:
-        return _load_from_gcp(name, project_id)
-    value = os.environ.get(env_fallback, "").strip()
-    if not value:
+    if not project_id:
         raise SecretNotFoundError(
-            f"Secret {name!r} não encontrado. Configure de um dos modos:\n"
-            f"  - Dev local: export {env_fallback}=... (ou .env)\n"
-            f"  - Produção:  export GCP_PROJECT_ID=... e crie o secret "
-            f"'{_SECRET_PREFIX}{name}' no Secret Manager."
+            f"GCP_PROJECT_ID nao setado. Configure com:\n"
+            f"  export GCP_PROJECT_ID=<seu-projeto-gcp>\n"
+            f"  gcloud auth application-default login\n"
+            f"Secret esperado: '{_SECRET_PREFIX}{name}'."
         )
-    return value
+    return _load_from_gcp(name, project_id)
 
 
 def _load_from_gcp(name: str, project_id: str) -> str:
@@ -90,8 +80,8 @@ def _load_from_gcp(name: str, project_id: str) -> str:
         from google.cloud import secretmanager  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
-            "GCP_PROJECT_ID setado mas google-cloud-secret-manager ausente. "
-            "Instale com: uv sync --extra gcp"
+            "google-cloud-secret-manager nao instalado. "
+            "Rode: uv sync --extra gcp"
         ) from exc
 
     client = secretmanager.SecretManagerServiceClient()

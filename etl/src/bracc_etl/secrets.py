@@ -1,9 +1,7 @@
-"""Secret loading com GCP Secret Manager + .env fallback (ETL side).
+"""Secret loading via GCP Secret Manager (ETL side, caminho único).
 
 Cópia intencional do helper em ``api/src/bracc/secrets.py`` — ``api/`` e
-``etl/`` são pacotes Python independentes (pyproject.toml separados) e
-não compartilham código. Manter em sync manualmente quando mudar a
-semântica do contrato (raramente).
+``etl/`` são pacotes Python independentes. Manter em sync manualmente.
 
 Ver ``api/src/bracc/secrets.py`` pro docstring completo.
 """
@@ -24,23 +22,20 @@ class SecretNotFoundError(RuntimeError):
 
 
 @cache
-def load_secret(name: str, *, env_fallback: str) -> str:
-    """Busca secret pelo nome lógico, fallback pra env var local.
+def load_secret(name: str) -> str:
+    """Busca secret pelo nome lógico no GCP Secret Manager.
 
-    Ver ``api/src/bracc/secrets.py::load_secret`` pro docstring completo.
+    Ver ``api/src/bracc/secrets.py::load_secret`` pro contrato completo.
     """
     project_id = os.environ.get("GCP_PROJECT_ID", "").strip()
-    if project_id:
-        return _load_from_gcp(name, project_id)
-    value = os.environ.get(env_fallback, "").strip()
-    if not value:
+    if not project_id:
         raise SecretNotFoundError(
-            f"Secret {name!r} não encontrado. Configure de um dos modos:\n"
-            f"  - Dev local: export {env_fallback}=... (ou .env)\n"
-            f"  - Produção:  export GCP_PROJECT_ID=... e crie o secret "
-            f"'{_SECRET_PREFIX}{name}' no Secret Manager."
+            f"GCP_PROJECT_ID nao setado. Configure com:\n"
+            f"  export GCP_PROJECT_ID=<seu-projeto-gcp>\n"
+            f"  gcloud auth application-default login\n"
+            f"Secret esperado: '{_SECRET_PREFIX}{name}'."
         )
-    return value
+    return _load_from_gcp(name, project_id)
 
 
 def _load_from_gcp(name: str, project_id: str) -> str:
@@ -49,8 +44,8 @@ def _load_from_gcp(name: str, project_id: str) -> str:
         from google.cloud import secretmanager  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
-            "GCP_PROJECT_ID setado mas google-cloud-secret-manager ausente. "
-            "Instale com: uv sync --extra gcp"
+            "google-cloud-secret-manager nao instalado. "
+            "Rode: uv sync --extra gcp"
         ) from exc
 
     client = secretmanager.SecretManagerServiceClient()
