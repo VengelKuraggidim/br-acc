@@ -613,6 +613,32 @@
       color: var(--accent);
     }
 
+    .emenda-valor-box.danger {
+      background: var(--danger-bg);
+      border: 1px solid rgba(255, 59, 92, 0.35);
+    }
+    .emenda-valor-box.danger .emenda-valor-num { color: var(--danger); }
+
+    .emenda-valor-box.warning {
+      background: var(--warning-bg);
+      border: 1px solid rgba(255, 182, 39, 0.35);
+    }
+    .emenda-valor-box.warning .emenda-valor-num { color: var(--warning); }
+
+    .emenda-card.alert-danger { border-left: 3px solid var(--danger); }
+    .emenda-card.alert-warning { border-left: 3px solid var(--warning); }
+
+    .emenda-status {
+      margin-top: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .emenda-status.danger { background: var(--danger-bg); color: var(--danger); }
+    .emenda-status.warning { background: var(--warning-bg); color: var(--warning); }
+
     .emenda-local {
       font-size: 11px;
       color: var(--text-dim);
@@ -1312,7 +1338,20 @@ function renderPerfil(d) {
         <summary>Ver ${d.emendas.length} emenda(s)</summary>
         <div class="collapsible-body">`;
     d.emendas.forEach(e => {
-      html += `<div class="emenda-card">
+      const emp = e.valor_empenhado || 0;
+      const pago = e.valor_pago || 0;
+      let cardCls = '', pagoCls = '', statusHtml = '';
+      if (emp > 0 && pago <= 0) {
+        cardCls = ' alert-danger';
+        pagoCls = ' danger';
+        statusHtml = '<div class="emenda-status danger">&#9888; Empenhado mas não pago</div>';
+      } else if (pago > 0 && pago < emp * 0.99) {
+        cardCls = ' alert-warning';
+        pagoCls = ' warning';
+        const pct = Math.round((pago / emp) * 100);
+        statusHtml = `<div class="emenda-status warning">&#9888; Pago parcial (${pct}% do empenhado)</div>`;
+      }
+      html += `<div class="emenda-card${cardCls}">
         <div class="emenda-top">
           <div class="emenda-funcao">${e.funcao}</div>
           <span class="emenda-tipo">${e.tipo}</span>
@@ -1322,11 +1361,12 @@ function renderPerfil(d) {
             <div class="emenda-valor-label">Empenhado</div>
             <div class="emenda-valor-num">${e.valor_empenhado_fmt}</div>
           </div>
-          <div class="emenda-valor-box">
+          <div class="emenda-valor-box${pagoCls}">
             <div class="emenda-valor-label">Pago</div>
             <div class="emenda-valor-num">${e.valor_pago_fmt}</div>
           </div>
         </div>
+        ${statusHtml}
         ${e.municipio ? `<div class="emenda-local">&#128205; ${e.municipio}${e.uf ? ', '+e.uf : ''}</div>` : ''}
       </div>`;
     });
@@ -1419,6 +1459,48 @@ function renderPerfil(d) {
     });
 
     html += '</div>';
+  }
+
+  // Cross-check: valor declarado ao TSE vs valor ingerido no sistema
+  if (d.validacao_tse) {
+    const v = d.validacao_tse;
+    const corBorda = v.status === 'ok' ? '#10b981' : v.status === 'atencao' ? '#f59e0b' : '#ef4444';
+    const corFundo = v.status === 'ok' ? 'rgba(16,185,129,0.08)' : v.status === 'atencao' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+    const icone = v.status === 'ok' ? '&#10004;' : v.status === 'atencao' ? '&#9888;' : '&#128680;';
+    const txtStatus = v.status === 'ok' ? `Bateu com o TSE (diferença de ${v.divergencia_pct}%)` : v.status === 'atencao' ? `Divergência moderada de ${v.divergencia_pct}%` : `Divergência grande de ${v.divergencia_pct}%`;
+    html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-size:20px;">${icone}</span>
+        <div style="font-weight:700; font-size:14px;">Confere com o TSE? ${txtStatus}</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+        <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Declarado ao TSE (${v.ano_eleicao})</div>
+          <div style="font-size:16px; font-weight:700;">${v.total_declarado_tse_fmt}</div>
+        </div>
+        <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Ingerido no sistema</div>
+          <div style="font-size:16px; font-weight:700;">${v.total_ingerido_fmt}</div>
+        </div>
+      </div>`;
+    if (v.status !== 'ok') {
+      html += `<div style="font-size:12px; color:var(--text-secondary); line-height:1.55; padding:8px 10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:10px;">
+        &#9432; <strong>Por que a diferença?</strong> Os dados no painel vêm da ingestão pública do TSE — algumas doações podem não ter sido carregadas no nosso banco (especialmente repasses do fundo partidário). O valor <strong>oficial é o do TSE</strong>. Estamos trabalhando pra fechar essa diferença.
+      </div>`;
+    }
+    if (v.breakdown_tse && v.breakdown_tse.length) {
+      html += `<details class="collapsible" style="margin-top:4px;">
+        <summary>Ver detalhamento oficial do TSE (${v.breakdown_tse.length} origens)</summary>
+        <div class="collapsible-body">`;
+      v.breakdown_tse.forEach(b => {
+        html += `<div class="conexao-card">
+          <div class="conexao-info"><div class="conexao-nome">${b.origem}</div></div>
+          <div class="conexao-valor">${b.valor_fmt}</div>
+        </div>`;
+      });
+      html += `</div></details>`;
+    }
+    html += `</div>`;
   }
 
   // Introducao leiga das conexoes (aparece antes dos cards especificos)

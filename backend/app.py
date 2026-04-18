@@ -105,6 +105,20 @@ class FamiliarConectado(BaseModel):
     relacao: str
 
 
+class ValidacaoTSE(BaseModel):
+    """Cross-check: valor declarado ao TSE vs o que o sistema ingeriu."""
+    ano_eleicao: int
+    total_declarado_tse: float
+    total_declarado_tse_fmt: str
+    total_ingerido: float
+    total_ingerido_fmt: str
+    divergencia_valor: float
+    divergencia_valor_fmt: str
+    divergencia_pct: float
+    breakdown_tse: list[dict[str, str]]  # [{"origem": "Partido", "valor_fmt": "R$ X mi"}, ...]
+    status: str  # "ok" (<5%), "atencao" (5-20%), "divergente" (>20%)
+
+
 class ContratoConectado(BaseModel):
     objeto: str
     valor: float
@@ -153,6 +167,7 @@ class PerfilPolitico(BaseModel):
     socios: list[SocioConectado] = []
     familia: list[FamiliarConectado] = []
     aviso_despesas: str = ""
+    validacao_tse: ValidacaoTSE | None = None
 
 
 class ServidorResumo(BaseModel):
@@ -879,6 +894,43 @@ async def perfil_politico(entity_id: str):
     else:
         descricao_conexoes = ""
 
+    # Validacao cruzada: total declarado ao TSE vs total que temos ingerido.
+    validacao_tse: ValidacaoTSE | None = None
+    total_tse = props.get("total_tse_2022")
+    if total_tse:
+        declarado = float(total_tse)
+        ingerido = total_doacoes
+        div = declarado - ingerido
+        pct = (abs(div) / declarado * 100) if declarado > 0 else 0.0
+        if pct < 5:
+            status = "ok"
+        elif pct < 20:
+            status = "atencao"
+        else:
+            status = "divergente"
+        breakdown = []
+        for label, key in [
+            ("Partido político (fundo partidário + FEFC)", "tse_2022_partido"),
+            ("Pessoas físicas", "tse_2022_pessoa_fisica"),
+            ("Recursos próprios (autofinanciamento)", "tse_2022_proprios"),
+            ("Financiamento coletivo (vaquinha)", "tse_2022_fin_coletivo"),
+        ]:
+            v = props.get(key)
+            if v and float(v) > 0:
+                breakdown.append({"origem": label, "valor_fmt": fmt_brl(float(v))})
+        validacao_tse = ValidacaoTSE(
+            ano_eleicao=2022,
+            total_declarado_tse=declarado,
+            total_declarado_tse_fmt=fmt_brl(declarado),
+            total_ingerido=ingerido,
+            total_ingerido_fmt=fmt_brl(ingerido),
+            divergencia_valor=div,
+            divergencia_valor_fmt=fmt_brl(abs(div)),
+            divergencia_pct=round(pct, 1),
+            breakdown_tse=breakdown,
+            status=status,
+        )
+
     # Aviso explicando pq nao tem despesas CEAP quando o politico nao e
     # deputado federal (so a Camara Federal tem essa cota com dados publicos).
     aviso_despesas = ""
@@ -915,6 +967,7 @@ async def perfil_politico(entity_id: str):
         socios=socios,
         familia=familia,
         aviso_despesas=aviso_despesas,
+        validacao_tse=validacao_tse,
     )
 
 
