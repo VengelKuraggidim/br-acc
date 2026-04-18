@@ -86,8 +86,10 @@ def _build_transport(
         cnpj = request.url.path.rsplit("/", 1)[-1]
         spec = responses.get(cnpj)
         headers = {"content-type": "application/json; charset=utf-8"}
-        if spec == "timeout":
-            raise httpx.ConnectTimeout("mock timeout")
+        if isinstance(spec, str):
+            if spec == "timeout":
+                raise httpx.ConnectTimeout("mock timeout")
+            raise AssertionError(f"unexpected spec string: {spec!r}")
         if spec is None:
             return httpx.Response(
                 404,
@@ -106,7 +108,7 @@ def _build_transport(
 
 def _build_driver(
     targets: list[dict[str, Any]],
-) -> tuple[MagicMock, list[tuple[str, dict[str, Any] | None]]]:
+) -> tuple[MagicMock, list[tuple[str, dict[str, Any]]]]:
     """Driver mock: ``session.run(query, params)`` com side_effect.
 
     Retorna o driver + uma lista que acumula ``(query, params)`` de cada
@@ -115,7 +117,7 @@ def _build_driver(
     driver = MagicMock()
     session_cm = driver.session.return_value
     session = session_cm.__enter__.return_value
-    calls: list[tuple[str, dict[str, Any] | None]] = []
+    calls: list[tuple[str, dict[str, Any]]] = []
 
     def run(
         query: str, params: dict[str, Any] | None = None,
@@ -157,7 +159,7 @@ def _make_pipeline(
     batch_size: int = 10,
 ) -> tuple[
     BrasilapiCnpjStatusPipeline,
-    list[tuple[str, dict[str, Any] | None]],
+    list[tuple[str, dict[str, Any]]],
 ]:
     driver, calls = _build_driver(targets)
     transport = _build_transport(responses)

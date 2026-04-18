@@ -194,6 +194,7 @@ def _alego_handler() -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         headers = {"content-type": "application/json; charset=utf-8"}
         path = request.url.path
+        body: Any
         if path.endswith("/verbas_indenizatorias/periodos"):
             body = _PERIODOS_PAYLOAD
         elif path.endswith("/verbas_indenizatorias/deputados"):

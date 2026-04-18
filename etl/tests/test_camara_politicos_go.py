@@ -13,7 +13,7 @@ Covers:
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock
 
 import httpx
@@ -386,7 +386,9 @@ class TestLoad:
         pipeline.extract()
         pipeline.transform()
         pipeline.load()
-        session_cm = pipeline.driver.session.return_value
+        # pipeline.driver is a MagicMock in tests; cast to satisfy mypy.
+        driver_mock = cast("MagicMock", pipeline.driver)
+        session_cm = driver_mock.session.return_value
         session = session_cm.__enter__.return_value
         # Must hit neo4j multiple times: at least nodes legislators +
         # nodes expenses + rels.
