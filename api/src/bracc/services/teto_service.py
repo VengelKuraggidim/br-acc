@@ -26,10 +26,18 @@ O service é **puro** — zero IO, zero grafo. O consumidor
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 
 from bracc.models.perfil import TetoGastos
 from bracc.services.formatacao_service import fmt_brl
+
+logger = logging.getLogger(__name__)
+
+# Ano único coberto no MVP. Quando o TSE publicar a Resolução de 2026,
+# adicionar ``_TETOS_NACIONAIS_2026`` + ``_TETO_GOVERNADOR_2026`` seguindo
+# o padrão abaixo e expandir a checagem em :func:`calcular_teto`.
+_ANOS_COBERTOS: frozenset[int] = frozenset({2022})
 
 # --- Fonte legal por eleição ------------------------------------------------
 
@@ -152,15 +160,29 @@ def calcular_teto(
         ``tse_prestacao_contas_go``).
 
     Degradação silenciosa (retorna ``None``) quando:
-    * Ano não é 2022 (MVP atual).
+    * Ano não está em :data:`_ANOS_COBERTOS` (hoje só 2022). **Loga
+      warning explícito** apontando que a tabela do ano correspondente
+      ainda não foi adicionada — não quebra produção mas deixa trilha
+      pro operador notar antes de 2026 (senão o card "teto" some do
+      PWA silenciosamente quando o pipeline começar a alimentar
+      ``ano_eleicao=2026``).
     * Cargo é ``None`` ou string vazia.
     * Cargo é prefeito/vereador (teto municipal fora do MVP).
     * Governador sem UF mapeada (ex.: outra UF fora da tabela).
     * ``total_despesas_declaradas <= 0`` (candidato sem gasto declarado
       — exibir percentual seria enganoso).
     """
-    # MVP hardcoded — apenas 2022 está coberto.
-    if ano_eleicao != 2022:
+    # MVP hardcoded — fail-loud no log, degrada pra None silenciosamente.
+    # Rationale: raise NotImplementedError quebraria o PerfilService
+    # inteiro quando 2026 chegar; devolver None só oculta o card teto
+    # (graceful) e o warning garante que o operador veja o gap antes.
+    if ano_eleicao not in _ANOS_COBERTOS:
+        logger.warning(
+            "[teto_service] ano_eleicao=%s sem tabela hardcoded; "
+            "adicionar TETOS_%s + TETO_GOVERNADOR_%s seguindo o padrao "
+            "TETOS_2022. Retornando None (card 'teto' sera omitido).",
+            ano_eleicao, ano_eleicao, ano_eleicao,
+        )
         return None
     if not cargo:
         return None

@@ -159,6 +159,27 @@ class TestDegradacaoSilenciosa:
             "DEPUTADO FEDERAL", "GO", 2018, 1_000_000.0,
         ) is None
 
+    def test_ano_nao_coberto_loga_warning_com_year_explicito(
+        self, caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Ano fora da tabela deve deixar trilha no log.
+
+        Rationale: em 2026, quando o pipeline começar a emitir
+        ``ano_eleicao=2026`` o card "teto" vai sumir silenciosamente do
+        PWA. O warning aqui é o canary — o operador vê no log antes da
+        primeira request real. Teste-fonte pra garantir que a mensagem
+        cita o ano explicitamente (não um genérico "ano nao mapeado").
+        """
+        with caplog.at_level("WARNING", logger="bracc.services.teto_service"):
+            assert (
+                calcular_teto("DEPUTADO FEDERAL", "GO", 2026, 1_000_000.0)
+                is None
+            )
+        assert any(
+            "2026" in rec.getMessage() and "TETOS" in rec.getMessage()
+            for rec in caplog.records
+        ), f"esperava warning citando 2026 + TETOS; vi: {[r.getMessage() for r in caplog.records]}"
+
 
 class TestNormalizacao:
     def test_cargo_com_acento(self) -> None:
