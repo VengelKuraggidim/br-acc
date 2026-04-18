@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -69,6 +70,10 @@ CONTAS_IRREGULARES_URL = (
 )
 _HTTP_TIMEOUT = 60.0
 _USER_AGENT = "br-acc-etl/1.0 (+https://github.com/brunoclz/br-acc)"
+# Fallback content-type quando o endpoint do TCM-GO omite o header (acontece
+# ocasionalmente na API de dados abertos). Archival é content-addressed, então
+# o único efeito do fallback é a extensão do arquivo gravado (.csv vs .bin).
+_CONTAS_CONTENT_TYPE = "text/csv"
 
 # Column map: TCM-GO Portal CSV header -> tcmgo_sancoes pipeline alias.
 # The pipeline's ``transform`` step uses ``row_pick`` over these aliases,
@@ -193,6 +198,8 @@ class TcmgoSancoesPipeline(Pipeline):
         data_dir: str = "./data",
         limit: int | None = None,
         chunk_size: int = 50_000,
+        *,
+        archive_online: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(driver, data_dir, limit=limit, chunk_size=chunk_size, **kwargs)
@@ -202,6 +209,21 @@ class TcmgoSancoesPipeline(Pipeline):
         self.impedidos: list[dict[str, Any]] = []
         self.rejected_accounts: list[dict[str, Any]] = []
         self.impedido_rels: list[dict[str, Any]] = []
+        # Opt-out switch pro fetch online do CSV de contas-irregulares. Testes
+        # offline (fixtures CSV locais, sem mock de HTTP) desativam via
+        # ``archive_online=False`` pra não hit network. Produção e testes com
+        # ``MockTransport`` deixam ``True`` (default) — o CSV baixado é
+        # persistido content-addressed via :func:`archive_fetch`, e a URI
+        # resultante é carimbada em cada row derivada do endpoint.
+        self._archive_online_enabled = archive_online
+        # URI do snapshot do CSV de contas-irregulares (único endpoint
+        # público do TCM-GO consumido pelo pipeline). Populada pelo fetch
+        # online em ``extract`` e consumida em ``transform`` pra carimbar
+        # ``source_snapshot_uri`` em cada impedido/rel. ``None`` no caminho
+        # offline (fixture local sem HTTP) — preserva o contrato opt-in de
+        # ``attach_provenance``. ``rejeitados.csv`` não tem fonte pública
+        # correspondente, então permanece sem snapshot.
+        self._impedidos_snapshot_uri: str | None = None
 
     def _read_csv_optional(self, path: Path) -> pd.DataFrame:
         if not path.exists() or path.stat().st_size == 0:
@@ -225,6 +247,55 @@ class TcmgoSancoesPipeline(Pipeline):
             logger.warning("[tcmgo_sancoes] failed to read %s: %s", path, exc)
             return pd.DataFrame()
 
+    def _archive_contas_online(self) -> str | None:
+        """Baixa e arquiva o CSV de contas-irregulares (TCM-GO, online).
+
+        Retorna a URI relativa devolvida por
+        :func:`bracc_etl.archival.archive_fetch` ou ``None`` em caso de falha
+        de HTTP. Falhas são logadas e engolidas: o pipeline continua com o
+        CSV offline mesmo se o endpoint do TCM-GO estiver fora do ar — nessa
+        situação as rows simplesmente não ganham ``source_snapshot_uri``
+        (opt-in preservado).
+
+        Única fonte pública do pipeline é o CSV de contas-irregulares.
+        ``rejeitados.csv`` depende de export manual via LAI e não tem URL
+        estável pra arquivar — por isso fica fora.
+        """
+        try:
+            with httpx.Client(
+                timeout=_HTTP_TIMEOUT,
+                headers={
+                    "User-Agent": _USER_AGENT,
+                    "Accept": "text/csv,*/*",
+                },
+                follow_redirects=True,
+            ) as client:
+                resp = client.get(CONTAS_IRREGULARES_URL)
+                resp.raise_for_status()
+                content = resp.content
+                content_type = resp.headers.get(
+                    "content-type", _CONTAS_CONTENT_TYPE,
+                )
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "[tcmgo_sancoes] online archival falhou (%s): %s",
+                CONTAS_IRREGULARES_URL, exc,
+            )
+            return None
+
+        uri = archive_fetch(
+            url=CONTAS_IRREGULARES_URL,
+            content=content,
+            content_type=content_type,
+            run_id=self.run_id,
+            source_id=self.source_id,
+        )
+        logger.info(
+            "[tcmgo_sancoes] archived contas-irregulares -> %s (%d bytes)",
+            uri, len(content),
+        )
+        return uri
+
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "tcmgo_sancoes"
         if not src_dir.exists():
@@ -242,6 +313,16 @@ class TcmgoSancoesPipeline(Pipeline):
             self._raw_rejeitados = self._raw_rejeitados.head(self.limit)
 
         self.rows_in = len(self._raw_impedidos) + len(self._raw_rejeitados)
+
+        # Online archival do CSV de contas-irregulares. Rodando produção com
+        # ``archive_online=True`` (default), baixa do endpoint público do
+        # TCM-GO e grava snapshot content-addressed via :func:`archive_fetch`.
+        # Falhas de HTTP são absorvidas — se o ws.tcm.go.gov.br estiver fora,
+        # ``self._impedidos_snapshot_uri`` fica ``None`` e rows não ganham
+        # ``source_snapshot_uri`` (opt-in preservado). Testes offline passam
+        # ``archive_online=False`` pra evitar network.
+        if self._archive_online_enabled:
+            self._impedidos_snapshot_uri = self._archive_contas_online()
 
     def transform(self) -> None:
         for _, row in self._raw_impedidos.iterrows():
@@ -267,6 +348,10 @@ class TcmgoSancoesPipeline(Pipeline):
                 doc_kind = "CPF"
                 doc_fmt = mask_cpf(doc_raw)
             impedido_record_id = f"{doc_fmt}|{processo}"
+            # Todos os impedidos derivam do mesmo CSV de contas-irregulares
+            # — então compartilham a mesma URI de snapshot (quando o fetch
+            # online rodou). ``None`` preserva o opt-in de attach_provenance.
+            snapshot_uri = self._impedidos_snapshot_uri
             self.impedidos.append(self.attach_provenance(
                 {
                     "impedido_id": record_id,
@@ -281,6 +366,7 @@ class TcmgoSancoesPipeline(Pipeline):
                     "source": "tcmgo_sancoes",
                 },
                 record_id=impedido_record_id,
+                snapshot_uri=snapshot_uri,
             ))
             if doc_kind == "CNPJ":
                 self.impedido_rels.append(self.attach_provenance(
@@ -289,6 +375,7 @@ class TcmgoSancoesPipeline(Pipeline):
                         "target_key": record_id,
                     },
                     record_id=impedido_record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
         for _, row in self._raw_rejeitados.iterrows():
@@ -340,11 +427,16 @@ class TcmgoSancoesPipeline(Pipeline):
             # Company nodes derived from impedidos need provenance too. The
             # raw CNPJ digits are the natural record_id (deep-link is the
             # registry primary_url; no per-record URL available here).
+            # Snapshot URI é o mesmo do impedido que originou cada Company
+            # (todos saem do mesmo CSV de contas-irregulares). Preservar a
+            # URI por-row permite que o retrofit seja verificado ponta a
+            # ponta mesmo quando o pipeline escrita pra Company.
             companies = deduplicate_rows(
                 [
                     self.attach_provenance(
                         {"cnpj": r["document"], "razao_social": r["name"]},
                         record_id=strip_document(str(r["document"])),
+                        snapshot_uri=r.get("source_snapshot_uri"),
                     )
                     for r in self.impedidos
                     if r["document_kind"] == "CNPJ"
