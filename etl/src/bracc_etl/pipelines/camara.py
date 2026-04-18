@@ -49,6 +49,15 @@ _MAX_PAGES_PER_DEPUTY = 50
 _MAX_PAGES_GLOBAL = 10
 _DEFAULT_HEADERS = {"Accept": "application/json"}
 
+# Annual CEAP bulk CSV (the dataset CamaraPipeline.extract() globs for).
+# Public, no auth. Served as a ZIP because the raw ``.csv`` endpoint
+# returns a file padded with ~12 MB of null bytes before the actual
+# content (upstream CDN bug, observed 2026-04). Each archive contains
+# a single ``Ano-<year>.csv`` (~80 MB). Years go back to 2008; default
+# window targets the Marconi-era senate overlap.
+_CEAP_ZIP_URL = "https://www.camara.leg.br/cotas/Ano-{year}.csv.zip"
+_DEFAULT_CEAP_YEARS = tuple(range(2019, 2027))
+
 
 def _make_expense_id(deputy_id: str, date: str, supplier_doc: str, value: str) -> str:
     """Generate a stable expense ID from key fields."""
@@ -114,35 +123,127 @@ def _write_json(path: Path, records: list[dict[str, Any]]) -> None:
     )
 
 
+def _download_ceap_csv(
+    client: httpx.Client,
+    year: int,
+    output_dir: Path,
+    *,
+    uf: str | None = None,
+) -> Path | None:
+    """Download the annual CEAP CSV for ``year`` and write it to ``output_dir``.
+
+    Fetches the ZIP archive (the plain ``.csv`` endpoint has a CDN-side
+    null-byte padding bug) and extracts the single ``Ano-<year>.csv``.
+    When ``uf`` is set, the file is filtered client-side on the ``sgUF``
+    column so the on-disk slice matches the scope the bootstrap contract
+    expects.
+
+    Returns the written path on success, ``None`` on HTTP failure or when
+    the filter yields zero rows.
+    """
+    import io
+    import zipfile
+
+    url = _CEAP_ZIP_URL.format(year=year)
+    try:
+        resp = client.get(url)
+    except httpx.HTTPError as exc:
+        logger.warning("[camara] HTTP error on CEAP %d: %s", year, exc)
+        return None
+    if resp.status_code != 200:
+        logger.warning("[camara] non-200 on CEAP %d: %s", year, resp.status_code)
+        return None
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    except zipfile.BadZipFile:
+        logger.warning("[camara] CEAP %d: bad zip archive", year)
+        return None
+    inner_name = next(
+        (n for n in zf.namelist() if n.lower().endswith(".csv")),
+        None,
+    )
+    if inner_name is None:
+        logger.warning(
+            "[camara] CEAP %d: no CSV in archive (members=%s)",
+            year, zf.namelist(),
+        )
+        return None
+    csv_bytes = zf.read(inner_name)
+
+    suffix = f"_{uf}" if uf else ""
+    out_path = output_dir / f"Ano-{year}{suffix}.csv"
+    if not uf:
+        out_path.write_bytes(csv_bytes)
+        logger.info(
+            "[camara] wrote %s (%.1f MB)", out_path.name, len(csv_bytes) / 1_048_576,
+        )
+        return out_path
+
+    # Client-side UF filter. CEAP CSVs are ';'-delimited, UTF-8 with BOM.
+    df = pd.read_csv(
+        io.BytesIO(csv_bytes),
+        sep=";",
+        dtype=str,
+        encoding="utf-8-sig",
+        keep_default_na=False,
+    )
+    before = len(df)
+    df = df[df.get("sgUF", "").str.upper() == uf.upper()]
+    if df.empty:
+        logger.warning(
+            "[camara] CEAP %d: zero rows after UF=%s filter (had %d)",
+            year, uf, before,
+        )
+        return None
+    df.to_csv(out_path, sep=";", index=False, encoding="utf-8-sig")
+    logger.info(
+        "[camara] wrote %s (%d/%d rows, UF=%s)",
+        out_path.name, len(df), before, uf,
+    )
+    return out_path
+
+
 def fetch_to_disk(
     output_dir: Path,
     uf: str | None = None,
     limit: int | None = None,
+    years: list[int] | tuple[int, ...] | None = None,
 ) -> list[Path]:
-    """Download Camara dos Deputados v2 API snapshots to ``output_dir``.
+    """Download Camara dos Deputados CEAP CSVs + v2 API snapshots.
 
-    Hits the five canonical endpoints — ``/deputados`` (optionally filtered
-    by ``siglaUf=<uf>``), ``/deputados/{id}/despesas`` (CEAP), per-deputy
-    ``/deputados/{id}/proposicoes``, and the global ``/votacoes`` /
-    ``/orgaos`` — and writes each as a single JSON file under
-    ``output_dir``. Filenames are namespaced by UF when provided so
-    multiple scoped snapshots can coexist (``deputados_GO.json`` etc.).
+    Produces two complementary outputs under ``output_dir``:
+
+    * **Annual CEAP CSVs** (``Ano-{year}[_UF].csv``) — the primary input
+      consumed by :class:`CamaraPipeline.extract`, which globs
+      ``data/camara/*.csv``. Sourced from
+      ``https://www.camara.leg.br/cotas/Ano-<year>.csv`` (public, no
+      auth). When ``uf`` is set the CSV is filtered client-side on the
+      ``sgUF`` column so only the matching UF rows are written.
+    * **v2 API JSON snapshots** — ``deputados[_UF].json``,
+      ``despesas[_UF].json``, ``proposicoes[_UF].json``, ``votacoes``,
+      ``orgaos``. Sidecar metadata (proposicoes, votacoes, orgaos) that
+      enriches the graph beyond what the CEAP CSV alone exposes. Hits
+      ``/deputados`` (optionally filtered by ``siglaUf=<uf>``),
+      ``/deputados/{id}/despesas``, ``/deputados/{id}/proposicoes``,
+      ``/votacoes``, ``/orgaos``.
 
     Args:
-        output_dir: Directory where JSON files are written. Created if
-            missing. Files coexist with the legacy CEAP CSV annual dumps
-            that :class:`CamaraPipeline.extract` consumes (the CSV glob
-            ignores ``*.json``).
-        uf: Two-letter UF filter applied to ``/deputados`` via the API's
-            ``siglaUf`` parameter. When set, per-deputy sub-resources are
-            scoped to the matching set of deputies. ``None`` pulls the
-            full national roster.
-        limit: Optional record cap applied per endpoint (deputados,
-            despesas, proposicoes, votacoes, orgaos). Useful for smoke
-            tests; ``None`` means no cap.
+        output_dir: Directory where CSVs + JSONs are written. Created if
+            missing.
+        uf: Two-letter UF filter. Applied to the CEAP CSV (client-side
+            ``sgUF`` filter) and to ``/deputados`` (server-side
+            ``siglaUf`` param). When set, per-deputy sub-resources are
+            scoped to the matching deputies. ``None`` keeps the full
+            national dataset in both outputs.
+        limit: Optional record cap applied per JSON endpoint. Useful for
+            smoke tests; ``None`` means no cap. Does **not** apply to the
+            CEAP CSV (which is downloaded whole and filtered).
+        years: Years to include in the CEAP CSV download. ``None``
+            defaults to 2019-2026 (current Marconi-era window).
 
     Returns:
-        List of JSON file paths written to disk (sorted). Endpoints that
+        List of file paths written to disk (sorted). Endpoints that
         returned zero rows are skipped so the caller can tell success
         apart from empty responses.
     """
@@ -151,8 +252,21 @@ def fetch_to_disk(
 
     uf_norm = uf.strip().upper() if uf else None
     suffix = f"_{uf_norm}" if uf_norm else ""
+    ceap_years = tuple(years) if years else _DEFAULT_CEAP_YEARS
 
     written: list[Path] = []
+
+    # --- Annual CEAP CSVs (primary input for CamaraPipeline.extract) ---
+    with httpx.Client(
+        timeout=httpx.Timeout(120.0, connect=30.0),
+        follow_redirects=True,
+    ) as csv_client:
+        for year in ceap_years:
+            path = _download_ceap_csv(
+                csv_client, year, output_dir, uf=uf_norm,
+            )
+            if path is not None:
+                written.append(path)
 
     with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
         # --- /deputados (filtered by UF when provided) ---

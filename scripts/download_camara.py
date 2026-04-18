@@ -83,6 +83,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--year",
+        type=int,
+        action="append",
+        default=None,
+        help=(
+            "Year to include in the CEAP CSV download. May be repeated "
+            "(e.g. --year 2023 --year 2024). Omit to use the default "
+            "window (2019-2026)."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         help="Python logging level (default: INFO).",
@@ -102,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.output_dir,
         uf=args.uf,
         limit=args.limit,
+        years=args.year,
     )
 
     if not written:
