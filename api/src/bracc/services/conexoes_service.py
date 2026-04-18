@@ -79,12 +79,20 @@ class ConexoesClassificadas:
 
 @dataclass
 class _DoacaoEmpresaAcc:
-    """Acumulador interno de doações por empresa (antes de virar ``DoadorEmpresa``)."""
+    """Acumulador interno de doações por empresa (antes de virar ``DoadorEmpresa``).
+
+    ``situacao_*`` replicam o ultimo valor visto nos ``target_props`` da
+    empresa — se varias arestas DOOU apontam pro mesmo :Company, todas
+    veem a mesma situacao cadastral (a do no), entao preservar o primeiro
+    e suficiente.
+    """
 
     nome: str
     cnpj: str | None
     total: float = 0.0
     n: int = 0
+    situacao: str | None = None
+    situacao_verified_at: str | None = None
 
 
 @dataclass
@@ -138,6 +146,38 @@ def _valor_doacao(rel_props: dict[str, Any] | None) -> float:
 def _nome_empresa(props: dict[str, Any]) -> str:
     """Nome preferido da empresa: razão social > name > ''."""
     return _as_str(props, "razao_social") or _as_str(props, "name") or ""
+
+
+# Tradução leiga pras 5 situações cadastrais RFB. Exibida direto no card
+# de doadores/sócios; `situacao_fmt` vai pro UI, `situacao` bruto fica
+# pras buscas/filtros.
+_SITUACAO_LEIGA: dict[str, str] = {
+    "ATIVA": "Ativa",
+    "BAIXADA": "Baixada",
+    "SUSPENSA": "Suspensa",
+    "INAPTA": "Inapta",
+    "NULA": "Nula",
+}
+
+
+def _situacao_from_props(
+    props: dict[str, Any],
+) -> tuple[str | None, str | None, str | None]:
+    """Extrai (situacao, situacao_fmt, situacao_verified_at) de ``props``.
+
+    ``situacao`` só é considerada quando for uma das 5 categorias válidas
+    da Receita (``_SITUACAO_LEIGA``) — evita propagar string lixo pro UI.
+    ``None`` em todos os 3 campos quando a empresa ainda não foi
+    verificada pelo pipeline ``brasilapi_cnpj_status``.
+    """
+    raw = _as_str(props, "situacao_cadastral")
+    if raw is None:
+        return None, None, None
+    upper = raw.upper()
+    if upper not in _SITUACAO_LEIGA:
+        return None, None, None
+    verified_at = _as_str(props, "situacao_verified_at")
+    return upper, _SITUACAO_LEIGA[upper], verified_at
 
 
 def classificar(
@@ -239,10 +279,23 @@ def classificar(
                 # Gotcha do audit: CNPJ ausente → usa element_id como chave
                 # pra evitar colapsar empresas diferentes em 1 só.
                 chave = cnpj or f"empresa_{target_id}"
+                situacao, _fmt, verified_at = _situacao_from_props(
+                    target_props,
+                )
                 emp_acc = doacoes_empresa.setdefault(
                     chave,
-                    _DoacaoEmpresaAcc(nome=_nome_empresa(target_props), cnpj=cnpj),
+                    _DoacaoEmpresaAcc(
+                        nome=_nome_empresa(target_props),
+                        cnpj=cnpj,
+                        situacao=situacao,
+                        situacao_verified_at=verified_at,
+                    ),
                 )
+                # Se a primeira doação vista não trazia situacao (props
+                # antigos) mas uma próxima traz, adota — o no é o mesmo.
+                if emp_acc.situacao is None and situacao is not None:
+                    emp_acc.situacao = situacao
+                    emp_acc.situacao_verified_at = verified_at
                 emp_acc.total += valor
                 emp_acc.n += 1
                 continue
@@ -271,10 +324,16 @@ def classificar(
 
         # --- 3. Sócio de empresa ------------------------------------------
         if rel_type == "SOCIO_DE" and target_type == "company":
+            situacao, situacao_fmt, verified_at = _situacao_from_props(
+                target_props,
+            )
             socios.append(
                 SocioConectado(
                     nome=_nome_empresa(target_props),
                     cnpj=_as_str(target_props, "cnpj"),
+                    situacao=situacao,
+                    situacao_fmt=situacao_fmt,
+                    situacao_verified_at=verified_at,
                 ),
             )
             continue
@@ -325,11 +384,17 @@ def classificar(
 
         # --- 6. Empresas conectadas (fallback) -----------------------------
         if target_type == "company":
+            situacao, situacao_fmt, verified_at = _situacao_from_props(
+                target_props,
+            )
             empresas.append(
                 EmpresaConectada(
                     nome=_nome_empresa(target_props),
                     cnpj=_as_str(target_props, "cnpj"),
                     relacao=traduzir_relacao(rel_type),
+                    situacao=situacao,
+                    situacao_fmt=situacao_fmt,
+                    situacao_verified_at=verified_at,
                 ),
             )
             continue
@@ -357,6 +422,13 @@ def classificar(
             valor_total=acc.total,
             valor_total_fmt=fmt_brl(acc.total),
             n_doacoes=acc.n,
+            situacao=acc.situacao,
+            situacao_fmt=(
+                _SITUACAO_LEIGA.get(acc.situacao)
+                if acc.situacao is not None
+                else None
+            ),
+            situacao_verified_at=acc.situacao_verified_at,
         )
         for acc in doacoes_empresa.values()
     ]

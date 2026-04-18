@@ -628,6 +628,159 @@ class TestRobustez:
         assert resultado.doadores_empresa[0].valor_total == 2500.0
 
 
+# --- Situacao cadastral RFB propagada ---------------------------------------
+
+
+class TestSituacaoCadastralPropagada:
+    """Propagacao de ``situacao_cadastral`` de :Company pros 3 models com CNPJ.
+
+    Pipeline ``brasilapi_cnpj_status`` SET ``situacao_cadastral`` +
+    ``situacao_verified_at`` no no; ``classificar`` le de
+    ``target_props`` e carimba em DoadorEmpresa / SocioConectado /
+    EmpresaConectada como ``situacao`` (bruto) + ``situacao_fmt``
+    (leigo) + ``situacao_verified_at``.
+    """
+
+    def test_doador_empresa_baixada_propaga_situacao(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 5_000.0},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "12345678000190",
+                    "razao_social": "Empresa Baixada LTDA",
+                    "situacao_cadastral": "BAIXADA",
+                    "situacao_verified_at": "2026-04-15T10:00:00+00:00",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert len(resultado.doadores_empresa) == 1
+        d = resultado.doadores_empresa[0]
+        assert d.situacao == "BAIXADA"
+        assert d.situacao_fmt == "Baixada"
+        assert d.situacao_verified_at == "2026-04-15T10:00:00+00:00"
+
+    def test_doador_sem_situacao_fica_none(self) -> None:
+        """Empresa ainda nao verificada pelo pipeline → campos None."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 5_000.0},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "12345678000190",
+                    "razao_social": "Nao verificada",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.situacao is None
+        assert d.situacao_fmt is None
+        assert d.situacao_verified_at is None
+
+    def test_situacao_lixo_ignorada(self) -> None:
+        """Valor que nao esta em {ATIVA,BAIXADA,SUSPENSA,INAPTA,NULA} → None."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "99999999000100",
+                    "razao_social": "Strings Lixo",
+                    "situacao_cadastral": "valor_invalido_nao_RFB",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.situacao is None
+        assert d.situacao_fmt is None
+
+    def test_socio_inapta_propaga_situacao(self) -> None:
+        conexoes = [_conn(rel_type="SOCIO_DE", target_id="emp_1")]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "22333444000155",
+                    "razao_social": "Socio SA",
+                    "situacao_cadastral": "INAPTA",
+                    "situacao_verified_at": "2026-04-10T12:00:00+00:00",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        s = resultado.socios[0]
+        assert s.situacao == "INAPTA"
+        assert s.situacao_fmt == "Inapta"
+
+    def test_empresa_conectada_suspensa_propaga(self) -> None:
+        """EmpresaConectada (fallback; não DOOU nem SOCIO) também carrega."""
+        conexoes = [_conn(rel_type="CONTRATADA_POR", target_id="emp_1")]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "55555555000199",
+                    "razao_social": "Fornecedora",
+                    "situacao_cadastral": "SUSPENSA",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert len(resultado.empresas) == 1
+        e = resultado.empresas[0]
+        assert e.situacao == "SUSPENSA"
+        assert e.situacao_fmt == "Suspensa"
+
+    def test_todas_as_5_situacoes_validas(self) -> None:
+        """Cobertura dos 5 valores RFB → formatacao leiga correta."""
+        mapping = {
+            "ATIVA": "Ativa",
+            "BAIXADA": "Baixada",
+            "SUSPENSA": "Suspensa",
+            "INAPTA": "Inapta",
+            "NULA": "Nula",
+        }
+        for idx, (raw, leigo) in enumerate(mapping.items()):
+            conexoes = [_conn(rel_type="SOCIO_DE", target_id=f"emp_{idx}")]
+            entidades = {
+                f"emp_{idx}": {
+                    "type": "Company",
+                    "properties": {
+                        "cnpj": f"{idx:014d}",
+                        "razao_social": f"E {idx}",
+                        "situacao_cadastral": raw,
+                    },
+                },
+            }
+            resultado = classificar(conexoes, entidades, POLITICO_ID)
+            assert resultado.socios[0].situacao == raw
+            assert resultado.socios[0].situacao_fmt == leigo
+
+
 # --- Cypher query sanity check ----------------------------------------------
 
 

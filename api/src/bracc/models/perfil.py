@@ -49,21 +49,37 @@ class EmpresaConectada(BaseModel):
 
     Campo `capital_social` foi removido nesta fase (04.A) porque o pipeline
     RFB/QSA ainda não existe. Volta quando o pipeline for implementado.
+
+    `situacao` vem da RFB via pipeline ``brasilapi_cnpj_status`` (ou do
+    bulk ``cnpj`` quando rodar). Valores brutos: ATIVA / BAIXADA /
+    SUSPENSA / INAPTA / NULA / ``None``. ``situacao_fmt`` é a versão
+    leiga pra exibir (Ativa / Baixada / etc.).
     """
 
     nome: str
     cnpj: str | None = None
     relacao: str
+    situacao: str | None = None
+    situacao_fmt: str | None = None
+    situacao_verified_at: str | None = None
 
 
 class DoadorEmpresa(BaseModel):
-    """Pessoa jurídica agregada por CNPJ que doou para a campanha."""
+    """Pessoa jurídica agregada por CNPJ que doou para a campanha.
+
+    `situacao` vem do mesmo lugar que em :class:`EmpresaConectada`
+    (pipeline ``brasilapi_cnpj_status``). Quando a empresa está
+    BAIXADA/SUSPENSA/INAPTA, o ``alertas_service`` levanta alerta grave.
+    """
 
     nome: str
     cnpj: str | None = None
     valor_total: float
     valor_total_fmt: str
     n_doacoes: int
+    situacao: str | None = None
+    situacao_fmt: str | None = None
+    situacao_verified_at: str | None = None
 
 
 class DoadorPessoa(BaseModel):
@@ -85,10 +101,16 @@ class SocioConectado(BaseModel):
 
     Campo `capital_social_fmt` foi removido nesta fase (04.A) — pipeline
     RFB/QSA ausente. Volta quando o pipeline existir.
+
+    `situacao` idem :class:`DoadorEmpresa` — sócio de empresa BAIXADA
+    também alimenta o alerta grave de ``alertas_service``.
     """
 
     nome: str
     cnpj: str | None = None
+    situacao: str | None = None
+    situacao_fmt: str | None = None
+    situacao_verified_at: str | None = None
 
 
 class FamiliarConectado(BaseModel):
