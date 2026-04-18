@@ -31,3 +31,30 @@ class StatusResponse(BaseModel):
     licitacoes_go: int = 0
     nomeacoes_go: int = 0
     vereadores_goiania: int = 0
+
+
+class BuscarTudoItem(BaseModel):
+    """One search result item rendered by the PWA result list.
+
+    ``tipo`` matches the Neo4j label lower-cased and (historically)
+    without underscores, matching what ``/api/v1/search`` already
+    emits. ``icone`` is a UI hint the PWA maps to an avatar.
+    """
+
+    id: str
+    tipo: str
+    nome: str
+    documento: str | None = None
+    score: float = 0.0
+    icone: str = "outro"
+    detalhe: str = ""
+    is_pep: bool | None = None
+    is_comissionado: bool | None = None
+
+
+class BuscarTudoResponse(BaseModel):
+    """Envelope for ``/buscar-tudo``; matches the Flask payload keys."""
+
+    resultados: list[BuscarTudoItem]
+    total: int
+    pagina: int

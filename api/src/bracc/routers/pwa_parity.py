@@ -13,18 +13,208 @@ graph-native, and this router is a thin PWA-facing facade that can be
 removed once the PWA is updated to call ``/api/v1`` directly.
 """
 
-from typing import Annotated
+import re
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from neo4j import AsyncSession
 
 from bracc.dependencies import get_session
-from bracc.models.pwa_parity import StatusResponse
-from bracc.services.neo4j_service import execute_query_single
+from bracc.models.pwa_parity import (
+    BuscarTudoItem,
+    BuscarTudoResponse,
+    StatusResponse,
+)
+from bracc.services.neo4j_service import execute_query, execute_query_single
+from bracc.services.public_guard import should_hide_person_entities
 
 router = APIRouter(tags=["pwa-parity"])
 
 UF_FILTRO = "GO"
+
+# Mirrors the dedup + filter taxonomy used by the legacy Flask
+# ``/buscar-tudo`` handler. We accept both the historical
+# ``state_employee``/``go_procurement`` spellings and the
+# lower-cased-no-underscore spellings emitted by ``/api/v1/search``
+# today so the endpoint returns results regardless of which label
+# normalizer upstream happens to apply.
+_GO_TYPES = {
+    "state_employee",
+    "stateemployee",
+    "go_procurement",
+    "goprocurement",
+    "go_appointment",
+    "goappointment",
+    "go_vereador",
+    "govereador",
+}
+
+_LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}[\]^"~*?:\\/])')
+
+
+def _to_lucene_query(query: str) -> str:
+    """Lucene-escape the user query; ``*`` keeps its match-all semantics."""
+    if query.strip() == "*":
+        return "*:*"
+    return _LUCENE_SPECIAL.sub(r"\\\1", query)
+
+
+def _fmt_brl(valor: float | int | None) -> str:
+    """Reimplements ``backend/app.py::fmt_brl`` 1:1 for PWA parity."""
+    if not valor:
+        return "R$ 0,00"
+    value = float(valor)
+    if value >= 1_000_000_000:
+        return f"R$ {value / 1_000_000_000:.2f} bi"
+    if value >= 1_000_000:
+        return f"R$ {value / 1_000_000:.2f} mi"
+    if value >= 1_000:
+        return f"R$ {value / 1_000:.1f} mil"
+    formatted = f"R$ {value:,.2f}"
+    # Swap the US ``1,234.56`` → pt-BR ``1.234,56`` through an X pivot.
+    return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _is_person_go(props: dict[str, Any]) -> bool:
+    uf = str(props.get("uf") or "").upper()
+    return uf == UF_FILTRO
+
+
+def _format_item(result: dict[str, Any]) -> BuscarTudoItem | None:
+    """Translate a ``/api/v1/search`` result into the PWA shape.
+
+    Returns ``None`` when the entity is out of the Goias scope (either
+    a non-GO politician or a non-GO label). The Flask backend already
+    applies this filter; we preserve the same behaviour here so
+    consumers see identical result lists.
+    """
+    props = result.get("properties") or {}
+    tipo_raw = str(result.get("type") or "").lower()
+
+    if tipo_raw == "person":
+        if not _is_person_go(props):
+            return None
+    elif tipo_raw not in _GO_TYPES:
+        return None
+
+    item = BuscarTudoItem(
+        id=str(result["id"]),
+        tipo=tipo_raw,
+        nome=str(result.get("name") or ""),
+        documento=result.get("document"),
+        score=float(result.get("score") or 0.0),
+        icone="outro",
+        detalhe=tipo_raw.capitalize(),
+    )
+
+    if tipo_raw == "person":
+        item.icone = "pessoa"
+        patrimonio = props.get("patrimonio_declarado")
+        item.detalhe = (
+            f"Patrimonio: {_fmt_brl(patrimonio)}" if patrimonio else "Pessoa publica"
+        )
+        item.is_pep = bool(props.get("is_pep", False))
+    elif tipo_raw in {"state_employee", "stateemployee"}:
+        item.icone = "servidor"
+        salario = props.get("salary_gross")
+        cargo = str(props.get("role") or "")
+        if salario:
+            item.detalhe = f"{cargo} - {_fmt_brl(salario)}/mes"
+        else:
+            item.detalhe = cargo or "Servidor estadual"
+        item.is_comissionado = bool(props.get("is_commissioned", False))
+    elif tipo_raw in {"go_procurement", "goprocurement"}:
+        item.icone = "licitacao"
+        valor = props.get("amount_estimated") or 0
+        item.detalhe = (
+            f"Licitacao: {_fmt_brl(valor)}" if valor else str(props.get("object") or "Licitacao")
+        )
+    elif tipo_raw in {"go_appointment", "goappointment"}:
+        item.icone = "nomeacao"
+        tipo_apt = str(props.get("appointment_type") or "Nomeacao").title()
+        role = str(props.get("role") or "")
+        item.detalhe = f"{tipo_apt}: {role}"
+    elif tipo_raw in {"go_vereador", "govereador"}:
+        item.icone = "vereador"
+        item.detalhe = f"Vereador(a) - {props.get('party', '')}"
+    elif tipo_raw == "company":
+        item.icone = "empresa"
+        item.detalhe = str(props.get("razao_social") or "")
+    elif tipo_raw == "contract":
+        item.icone = "contrato"
+        valor = props.get("value") or 0
+        item.detalhe = _fmt_brl(valor) if valor else "Contrato publico"
+    elif tipo_raw == "amendment":
+        item.icone = "emenda"
+        valor = props.get("value_paid") or props.get("value_committed") or 0
+        item.detalhe = f"Emenda: {_fmt_brl(valor)}" if valor else "Emenda parlamentar"
+
+    return item
+
+
+async def _run_search(
+    session: AsyncSession,
+    q: str,
+    page: int,
+    size: int,
+    *,
+    entity_type: str | None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Thin wrapper around ``search``/``search_count`` that returns
+    result dicts + total, matching what the Flask handler consumed
+    from ``/api/v1/search``.
+    """
+    skip = (page - 1) * size
+    hide_person_entities = should_hide_person_entities()
+    lucene_query = _to_lucene_query(q)
+
+    records = await execute_query(
+        session,
+        "search",
+        {
+            "query": lucene_query,
+            "entity_type": entity_type,
+            "skip": skip,
+            "limit": size,
+            "hide_person_entities": hide_person_entities,
+        },
+    )
+    total_record = await execute_query_single(
+        session,
+        "search_count",
+        {
+            "query": lucene_query,
+            "entity_type": entity_type,
+            "hide_person_entities": hide_person_entities,
+        },
+    )
+    total = 0
+    if total_record and total_record["total"] is not None:
+        total = int(total_record["total"])
+
+    results: list[dict[str, Any]] = []
+    for record in records:
+        node = record["node"]
+        props = dict(node)
+        labels = record["node_labels"] or []
+        doc_id = record["document_id"]
+        document = (
+            str(doc_id) if doc_id and not str(doc_id).startswith("4:") else None
+        )
+        results.append(
+            {
+                "id": record["node_id"],
+                "type": labels[0].lower() if labels else "unknown",
+                "name": props.get(
+                    "name",
+                    props.get("razao_social", props.get("object", "")),
+                ),
+                "score": float(record["score"] or 0.0),
+                "document": document,
+                "properties": props,
+            }
+        )
+    return results, total
 
 
 @router.get("/status", response_model=StatusResponse)
@@ -73,3 +263,44 @@ async def pwa_status(
         licitacoes_go=int(record["licitacoes_go"] or 0),
         nomeacoes_go=int(record["nomeacoes_go"] or 0),
     )
+
+
+@router.get("/buscar-tudo", response_model=BuscarTudoResponse)
+async def pwa_buscar_tudo(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    q: Annotated[str, Query(min_length=2, max_length=200)],
+    page: Annotated[int, Query(ge=1)] = 1,
+) -> BuscarTudoResponse:
+    """Unified search for the PWA result list.
+
+    Runs the same two-pass search the Flask handler performs — one
+    call filtered to ``type=person`` so politicians are not buried by
+    high-scoring company matches, and one unfiltered pass — then
+    dedups by id keeping the highest score, applies the Goias scope
+    filter, and maps each result to the PWA ``BuscarTudoItem`` shape.
+    """
+    try:
+        pessoas, pessoas_total = await _run_search(
+            session, q, page, 30, entity_type="person"
+        )
+        outros, outros_total = await _run_search(
+            session, q, page, 20, entity_type=None
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Erro: {exc}") from exc
+
+    combined: dict[str, dict[str, Any]] = {}
+    for r in (*pessoas, *outros):
+        existing = combined.get(r["id"])
+        if not existing or r.get("score", 0) > existing.get("score", 0):
+            combined[r["id"]] = r
+
+    total = max(pessoas_total, outros_total)
+
+    items: list[BuscarTudoItem] = []
+    for r in sorted(combined.values(), key=lambda x: -x.get("score", 0)):
+        item = _format_item(r)
+        if item is not None:
+            items.append(item)
+
+    return BuscarTudoResponse(resultados=items, total=total, pagina=page)

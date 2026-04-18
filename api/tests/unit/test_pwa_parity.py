@@ -5,6 +5,7 @@ page still renders when Neo4j is unreachable or the graph is freshly
 bootstrapped and has no ingested politicians yet.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -85,3 +86,206 @@ async def test_status_reports_disconnected_on_driver_error(client: AsyncClient) 
     body = response.json()
     assert body["bracc_conectado"] is False
     assert body["total_nos"] == 0
+
+
+# ---------------------------------------------------------------------------
+# /buscar-tudo
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_buscar_tudo_rejects_short_query(client: AsyncClient) -> None:
+    response = await client.get("/buscar-tudo?q=a")
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_buscar_tudo_rejects_missing_query(client: AsyncClient) -> None:
+    response = await client.get("/buscar-tudo")
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_buscar_tudo_maps_person_result_and_filters_non_go(
+    client: AsyncClient,
+) -> None:
+    pessoa_go = _fake_search_record(
+        node_id="person:1",
+        labels=["Person"],
+        props={
+            "name": "Fulano da Silva",
+            "uf": "GO",
+            "patrimonio_declarado": 1_234_567.89,
+            "is_pep": True,
+        },
+        score=12.5,
+        document_id="12345678900",
+    )
+    pessoa_sp = _fake_search_record(
+        node_id="person:2",
+        labels=["Person"],
+        props={"name": "Outro Silva", "uf": "SP"},
+        score=10.0,
+        document_id="98765432100",
+    )
+
+    async def fake_execute_query(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        if name == "search":
+            if params.get("entity_type") == "person":
+                return [pessoa_go, pessoa_sp]
+            return []
+        raise AssertionError(f"unexpected query: {name}")
+
+    async def fake_execute_query_single(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        if name == "search_count":
+            return {"total": 2 if params.get("entity_type") == "person" else 0}
+        raise AssertionError(f"unexpected single query: {name}")
+
+    with (
+        patch(
+            "bracc.routers.pwa_parity.execute_query",
+            new=AsyncMock(side_effect=fake_execute_query),
+        ),
+        patch(
+            "bracc.routers.pwa_parity.execute_query_single",
+            new=AsyncMock(side_effect=fake_execute_query_single),
+        ),
+    ):
+        response = await client.get("/buscar-tudo?q=silva")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pagina"] == 1
+    assert body["total"] == 2
+    assert len(body["resultados"]) == 1
+    item = body["resultados"][0]
+    assert item["id"] == "person:1"
+    assert item["tipo"] == "person"
+    assert item["nome"] == "Fulano da Silva"
+    assert item["documento"] == "12345678900"
+    assert item["icone"] == "pessoa"
+    assert item["is_pep"] is True
+    assert "Patrimonio" in item["detalhe"]
+
+
+@pytest.mark.anyio
+async def test_buscar_tudo_keeps_go_typed_results(client: AsyncClient) -> None:
+    servidor = _fake_search_record(
+        node_id="emp:1",
+        labels=["StateEmployee"],
+        props={
+            "name": "Servidora Exemplo",
+            "role": "ANALISTA",
+            "salary_gross": 12_345.0,
+            "is_commissioned": False,
+        },
+        score=5.0,
+        document_id="4:abcd:0",  # internal element id → documento must be None
+    )
+    licitacao = _fake_search_record(
+        node_id="proc:1",
+        labels=["GoProcurement"],
+        props={
+            "object": "Aquisicao de materiais",
+            "amount_estimated": 250_000.0,
+        },
+        score=4.0,
+        document_id="4:abcd:1",
+    )
+
+    async def fake_execute_query(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        if name == "search":
+            if params.get("entity_type") == "person":
+                return []
+            return [servidor, licitacao]
+        raise AssertionError(name)
+
+    async def fake_execute_query_single(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"total": 2}
+
+    with (
+        patch(
+            "bracc.routers.pwa_parity.execute_query",
+            new=AsyncMock(side_effect=fake_execute_query),
+        ),
+        patch(
+            "bracc.routers.pwa_parity.execute_query_single",
+            new=AsyncMock(side_effect=fake_execute_query_single),
+        ),
+    ):
+        response = await client.get("/buscar-tudo?q=teste")
+
+    assert response.status_code == 200
+    resultados = response.json()["resultados"]
+    tipos = {item["tipo"]: item for item in resultados}
+    assert "stateemployee" in tipos
+    assert tipos["stateemployee"]["icone"] == "servidor"
+    assert tipos["stateemployee"]["is_comissionado"] is False
+    # Internal element id must be stripped from ``documento``
+    assert tipos["stateemployee"]["documento"] is None
+    assert "goprocurement" in tipos
+    assert tipos["goprocurement"]["icone"] == "licitacao"
+    assert "Licitacao" in tipos["goprocurement"]["detalhe"]
+
+
+@pytest.mark.anyio
+async def test_buscar_tudo_empty_results(client: AsyncClient) -> None:
+    async def fake_execute_query(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        return []
+
+    async def fake_execute_query_single(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"total": 0}
+
+    with (
+        patch(
+            "bracc.routers.pwa_parity.execute_query",
+            new=AsyncMock(side_effect=fake_execute_query),
+        ),
+        patch(
+            "bracc.routers.pwa_parity.execute_query_single",
+            new=AsyncMock(side_effect=fake_execute_query_single),
+        ),
+    ):
+        response = await client.get("/buscar-tudo?q=nenhum")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {"resultados": [], "total": 0, "pagina": 1}
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+
+def _fake_search_record(
+    *,
+    node_id: str,
+    labels: list[str],
+    props: dict[str, Any],
+    score: float,
+    document_id: str,
+) -> dict[str, Any]:
+    """Build a dict that mimics the neo4j Record shape consumed by
+    ``_run_search`` (which only does dictionary-style access, so a
+    plain dict is sufficient for unit testing).
+    """
+    return {
+        "node": props,
+        "score": score,
+        "node_labels": labels,
+        "node_id": node_id,
+        "document_id": document_id,
+    }
