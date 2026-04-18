@@ -16,4 +16,5 @@ RETURN center AS e,
        type(r) AS rel_type,
        elementId(src) AS source_id,
        elementId(tgt) AS target_id,
+       elementId(connected) AS connected_id,
        elementId(r) AS rel_id

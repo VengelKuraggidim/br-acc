@@ -258,11 +258,13 @@ async def get_connections(
             exposure_tier=infer_exposure_tier(target_labels),
         ))
 
-        target_id = record["target_id"]
-        if target_id not in seen_ids:
-            seen_ids.add(target_id)
+        # Use connected_id (the "other end" of the rel) so inbound connections
+        # don't collapse into the center node — see entity_connections.cypher.
+        connected_id = record.get("connected_id") or record["target_id"]
+        if connected_id not in seen_ids:
+            seen_ids.add(connected_id)
             connected_entities.append(
-                _node_to_entity(record["connected"], target_labels, target_id)
+                _node_to_entity(record["connected"], target_labels, connected_id)
             )
 
     return EntityWithConnections(

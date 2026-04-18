@@ -76,6 +76,34 @@ class EmpresaConectada(BaseModel):
     capital_social_fmt: str | None = None
 
 
+class DoadorEmpresa(BaseModel):
+    nome: str
+    cnpj: str | None = None
+    valor_total: float
+    valor_total_fmt: str
+    n_doacoes: int
+
+
+class DoadorPessoa(BaseModel):
+    nome: str
+    cpf_mascarado: str | None = None
+    valor_total: float
+    valor_total_fmt: str
+    n_doacoes: int
+
+
+class SocioConectado(BaseModel):
+    nome: str
+    cnpj: str | None = None
+    capital_social_fmt: str | None = None
+
+
+class FamiliarConectado(BaseModel):
+    nome: str
+    cpf_mascarado: str | None = None
+    relacao: str
+
+
 class ContratoConectado(BaseModel):
     objeto: str
     valor: float
@@ -116,6 +144,13 @@ class PerfilPolitico(BaseModel):
     alertas: list[dict[str, str]]
     conexoes_total: int
     fonte_emendas: str | None = None
+    descricao_conexoes: str = ""
+    doadores_empresa: list[DoadorEmpresa] = []
+    doadores_pessoa: list[DoadorPessoa] = []
+    total_doacoes: float = 0
+    total_doacoes_fmt: str = "R$ 0,00"
+    socios: list[SocioConectado] = []
+    familia: list[FamiliarConectado] = []
 
 
 class ServidorResumo(BaseModel):
@@ -550,19 +585,32 @@ async def perfil_politico(entity_id: str):
         uf=props.get("uf"),
     )
 
-    # Classificar conexoes
+    # Classificar conexoes em categorias separadas
     emendas = []
-    empresas = []
+    empresas: list[EmpresaConectada] = []  # empresas ligadas por sociedade/contrato
     contratos = []
+    # Agregacao de doacoes por documento (1 doador pode fazer varias doacoes)
+    doacoes_empresa_raw: dict[str, dict] = {}
+    doacoes_pessoa_raw: dict[str, dict] = {}
+    socios: list[SocioConectado] = []
+    familia: list[FamiliarConectado] = []
 
     for conn in conexoes_raw:
-        # So processar conexoes diretas deste politico
-        if conn["source_id"] != entity_id:
+        # Pegar a "outra ponta" da conexao — o politico pode estar como source OU target
+        # (ex: (Doador)-[:DOOU]->(Politico) tem o politico como target)
+        if conn["source_id"] == entity_id:
+            target_id = conn["target_id"]
+            politico_is_source = True
+        elif conn["target_id"] == entity_id:
+            target_id = conn["source_id"]
+            politico_is_source = False
+        else:
             continue
-        target_id = conn["target_id"]
         target = entidades_conectadas.get(target_id, {})
         target_type = target.get("type", "")
         target_props = target.get("properties", {})
+        rel_type = conn.get("relationship_type", "")
+        rel_props = conn.get("properties", {}) or {}
 
         if target_type == "amendment":
             val_committed = target_props.get("value_committed", 0) or 0
@@ -578,12 +626,41 @@ async def perfil_politico(entity_id: str):
                 valor_pago=val_paid,
                 valor_pago_fmt=fmt_brl(val_paid),
             ))
+        elif rel_type == "DOOU" and not politico_is_source:
+            # Doador de campanha (inbound): alguem doou dinheiro pro politico
+            valor_doacao = float(rel_props.get("valor") or rel_props.get("amount") or 0)
+            if target_type == "company":
+                doc = target_props.get("cnpj") or f"empresa_{target_id}"
+                nome = target_props.get("razao_social") or target_props.get("name", "")
+                reg = doacoes_empresa_raw.setdefault(doc, {"nome": nome, "cnpj": target_props.get("cnpj"), "total": 0.0, "n": 0})
+                reg["total"] += valor_doacao
+                reg["n"] += 1
+            elif target_type == "person":
+                cpf = target_props.get("cpf") or target_props.get("cpf_partial") or f"pessoa_{target_id}"
+                nome = target_props.get("name", "")
+                reg = doacoes_pessoa_raw.setdefault(cpf, {"nome": nome, "cpf": target_props.get("cpf"), "total": 0.0, "n": 0})
+                reg["total"] += valor_doacao
+                reg["n"] += 1
+        elif rel_type == "SOCIO_DE" and target_type == "company":
+            cap = target_props.get("capital_social")
+            socios.append(SocioConectado(
+                nome=target_props.get("razao_social") or target_props.get("name", ""),
+                cnpj=target_props.get("cnpj"),
+                capital_social_fmt=fmt_brl(cap) if cap else None,
+            ))
+        elif rel_type in ("CONJUGE_DE", "PARENTE_DE") and target_type == "person":
+            familia.append(FamiliarConectado(
+                nome=target_props.get("name", ""),
+                cpf_mascarado=target_props.get("cpf"),
+                relacao="Cônjuge" if rel_type == "CONJUGE_DE" else "Parente",
+            ))
         elif target_type == "company":
+            # Relacao empresarial direta nao-doacao nao-socio (ex: contratante)
             cap = target_props.get("capital_social")
             empresas.append(EmpresaConectada(
-                nome=target_props.get("razao_social", target_props.get("name", "")),
+                nome=target_props.get("razao_social") or target_props.get("name", ""),
                 cnpj=target_props.get("cnpj"),
-                relacao=traduzir_relacao(conn.get("relationship_type", "")),
+                relacao=traduzir_relacao(rel_type),
                 capital_social=cap,
                 capital_social_fmt=fmt_brl(cap) if cap else None,
             ))
@@ -596,16 +673,6 @@ async def perfil_politico(entity_id: str):
                 orgao=target_props.get("contracting_org"),
                 data=target_props.get("date"),
             ))
-        elif target_type == "election":
-            # Registro eleitoral - nao e emenda, ignorar aqui
-            pass
-        elif target_type == "person":
-            # Familiar ou conexao pessoal
-            empresas.append(EmpresaConectada(
-                nome=target_props.get("name", ""),
-                cnpj=target_props.get("cpf"),
-                relacao=traduzir_relacao(conn.get("relationship_type", "")),
-            ))
         elif target_type == "go_procurement":
             valor = target_props.get("amount_estimated", 0) or 0
             contratos.append(ContratoConectado(
@@ -615,15 +682,38 @@ async def perfil_politico(entity_id: str):
                 orgao=target_props.get("agency_name"),
                 data=target_props.get("published_at"),
             ))
-        elif target_type == "go_gazette_act":
-            # Gazette mentions are informational
-            pass
         elif target_type == "state_agency":
             empresas.append(EmpresaConectada(
                 nome=target_props.get("name", ""),
                 cnpj=None,
                 relacao="Lotado em (orgao estadual)",
             ))
+        # election, go_gazette_act, person (sem rel familiar/doacao) — informativos, ignorados
+
+    # Materializar listas agregadas de doadores, ordenadas por maior valor
+    doadores_empresa = [
+        DoadorEmpresa(
+            nome=r["nome"],
+            cnpj=r["cnpj"],
+            valor_total=r["total"],
+            valor_total_fmt=fmt_brl(r["total"]),
+            n_doacoes=r["n"],
+        )
+        for r in doacoes_empresa_raw.values()
+    ]
+    doadores_empresa.sort(key=lambda x: -x.valor_total)
+    doadores_pessoa = [
+        DoadorPessoa(
+            nome=r["nome"],
+            cpf_mascarado=r["cpf"],
+            valor_total=r["total"],
+            valor_total_fmt=fmt_brl(r["total"]),
+            n_doacoes=r["n"],
+        )
+        for r in doacoes_pessoa_raw.values()
+    ]
+    doadores_pessoa.sort(key=lambda x: -x.valor_total)
+    total_doacoes = sum(d.valor_total for d in doadores_empresa) + sum(d.valor_total for d in doadores_pessoa)
 
     total_emendas_valor = sum(e.valor_pago or e.valor_empenhado for e in emendas)
 
@@ -752,6 +842,27 @@ async def perfil_politico(entity_id: str):
         num_conexoes=len(conexoes_raw),
     )
 
+    # Descricao leiga do que o usuario vai ver nos cards abaixo.
+    cats = []
+    if doadores_empresa:
+        cats.append(f"{len(doadores_empresa)} empresa(s) que doaram para a campanha")
+    if doadores_pessoa:
+        cats.append(f"{len(doadores_pessoa)} pessoa(s) que doaram para a campanha")
+    if socios:
+        cats.append(f"{len(socios)} empresa(s) em que o(a) politico(a) aparece como socio(a)")
+    if familia:
+        cats.append(f"{len(familia)} familiar(es) com ligacao politica")
+
+    if cats:
+        descricao_conexoes = (
+            "Encontramos: " + "; ".join(cats) + ". "
+            "Esses dados vem da Justica Eleitoral (TSE) e da Receita Federal — "
+            "sao publicos. Aparecer aqui nao quer dizer que tem algo errado; "
+            "e so pra voce saber com quem o(a) politico(a) se relaciona."
+        )
+    else:
+        descricao_conexoes = ""
+
     return PerfilPolitico(
         politico=politico,
         resumo=resumo,
@@ -768,6 +879,13 @@ async def perfil_politico(entity_id: str):
         alertas=alertas,
         conexoes_total=len(conexoes_raw),
         fonte_emendas=fonte_emendas,
+        descricao_conexoes=descricao_conexoes,
+        doadores_empresa=doadores_empresa,
+        doadores_pessoa=doadores_pessoa,
+        total_doacoes=total_doacoes,
+        total_doacoes_fmt=fmt_brl(total_doacoes),
+        socios=socios,
+        familia=familia,
     )
 
 
