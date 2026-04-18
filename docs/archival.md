@@ -115,6 +115,15 @@ O campo `source_snapshot_uri` foi adicionado ao
 - Na camada API, `ProvenanceBlock.snapshot_url` expõe o valor ao cliente
   final (nullable também).
 
+## Primeiro consumidor non-retrofit
+
+`camara_politicos_go` (deputados federais GO + CEAP) é o primeiro pipeline
+**criado já consumindo archival** — substitui o live-call do Flask
+(`backend/app.py::/politico`) por ingestão com `ProvenanceBlock` +
+`source_snapshot_uri` em toda fetch (listagem `/deputados`, detalhe
+`/deputados/{id}` e despesa CEAP `/deputados/{id}/despesas`). Serve de
+referência para retrofits dos 10 legados e para pipelines novos.
+
 ## Retrofit nos 10 pipelines GO legados
 
 Fase separada. Ordem sugerida por valor:

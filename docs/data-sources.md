@@ -3,14 +3,14 @@
 > Fork re-scoped to Goiás. Derived from [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3). Goiás-specific pipelines (`camara_goiania`, `folha_go`, `mides`, SIOP GO transfers, etc.) are the priority; federal sources are kept where they add context for GO-based entities.
 
 <!-- SOURCE_SUMMARY_START -->
-**Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T20:16:52Z)**
+**Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T06:25:22Z)**
 
-- Universe v1 sources: 116
-- Implemented pipelines: 57
+- Universe v1 sources: 118
+- Implemented pipelines: 59
 - Loaded sources (load_state=loaded): 41
-- Partial sources (load_state=partial): 8
+- Partial sources (load_state=partial): 10
 - Not loaded sources (load_state=not_loaded): 67
-- Status counts: loaded=41, partial=11, operational=1, stale=3, blocked_external=1, not_built=59
+- Status counts: loaded=41, partial=11, stale=3, blocked_external=1, not_built=59
 <!-- SOURCE_SUMMARY_END -->
 
 
@@ -39,7 +39,8 @@ All sources below have working ETL pipelines in `etl/src/bracc_etl/pipelines/` a
 | 12 | DATASUS/CNES | `datasus` | 602K Health | 435K OPERA_UNIDADE | Health facility registry |
 | 13 | IBAMA (Embargoes) | `ibama` | 79K Embargo | 79K EMBARGADA | Environmental enforcement |
 | 14 | DOU (Official Gazette) | `dou` | 3.98M DOUAct | 169K MENCIONOU, 13K PUBLICOU | Parquet via BigQuery |
-| 15 | Camara (Expenses) | `camara` | 4.6M Expense | 4.6M GASTOU, 4.9M FORNECEU | Deputy CEAP expenses |
+| 15 | Camara (Expenses) | `camara` | 4.6M Expense | 4.6M GASTOU, 4.9M FORNECEU | Deputy CEAP expenses (federal, nacional) |
+| 15a | Camara Politicos GO | `camara_politicos_go` | FederalLegislator (GO) + LegislativeExpense | INCURRED (tipo=CEAP) | GO federal deputies cadastro + CEAP; substitui live-call Flask `/politico`. Archival ativo via `archive_fetch` |
 | 16 | Senado (Expenses) | `senado` | 272K Expense | 272K FORNECEU | Senator CEAPS expenses |
 | 17 | ICIJ (Offshore Leaks) | `icij` | 4.8K OffshoreEntity, 6.6K OffshoreOfficer | 2.3K OFFICER_OF | Panama/Paradise/Pandora papers |
 | 18 | OpenSanctions (Global PEPs) | `opensanctions` | 118K GlobalPEP | 7.6K GLOBAL_PEP_MATCH | Name-matched to Brazilian entities |
