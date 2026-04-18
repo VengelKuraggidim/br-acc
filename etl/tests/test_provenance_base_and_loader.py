@@ -110,6 +110,27 @@ class TestAttachProvenance:
         assert url_first == url_second
         assert pipe._primary_url_cache == url_first
 
+    def test_snapshot_uri_omitted_when_not_provided(self) -> None:
+        # Legados (todos os 10 pipelines GO hoje) não passam snapshot_uri.
+        # O row resultante NÃO deve ganhar chave source_snapshot_uri vazia —
+        # senão o loader escreveria string vazia ao invés de omitir o campo.
+        pipe = _make_pipeline()
+        stamped = pipe.attach_provenance(
+            {"x": 1}, record_id="42", record_url="https://x.test",
+        )
+        assert "source_snapshot_uri" not in stamped
+
+    def test_snapshot_uri_propagated_when_provided(self) -> None:
+        pipe = _make_pipeline()
+        uri = "folha_go/2026-04/deadbeef1234.csv"
+        stamped = pipe.attach_provenance(
+            {"x": 1},
+            record_id="42",
+            record_url="https://x.test",
+            snapshot_uri=uri,
+        )
+        assert stamped["source_snapshot_uri"] == uri
+
 
 class TestMissingProvenanceFields:
     def _valid(self) -> dict[str, Any]:

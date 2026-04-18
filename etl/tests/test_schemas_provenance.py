@@ -28,14 +28,30 @@ _PROVENANCE_SCHEMA = pa.DataFrameSchema(columns=PROVENANCE_COLUMNS)
 
 
 class TestProvenanceColumns:
-    def test_five_fields_defined(self) -> None:
+    def test_required_fields_defined(self) -> None:
+        # Five required + one opt-in archival snapshot URI.
         assert set(PROVENANCE_FIELDS) == {
             "source_id",
             "source_record_id",
             "source_url",
             "ingested_at",
             "run_id",
+            "source_snapshot_uri",
         }
+
+    def test_source_snapshot_uri_is_optional(self) -> None:
+        # Pipelines legados não emitem source_snapshot_uri — o schema não
+        # deve falhar quando a coluna está ausente. Só valida os 5 required.
+        row = _valid_row()
+        _PROVENANCE_SCHEMA.validate(pd.DataFrame([row]))
+
+    def test_source_snapshot_uri_accepted_when_present(self) -> None:
+        row = {**_valid_row(), "source_snapshot_uri": "folha_go/2026-04/abcdef123456.csv"}
+        _PROVENANCE_SCHEMA.validate(pd.DataFrame([row]))
+
+    def test_source_snapshot_uri_accepts_null(self) -> None:
+        row = {**_valid_row(), "source_snapshot_uri": None}
+        _PROVENANCE_SCHEMA.validate(pd.DataFrame([row]))
 
     def test_valid_row_passes(self) -> None:
         _PROVENANCE_SCHEMA.validate(pd.DataFrame([_valid_row()]))

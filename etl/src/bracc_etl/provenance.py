@@ -25,7 +25,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_NULLABLE_PROVENANCE_FIELDS: frozenset[str] = frozenset({"source_record_id"})
+# ``source_snapshot_uri`` é opt-in (pipelines novos devem popular via
+# ``bracc_etl.archival.archive_fetch``, legados continuam válidos sem ele).
+# ``source_record_id`` pode ser vazio quando a fonte não expõe id natural.
+_NULLABLE_PROVENANCE_FIELDS: frozenset[str] = frozenset(
+    {"source_record_id", "source_snapshot_uri"},
+)
 _REQUIRED_PROVENANCE_FIELDS: tuple[str, ...] = tuple(
     f for f in PROVENANCE_FIELDS if f not in _NULLABLE_PROVENANCE_FIELDS
 )

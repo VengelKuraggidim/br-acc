@@ -45,8 +45,9 @@ class Pipeline(ABC):
         *,
         record_id: object,
         record_url: str | None = None,
+        snapshot_uri: str | None = None,
     ) -> dict[str, Any]:
-        """Stamp a node or relationship row with the five provenance fields.
+        """Stamp a node or relationship row with the provenance fields.
 
         Pipelines MUST route every dict destined for ``Neo4jBatchLoader``
         through this helper so ``source_id`` / ``source_record_id`` /
@@ -56,6 +57,12 @@ class Pipeline(ABC):
         ``record_url`` is preferred when the source exposes a deep-link;
         otherwise the ``primary_url`` from ``docs/source_registry_br_v1.csv``
         is used. ``record_id`` is coerced to string (empty string when falsy).
+
+        ``snapshot_uri`` (optional, opt-in) is the URI returned by
+        :func:`bracc_etl.archival.archive_fetch` at fetch time. Pipelines
+        novos DEVEM populá-lo pra que a proveniência exibida ao usuário
+        inclua cópia imutável da fonte. Ver ``docs/archival.md``. ``None``
+        mantém compat com os 10 pipelines GO legados.
         """
         source_url = (record_url or self._get_primary_url() or "").strip()
         if not source_url.startswith("http"):
@@ -65,7 +72,7 @@ class Pipeline(ABC):
                 "ensure docs/source_registry_br_v1.csv has a primary_url for this source",
             )
         normalized_record_id = "" if record_id in (None, "") else str(record_id)
-        return {
+        stamped: dict[str, Any] = {
             **row,
             "source_id": self.source_id,
             "source_record_id": normalized_record_id,
@@ -73,6 +80,9 @@ class Pipeline(ABC):
             "ingested_at": self._provenance_ingested_at,
             "run_id": self.run_id,
         }
+        if snapshot_uri is not None:
+            stamped["source_snapshot_uri"] = snapshot_uri
+        return stamped
 
     def _get_primary_url(self) -> str:
         if self._primary_url_cache is None:

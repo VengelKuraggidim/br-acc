@@ -1,7 +1,7 @@
 """Provenance columns common to all Fiscal Cidadão ETL outputs.
 
-Every node and relationship persisted to Neo4j must carry five fields that
-let a user trace the fact back to its origin:
+Every node and relationship persisted to Neo4j must carry five required
+fields that let a user trace the fact back to its origin:
 
 - ``source_id``         (str)  Registry key (``docs/source_registry_br_v1.csv``).
 - ``source_record_id``  (str)  Stable natural id on the source (CPF, resource_id, ...).
@@ -10,6 +10,14 @@ let a user trace the fact back to its origin:
                                hierarchical fallback. Never empty.
 - ``ingested_at``       (str)  ISO 8601 UTC timestamp of the ingestion run.
 - ``run_id``            (str)  Correlates with ``IngestionRun`` nodes.
+
+Plus one **optional** field (opt-in, pipelines novos devem populá-lo):
+
+- ``source_snapshot_uri`` (str | None) URI relativa de um snapshot content-
+                                       addressed do payload bruto que produziu
+                                       este row. Preenchido via
+                                       ``bracc_etl.archival.archive_fetch``.
+                                       ``None`` em pipelines legados pré-archival.
 
 The :func:`with_provenance` helper merges these columns into any existing
 pandera :class:`pa.DataFrameSchema`, so business-level schemas can declare
@@ -61,6 +69,16 @@ PROVENANCE_COLUMNS: dict[str, pa.Column] = {
         nullable=False,
         coerce=True,
         checks=[pa.Check.str_length(min_value=1, error="run_id must not be empty")],
+    ),
+    # Opt-in: archival snapshot URI (relativo ao BRACC_ARCHIVAL_ROOT).
+    # Nullable pra não quebrar os 10 pipelines GO legados. Pipelines novos
+    # devem populá-lo via bracc_etl.archival.archive_fetch. Ver
+    # docs/archival.md.
+    "source_snapshot_uri": pa.Column(
+        str,
+        nullable=True,
+        required=False,
+        coerce=True,
     ),
 }
 
