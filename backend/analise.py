@@ -212,6 +212,54 @@ def analisar_emendas(emendas: list[dict]) -> list[dict]:
             "texto": f"{len(relator)} emenda(s) de relator (orcamento secreto) no valor de {_fmt(total_relator)}",
         })
 
+    # Emendas empenhadas mas nao pagas (dinheiro prometido que nao chegou no destino)
+    nao_pagas = [
+        e for e in emendas
+        if (e.get("value_committed", 0) or 0) > 0
+        and (e.get("value_paid", 0) or 0) <= 0
+    ]
+    if nao_pagas:
+        total_nao_pago = sum(e.get("value_committed", 0) or 0 for e in nao_pagas)
+        # Top municipio com mais emendas nao pagas
+        munic_nao_pago: dict[str, float] = {}
+        for e in nao_pagas:
+            mun = (e.get("municipality") or "").strip()
+            if mun:
+                munic_nao_pago[mun] = munic_nao_pago.get(mun, 0) + (e.get("value_committed", 0) or 0)
+        local_txt = ""
+        if munic_nao_pago:
+            top_mun = max(munic_nao_pago, key=munic_nao_pago.get)
+            if munic_nao_pago[top_mun] / total_nao_pago >= 0.5 and len(munic_nao_pago) > 0:
+                local_txt = f" (principal destino: {top_mun.title()} com {_fmt(munic_nao_pago[top_mun])})"
+        alertas.append({
+            "tipo": "grave",
+            "icone": "emenda",
+            "texto": (
+                f"{len(nao_pagas)} emenda(s) empenhada(s) mas nao paga(s): "
+                f"{_fmt(total_nao_pago)} prometidos que nao chegaram ao destino{local_txt}"
+            ),
+        })
+
+    # Emendas pagas parcialmente
+    parciais = [
+        e for e in emendas
+        if (e.get("value_committed", 0) or 0) > 0
+        and 0 < (e.get("value_paid", 0) or 0) < (e.get("value_committed", 0) or 0) * 0.99
+    ]
+    if parciais:
+        total_emp_parcial = sum(e.get("value_committed", 0) or 0 for e in parciais)
+        total_pago_parcial = sum(e.get("value_paid", 0) or 0 for e in parciais)
+        falta = total_emp_parcial - total_pago_parcial
+        alertas.append({
+            "tipo": "atencao",
+            "icone": "emenda",
+            "texto": (
+                f"{len(parciais)} emenda(s) paga(s) parcialmente: "
+                f"{_fmt(total_pago_parcial)} de {_fmt(total_emp_parcial)} empenhados "
+                f"(faltam {_fmt(falta)})"
+            ),
+        })
+
     return alertas
 
 
