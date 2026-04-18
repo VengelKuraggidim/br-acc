@@ -80,6 +80,32 @@ class TestTransform:
 
         assert len(pipeline.despesa_rels) == 2
 
+    def test_provenance_stamped_on_nodes(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for group in (pipeline.vereadores, pipeline.expenses, pipeline.proposals):
+            for item in group:
+                assert item["source_id"] == "camara_goiania"
+                assert item["source_record_id"]
+                assert item["source_url"].startswith("http")
+                assert item["ingested_at"].startswith("20")
+                assert item["run_id"].startswith("camara_goiania_")
+
+    def test_provenance_stamped_on_rels(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for rel in (*pipeline.autor_rels, *pipeline.despesa_rels):
+            assert rel["source_id"] == "camara_goiania"
+            assert rel["source_record_id"]
+            assert rel["source_url"].startswith("http")
+            assert rel["run_id"].startswith("camara_goiania_")
+            assert rel["source_key"]
+            assert rel["target_key"]
+
     def test_stable_ids_are_deterministic(self) -> None:
         p1 = _make_pipeline()
         p1.extract()

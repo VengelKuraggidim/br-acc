@@ -130,6 +130,30 @@ class TestTransform:
         for act in pipeline.acts:
             assert len(act["excerpt"]) <= 500
 
+    def test_provenance_stamped_on_acts_and_appointments(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for group in (pipeline.acts, pipeline.appointments):
+            for item in group:
+                assert item["source_id"] == "querido_diario_go"
+                assert item["source_record_id"]
+                assert item["source_url"].startswith("http")
+                assert item["run_id"].startswith("querido_diario_go_")
+
+    def test_provenance_stamped_on_company_mentions(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for m in pipeline.company_mentions:
+            assert m["source_id"] == "querido_diario_go"
+            assert m["source_record_id"]
+            assert m["source_url"].startswith("http")
+            assert m["source_key"] == m["cnpj"]
+            assert m["target_key"]
+
 
 class TestLoad:
     def test_load_no_raise(self) -> None:

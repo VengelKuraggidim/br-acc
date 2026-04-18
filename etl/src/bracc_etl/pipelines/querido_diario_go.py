@@ -408,32 +408,41 @@ class QueridoDiarioGoPipeline(Pipeline):
             excerpt = text[:500] if text else ""
 
             act_id = _stable_id(territory_id, date, edition, text[:180])
+            act_record_id = f"{territory_id}|{date}|{edition}"
+            act_url = url or None  # deep-link to the act when gazette provided one
 
-            acts.append({
-                "act_id": act_id,
-                "territory_id": territory_id,
-                "territory_name": territory_name,
-                "date": date,
-                "edition": edition,
-                "is_extra_edition": is_extra,
-                "excerpt": excerpt,
-                "url": url,
-                "act_type": act_type,
-                "uf": "GO",
-                "source": "querido_diario_go",
-            })
+            acts.append(self.attach_provenance(
+                {
+                    "act_id": act_id,
+                    "territory_id": territory_id,
+                    "territory_name": territory_name,
+                    "date": date,
+                    "edition": edition,
+                    "is_extra_edition": is_extra,
+                    "excerpt": excerpt,
+                    "url": url,
+                    "act_type": act_type,
+                    "uf": "GO",
+                    "source": "querido_diario_go",
+                },
+                record_id=act_record_id,
+                record_url=act_url,
+            ))
 
             # Extract CNPJ mentions
             for cnpj, span in _extract_cnpjs(text):
-                mentions.append({
-                    "cnpj": cnpj,
-                    "target_key": act_id,
-                    "method": "text_cnpj_extract",
-                    "confidence": 0.75,
-                    "source_ref": url or act_id,
-                    "extract_span": span,
-                    "run_id": self.run_id,
-                })
+                mentions.append(self.attach_provenance(
+                    {
+                        "source_key": cnpj,
+                        "target_key": act_id,
+                        "cnpj": cnpj,
+                        "method": "text_cnpj_extract",
+                        "confidence": 0.75,
+                        "extract_span": span,
+                    },
+                    record_id=f"{act_record_id}|{cnpj}|{span}",
+                    record_url=act_url,
+                ))
 
             # Extract appointment data
             if act_type in ("nomeacao", "exoneracao"):
@@ -454,25 +463,32 @@ class QueridoDiarioGoPipeline(Pipeline):
                         appt["person_name"],
                         appt["role"],
                     )
-                    appointments.append({
-                        "appointment_id": appt_id,
-                        "person_name": appt["person_name"],
-                        "role": appt["role"],
-                        "agency": "",
-                        "act_date": date,
-                        "appointment_type": appointment_type,
-                        "territory_id": territory_id,
-                        "territory_name": territory_name,
-                        "uf": "GO",
-                        "source": "querido_diario_go",
-                        "act_id": act_id,
-                    })
+                    appt_record_id = (
+                        f"{territory_id}|{date}|{appt['person_name']}|{appt['role']}"
+                    )
+                    appointments.append(self.attach_provenance(
+                        {
+                            "appointment_id": appt_id,
+                            "person_name": appt["person_name"],
+                            "role": appt["role"],
+                            "agency": "",
+                            "act_date": date,
+                            "appointment_type": appointment_type,
+                            "territory_id": territory_id,
+                            "territory_name": territory_name,
+                            "uf": "GO",
+                            "source": "querido_diario_go",
+                            "act_id": act_id,
+                        },
+                        record_id=appt_record_id,
+                        record_url=act_url,
+                    ))
 
         self.acts = deduplicate_rows(acts, ["act_id"])
         self.appointments = deduplicate_rows(appointments, ["appointment_id"])
         self.company_mentions = deduplicate_rows(
             mentions,
-            ["cnpj", "target_key", "method", "extract_span"],
+            ["source_key", "target_key", "method", "extract_span"],
         )
 
     # ------------------------------------------------------------------
@@ -486,47 +502,60 @@ class QueridoDiarioGoPipeline(Pipeline):
             loader.load_nodes("GoGazetteAct", self.acts, key_field="act_id")
 
         if self.appointments:
-            # Load appointment nodes (without the act_id FK — that goes in the rel)
+            # Load appointment nodes (strip act_id FK — it belongs on the rel).
             appt_nodes = [
                 {k: v for k, v in row.items() if k != "act_id"}
                 for row in self.appointments
             ]
             loader.load_nodes("GoAppointment", appt_nodes, key_field="appointment_id")
 
-            # Create PUBLICADO_EM relationships
+            # Create PUBLICADO_EM relationships via the loader so provenance
+            # props are auto-propagated to edges.
             appt_rels = [
-                {"appointment_id": row["appointment_id"], "act_id": row["act_id"]}
+                self.attach_provenance(
+                    {
+                        "source_key": row["appointment_id"],
+                        "target_key": row["act_id"],
+                    },
+                    record_id=row["source_record_id"],
+                    record_url=row.get("source_url"),
+                )
                 for row in self.appointments
             ]
-            rel_query = (
-                "UNWIND $rows AS row "
-                "MATCH (a:GoAppointment {appointment_id: row.appointment_id}) "
-                "MATCH (g:GoGazetteAct {act_id: row.act_id}) "
-                "MERGE (a)-[:PUBLICADO_EM]->(g)"
+            loader.load_relationships(
+                rel_type="PUBLICADO_EM",
+                rows=appt_rels,
+                source_label="GoAppointment",
+                source_key="appointment_id",
+                target_label="GoGazetteAct",
+                target_key="act_id",
             )
-            loader.run_query_with_retry(rel_query, appt_rels)
 
         if self.company_mentions:
             companies = deduplicate_rows(
                 [
-                    {"cnpj": row["cnpj"], "razao_social": row["cnpj"]}
+                    self.attach_provenance(
+                        {
+                            "cnpj": row["cnpj"],
+                            "razao_social": row["cnpj"],
+                        },
+                        record_id=row["cnpj"],
+                        record_url=row.get("source_url"),
+                    )
                     for row in self.company_mentions
                 ],
                 ["cnpj"],
             )
             loader.load_nodes("Company", companies, key_field="cnpj")
 
-            mention_query = (
-                "UNWIND $rows AS row "
-                "MATCH (c:Company {cnpj: row.cnpj}) "
-                "MATCH (a:GoGazetteAct {act_id: row.target_key}) "
-                "MERGE (c)-[m:MENCIONADA_EM_GO]->(a) "
-                "SET m.method = row.method, "
-                "m.confidence = row.confidence, "
-                "m.source_ref = row.source_ref, "
-                "m.extract_span = row.extract_span, "
-                "m.run_id = row.run_id"
+            loader.load_relationships(
+                rel_type="MENCIONADA_EM_GO",
+                rows=self.company_mentions,
+                source_label="Company",
+                source_key="cnpj",
+                target_label="GoGazetteAct",
+                target_key="act_id",
+                properties=["method", "confidence", "extract_span"],
             )
-            loader.run_query_with_retry(mention_query, self.company_mentions)
 
         self.rows_loaded = len(self.acts) + len(self.appointments)

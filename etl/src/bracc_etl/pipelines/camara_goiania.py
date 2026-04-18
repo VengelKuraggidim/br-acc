@@ -236,17 +236,21 @@ class CamaraGoianiaPipeline(Pipeline):
 
             vid = _stable_id("camara_goiania", name, party)
             name_to_id[name] = vid
+            vereador_record_id = f"{name}|{party}"
 
-            vereadores.append({
-                "vereador_id": vid,
-                "name": name,
-                "party": party,
-                "legislature": legislature,
-                "uf": "GO",
-                "municipality": "Goiania",
-                "municipality_code": "5208707",
-                "source": "camara_goiania",
-            })
+            vereadores.append(self.attach_provenance(
+                {
+                    "vereador_id": vid,
+                    "name": name,
+                    "party": party,
+                    "legislature": legislature,
+                    "uf": "GO",
+                    "municipality": "Goiania",
+                    "municipality_code": "5208707",
+                    "source": "camara_goiania",
+                },
+                record_id=vereador_record_id,
+            ))
 
         # --- expenses ---
         for row in self._raw_expenses:
@@ -268,25 +272,32 @@ class CamaraGoianiaPipeline(Pipeline):
                 description,
                 str(amount),
             )
-            expenses.append({
-                "expense_id": eid,
-                "vereador_name": vereador_name,
-                "type": exp_type,
-                "description": description,
-                "amount": amount,
-                "date": date,
-                "year": year,
-                "uf": "GO",
-                "municipality": "Goiania",
-                "source": "camara_goiania",
-            })
+            expense_record_id = f"{vereador_name}|{date}|{description}|{amount}"
+            expenses.append(self.attach_provenance(
+                {
+                    "expense_id": eid,
+                    "vereador_name": vereador_name,
+                    "type": exp_type,
+                    "description": description,
+                    "amount": amount,
+                    "date": date,
+                    "year": year,
+                    "uf": "GO",
+                    "municipality": "Goiania",
+                    "source": "camara_goiania",
+                },
+                record_id=expense_record_id,
+            ))
 
             # link to vereador if matched
             if vereador_name in name_to_id:
-                despesa_rels.append({
-                    "vereador_id": name_to_id[vereador_name],
-                    "expense_id": eid,
-                })
+                despesa_rels.append(self.attach_provenance(
+                    {
+                        "source_key": name_to_id[vereador_name],
+                        "target_key": eid,
+                    },
+                    record_id=expense_record_id,
+                ))
 
         # --- proposals ---
         for row in self._raw_proposicoes:
@@ -301,32 +312,39 @@ class CamaraGoianiaPipeline(Pipeline):
             date = parse_date(str(row.get("data") or row.get("date") or ""))
 
             pid = _stable_id("camara_goiania_prop", number, year, prop_type)
-            proposals.append({
-                "proposal_id": pid,
-                "number": number,
-                "year": year,
-                "type": prop_type,
-                "subject": subject,
-                "author": author,
-                "status": status,
-                "date": date,
-                "uf": "GO",
-                "municipality": "Goiania",
-                "source": "camara_goiania",
-            })
+            proposal_record_id = f"{number}|{year}|{prop_type}"
+            proposals.append(self.attach_provenance(
+                {
+                    "proposal_id": pid,
+                    "number": number,
+                    "year": year,
+                    "type": prop_type,
+                    "subject": subject,
+                    "author": author,
+                    "status": status,
+                    "date": date,
+                    "uf": "GO",
+                    "municipality": "Goiania",
+                    "source": "camara_goiania",
+                },
+                record_id=proposal_record_id,
+            ))
 
             # link to vereador if author matches
             if author in name_to_id:
-                autor_rels.append({
-                    "vereador_id": name_to_id[author],
-                    "proposal_id": pid,
-                })
+                autor_rels.append(self.attach_provenance(
+                    {
+                        "source_key": name_to_id[author],
+                        "target_key": pid,
+                    },
+                    record_id=proposal_record_id,
+                ))
 
         self.vereadores = deduplicate_rows(vereadores, ["vereador_id"])
         self.expenses = deduplicate_rows(expenses, ["expense_id"])
         self.proposals = deduplicate_rows(proposals, ["proposal_id"])
-        self.autor_rels = deduplicate_rows(autor_rels, ["vereador_id", "proposal_id"])
-        self.despesa_rels = deduplicate_rows(despesa_rels, ["vereador_id", "expense_id"])
+        self.autor_rels = deduplicate_rows(autor_rels, ["source_key", "target_key"])
+        self.despesa_rels = deduplicate_rows(despesa_rels, ["source_key", "target_key"])
 
     # ------------------------------------------------------------------
     # load
@@ -345,19 +363,21 @@ class CamaraGoianiaPipeline(Pipeline):
             loader.load_nodes("GoLegislativeProposal", self.proposals, key_field="proposal_id")
 
         if self.autor_rels:
-            query = (
-                "UNWIND $rows AS row "
-                "MATCH (v:GoVereador {vereador_id: row.vereador_id}) "
-                "MATCH (p:GoLegislativeProposal {proposal_id: row.proposal_id}) "
-                "MERGE (v)-[:AUTOR_DE]->(p)"
+            loader.load_relationships(
+                rel_type="AUTOR_DE",
+                rows=self.autor_rels,
+                source_label="GoVereador",
+                source_key="vereador_id",
+                target_label="GoLegislativeProposal",
+                target_key="proposal_id",
             )
-            loader.run_query_with_retry(query, self.autor_rels)
 
         if self.despesa_rels:
-            query = (
-                "UNWIND $rows AS row "
-                "MATCH (v:GoVereador {vereador_id: row.vereador_id}) "
-                "MATCH (e:GoCouncilExpense {expense_id: row.expense_id}) "
-                "MERGE (v)-[:DESPESA_GABINETE]->(e)"
+            loader.load_relationships(
+                rel_type="DESPESA_GABINETE",
+                rows=self.despesa_rels,
+                source_label="GoVereador",
+                source_key="vereador_id",
+                target_label="GoCouncilExpense",
+                target_key="expense_id",
             )
-            loader.run_query_with_retry(query, self.despesa_rels)
