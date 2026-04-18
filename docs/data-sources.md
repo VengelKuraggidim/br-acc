@@ -10,7 +10,7 @@
 - Loaded sources (load_state=loaded): 41
 - Partial sources (load_state=partial): 8
 - Not loaded sources (load_state=not_loaded): 67
-- Status counts: loaded=41, partial=12, stale=3, blocked_external=1, not_built=59
+- Status counts: loaded=41, partial=11, operational=1, stale=3, blocked_external=1, not_built=59
 <!-- SOURCE_SUMMARY_END -->
 
 

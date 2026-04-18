@@ -1,35 +1,50 @@
-"""ETL pipeline scaffold for TCM-GO (Tribunal de Contas dos Municipios de Goias).
+"""ETL pipeline for TCM-GO (Tribunal de Contas dos Municipios de Goias).
 
-The TCM-GO publishes a list of individuals "impedidos de licitar, contratar
-ou exercer cargo publico" and rejected municipal accounts at
-https://www.tcmgo.tc.br/site/. No documented JSON API or bulk CSV export is
-available at time of writing; this scaffold accepts operator-exported CSVs
-under ``data/tcmgo_sancoes/``:
+TCM-GO publishes two public sanction-flavored lists at https://www.tcmgo.tc.br/:
 
-- ``impedidos.csv``    -> TcmGoImpedido nodes + IMPEDIDO_TCMGO rels
-- ``rejeitados.csv``   -> TcmGoRejectedAccount nodes
+* "Impedidos de licitar, contratar ou exercer cargo publico" — rendered only
+  as an embedded Power BI report; no machine-readable export is available at
+  time of writing. Operators may still drop a manually exported
+  ``impedidos.csv`` under ``data/tcmgo_sancoes/`` if they obtain one via LAI.
+* "Contas com Parecer Previo pela Rejeicao ou julgadas Irregulares" — exposed
+  as an unauthenticated CSV via the TCM-GO Web Services catalog (service #31,
+  https://ws.tcm.go.gov.br/api/rest/dados/contas-irregulares). CPFs arrive
+  pre-masked; each row represents one agent x process with an "Assunto"
+  (proceedings type) and a TipoLista category.
 
-Human validation required:
+``fetch_to_disk`` hits that public CSV endpoint, normalises headers to the
+aliases this pipeline already accepts, and writes ``impedidos.csv`` under the
+target directory — so the same ingest code path used for LAI-derived exports
+also handles the automated pull. Operators may still drop their own
+``rejeitados.csv`` alongside it (expected layout is municipality x exercise
+x parecer).
 
-1. Confirm CSV schema once an operator produces a sample export.
-2. Check whether TCM-GO provides a machine-readable list (some TCMs expose
-   JSON through their jurisprudence search).
-3. Distinguish TCM-GO (municipal tribunal) from TCE-GO (state tribunal)
-   when merging into the existing sanctions graph.
+Pipeline outputs:
 
-Note: this is separate from the ``tcm_go`` pipeline already in the registry,
-which ingests SICONFI fiscal data for GO municipalities (different source).
+- ``impedidos.csv``  -> TcmGoImpedido nodes + IMPEDIDO_TCMGO rels (only when
+  a row carries a CNPJ, which is uncommon for this source).
+- ``rejeitados.csv`` -> TcmGoRejectedAccount nodes (optional, operator-fed).
+
+Notes:
+
+- This is separate from the ``tcm_go`` pipeline already in the registry,
+  which ingests SICONFI fiscal data for GO municipalities (different source).
+- The public CSV masks CPFs at the origin (``76***.***-***``), so the
+  ``mask_cpf`` transform is a no-op defensive shim for this source.
 
 Data source: https://www.tcmgo.tc.br/
+API endpoint: https://ws.tcm.go.gov.br/api/rest/dados/contas-irregulares
 """
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -49,10 +64,121 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+CONTAS_IRREGULARES_URL = (
+    "https://ws.tcm.go.gov.br/api/rest/dados/contas-irregulares"
+)
+_HTTP_TIMEOUT = 60.0
+_USER_AGENT = "br-acc-etl/1.0 (+https://github.com/brunoclz/br-acc)"
+
+# Column map: TCM-GO Portal CSV header -> tcmgo_sancoes pipeline alias.
+# The pipeline's ``transform`` step uses ``row_pick`` over these aliases,
+# so we rewrite headers once at download time and keep the ETL schema stable.
+_CONTAS_HEADER_MAP: dict[str, str] = {
+    "CPF": "cpf_cnpj",
+    "Nome": "nome",
+    "Assunto": "motivo",
+    "Processo/Fase": "processo",
+    "Data Julgamento": "data_inicio",
+    "Dt. Trânsito Julgado": "data_fim",
+    "Município": "municipio",
+    "Mês/Ano": "exercicio",
+    "Acórdão/Resolução": "acordao",
+    "Url": "url",
+    "TipoLista": "tipo_lista",
+}
+
 
 def _hash_id(*parts: str, length: int = 20) -> str:
     raw = ":".join(str(p) for p in parts if p is not None)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
+
+
+def _rewrite_contas_csv(
+    raw_text: str,
+    out_path: Path,
+    limit: int | None = None,
+) -> int:
+    """Rewrite the public TCM-GO CSV with headers the pipeline expects.
+
+    The upstream file uses PT-BR column names with accents (``Município``,
+    ``Mês/Ano``). We map them to the aliases ``row_pick`` looks for in
+    :meth:`TcmgoSancoesPipeline.transform` and drop any column we don't know.
+    Output is written semicolon-separated (matching the repo's CSV
+    fixtures) so both the pipeline and manual operator exports share the
+    same on-disk shape.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    reader = csv.reader(raw_text.splitlines())
+    try:
+        header = next(reader)
+    except StopIteration as exc:
+        msg = "empty CSV returned by TCM-GO contas-irregulares endpoint"
+        raise RuntimeError(msg) from exc
+
+    rewritten_header = [_CONTAS_HEADER_MAP.get(col, col) for col in header]
+
+    rows_written = 0
+    with out_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(rewritten_header)
+        for row in reader:
+            if not any(cell.strip() for cell in row):
+                continue
+            writer.writerow(row)
+            rows_written += 1
+            if limit is not None and rows_written >= limit:
+                break
+    return rows_written
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    limit: int | None = None,
+    url: str = CONTAS_IRREGULARES_URL,
+    timeout: float = _HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download the TCM-GO "contas irregulares" CSV and stage it on disk.
+
+    Writes ``impedidos.csv`` under ``output_dir`` using semicolon-separated
+    values with headers aliased to the names the pipeline's
+    :meth:`transform` step already recognises (``cpf_cnpj``, ``nome``,
+    ``motivo``, ``processo``, ``data_inicio``, ``data_fim``, plus auxiliary
+    ``municipio``, ``exercicio``, ``acordao``, ``url``, ``tipo_lista``).
+
+    Args:
+        output_dir: Destination directory. Created if missing.
+        limit: Optional cap on the number of data rows written (header
+            always preserved). Useful for smoke tests.
+        url: Override for the public API endpoint. Defaults to TCM-GO's
+            ``contas-irregulares`` open-data service.
+        timeout: HTTP timeout in seconds.
+
+    Returns:
+        List of file paths written (sorted).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(
+        "[tcmgo_sancoes] fetching %s (limit=%s) -> %s",
+        url, limit, output_dir,
+    )
+    with httpx.Client(
+        timeout=timeout,
+        headers={"User-Agent": _USER_AGENT, "Accept": "text/csv,*/*"},
+        follow_redirects=True,
+    ) as client:
+        response = client.get(url)
+        response.raise_for_status()
+        # TCM-GO ships UTF-8 but doesn't always declare charset.
+        text = response.content.decode(response.encoding or "utf-8")
+
+    out_csv = output_dir / "impedidos.csv"
+    rows = _rewrite_contas_csv(text, out_csv, limit=limit)
+    logger.info(
+        "[tcmgo_sancoes] wrote %s (%d data rows)", out_csv, rows,
+    )
+    return [out_csv]
 
 
 class TcmgoSancoesPipeline(Pipeline):

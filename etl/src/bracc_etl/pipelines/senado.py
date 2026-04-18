@@ -306,3 +306,392 @@ class SenadoPipeline(Pipeline):
             )
             count = loader.run_query(query, self.forneceu_rels)
             logger.info("Created %d FORNECEU relationships", count)
+
+
+# ────────────────────────────────────────────────────────────────────
+# Acquisition helper — UF-scoped Senado download for Fiscal Cidadao
+# ────────────────────────────────────────────────────────────────────
+#
+# Sources:
+#   - Senado Dados Abertos API (https://legis.senado.leg.br/dadosabertos)
+#     endpoints:
+#       * /senador/lista/legislatura/{N}?uf={UF}  — roster per legislature
+#       * /senador/{codigo}                        — identificacao + dados basicos
+#       * /senador/{codigo}/mandatos               — mandate history
+#   - CEAPS per-year CSV dump at
+#     https://www.senado.leg.br/transparencia/LAI/verba/despesa_ceaps_{YYYY}.csv
+#     (fed into ``SenadoPipeline.extract`` via the SENADOR column).
+#
+# This helper collects senators whose mandate UF matches the requested UF
+# (default GO) across every legislature from 48 (1987-1991) to the current
+# one. CEAPS CSVs are downloaded full and then client-side filtered to rows
+# whose SENADOR column matches any collected GO senator — CEAPS itself has no
+# UF column, so a senator-name join is the only available filter.
+
+_SENADO_API_BASE = "https://legis.senado.leg.br/dadosabertos"
+_CEAPS_CSV_BASE = "https://www.senado.leg.br/transparencia/LAI/verba/despesa_ceaps_{year}.csv"
+_DEFAULT_LEGISLATURES = tuple(range(48, 58))  # 48 (1987) through 57 (2027)
+# CEAPS dumps start in 2008; we default to Marconi-era windows (covers GO
+# senators since legislatura 53). Callers can override with --years.
+_DEFAULT_CEAPS_YEARS = tuple(range(2008, 2027))
+
+
+def _http_get_json(url: str, *, timeout: float = 60.0, retries: int = 3) -> dict[str, Any] | None:
+    """GET a JSON payload from the Senado API with basic retry/backoff."""
+    import time as _time
+
+    import httpx
+
+    headers = {"Accept": "application/json"}
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+                resp = client.get(url, headers=headers)
+            if resp.status_code == 200:
+                try:
+                    return resp.json()
+                except ValueError as exc:  # malformed JSON
+                    logger.warning("[senado] non-JSON response from %s: %s", url, exc)
+                    return None
+            if resp.status_code == 404:
+                return None
+            logger.warning(
+                "[senado] HTTP %d for %s (attempt %d)",
+                resp.status_code, url, attempt + 1,
+            )
+        except httpx.HTTPError as exc:
+            last_exc = exc
+            logger.warning("[senado] HTTP error on %s (attempt %d): %s", url, attempt + 1, exc)
+        _time.sleep(2**attempt)
+    if last_exc is not None:
+        logger.warning("[senado] giving up on %s after %d retries", url, retries)
+    return None
+
+
+def _http_download(url: str, dest: Path, *, timeout: float = 600.0) -> Path | None:
+    """Stream ``url`` into ``dest``. Returns the path on success, else None."""
+    import httpx
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with httpx.stream("GET", url, follow_redirects=True, timeout=timeout) as resp:
+            if resp.status_code != 200:
+                logger.warning("[senado] HTTP %d for %s", resp.status_code, url)
+                return None
+            with open(dest, "wb") as fh:
+                for chunk in resp.iter_bytes(chunk_size=65_536):
+                    fh.write(chunk)
+    except httpx.HTTPError as exc:
+        logger.warning("[senado] HTTP error %s: %s", url, exc)
+        dest.unlink(missing_ok=True)
+        return None
+    return dest
+
+
+def _parse_senator_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten the nested ListaParlamentarLegislatura payload to plain dicts."""
+    try:
+        parlamentares = payload["ListaParlamentarLegislatura"]["Parlamentares"]["Parlamentar"]
+    except (KeyError, TypeError):
+        return []
+    if isinstance(parlamentares, dict):
+        parlamentares = [parlamentares]
+
+    out: list[dict[str, Any]] = []
+    for entry in parlamentares:
+        ident = entry.get("IdentificacaoParlamentar", {}) or {}
+        mandatos_raw = entry.get("Mandatos", {}).get("Mandato", [])
+        if isinstance(mandatos_raw, dict):
+            mandatos_raw = [mandatos_raw]
+        mandate_ufs = {
+            str(m.get("UfParlamentar", "")).strip().upper()
+            for m in mandatos_raw
+            if isinstance(m, dict)
+        }
+        out.append({
+            "codigo": str(ident.get("CodigoParlamentar", "")).strip(),
+            "nome_parlamentar": str(ident.get("NomeParlamentar", "")).strip(),
+            "nome_completo": str(ident.get("NomeCompletoParlamentar", "")).strip(),
+            "uf": str(ident.get("UfParlamentar", "")).strip().upper(),
+            "partido": str(ident.get("SiglaPartidoParlamentar", "")).strip(),
+            "sexo": str(ident.get("SexoParlamentar", "")).strip(),
+            "mandate_ufs": sorted(u for u in mandate_ufs if u),
+        })
+    return out
+
+
+def _parse_senator_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract the enriched senator fields from the DetalheParlamentar payload."""
+    try:
+        p = payload["DetalheParlamentar"]["Parlamentar"]
+    except (KeyError, TypeError):
+        return {}
+    ident = p.get("IdentificacaoParlamentar", {}) or {}
+    dados = p.get("DadosBasicosParlamentar", {}) or {}
+    return {
+        "codigo": str(ident.get("CodigoParlamentar", "")).strip(),
+        "nome_parlamentar": str(ident.get("NomeParlamentar", "")).strip(),
+        "nome_completo": str(ident.get("NomeCompletoParlamentar", "")).strip(),
+        "uf": str(ident.get("UfParlamentar", "")).strip().upper(),
+        "partido": str(ident.get("SiglaPartidoParlamentar", "")).strip(),
+        "sexo": str(ident.get("SexoParlamentar", "")).strip(),
+        # CPF is no longer published by Dados Abertos — keep the key for forward
+        # compatibility but expect "" in most cases.
+        "cpf": str(dados.get("CpfParlamentar", "")).strip(),
+        "data_nascimento": str(dados.get("DataNascimento", "")).strip(),
+        "naturalidade": str(dados.get("Naturalidade", "")).strip(),
+        "uf_naturalidade": str(dados.get("UfNaturalidade", "")).strip().upper(),
+    }
+
+
+def _parse_mandates(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        mandatos = payload["MandatoParlamentar"]["Parlamentar"]["Mandatos"]["Mandato"]
+    except (KeyError, TypeError):
+        return []
+    if isinstance(mandatos, dict):
+        mandatos = [mandatos]
+    out: list[dict[str, Any]] = []
+    for m in mandatos:
+        if not isinstance(m, dict):
+            continue
+        first_leg = m.get("PrimeiraLegislaturaDoMandato") or {}
+        second_leg = m.get("SegundaLegislaturaDoMandato") or {}
+        out.append({
+            "codigo_mandato": str(m.get("CodigoMandato", "")).strip(),
+            "uf": str(m.get("UfParlamentar", "")).strip().upper(),
+            "participacao": str(m.get("DescricaoParticipacao", "")).strip(),
+            "primeira_legislatura": str(first_leg.get("NumeroLegislatura", "")).strip(),
+            "data_inicio": str(first_leg.get("DataInicio", "")).strip(),
+            "data_fim": str(second_leg.get("DataFim") or first_leg.get("DataFim") or "").strip(),
+        })
+    return out
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    *,
+    uf: str = "GO",
+    limit: int | None = None,
+    legislaturas: list[int] | None = None,
+    years: list[int] | None = None,
+    timeout: float = 60.0,
+    fetch_details: bool = True,
+    fetch_ceaps: bool = True,
+    skip_existing: bool = True,
+) -> list[Path]:
+    """Download Senado data scoped to senators whose mandate UF matches ``uf``.
+
+    Writes, under ``output_dir``:
+      * ``parlamentares.json``  — enriched roster (matches the format
+        ``SenadoPipeline._load_senator_lookup`` already consumes).
+      * ``senadores_{uf}.json``  — raw per-legislature roster dump.
+      * ``mandatos_{uf}.json``   — mandate history per senator.
+      * ``despesa_ceaps_{YYYY}_{UF}.csv`` — CEAPS rows where SENADOR matches a
+        roster entry (skipped when ``fetch_ceaps=False``).
+      * ``raw/despesa_ceaps_{YYYY}.csv`` — cached full-year CSV (for reuse).
+
+    ``limit`` caps the number of enriched senators probed (useful for smoke
+    runs). ``legislaturas`` defaults to 48..current; ``years`` defaults to
+    2008..current for CEAPS.
+    """
+    import time as _time
+
+    uf_upper = uf.upper()
+    legs = legislaturas or list(_DEFAULT_LEGISLATURES)
+    ceaps_years = years or list(_DEFAULT_CEAPS_YEARS)
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    written: list[Path] = []
+
+    # ------------------------------------------------------------------
+    # 1) Collect UF-scoped senators across legislatures.
+    # ------------------------------------------------------------------
+    per_leg: dict[int, list[dict[str, Any]]] = {}
+    unique: dict[str, dict[str, Any]] = {}  # keyed by codigo
+    for leg in legs:
+        url = f"{_SENADO_API_BASE}/senador/lista/legislatura/{leg}?uf={uf_upper}"
+        logger.info("[senado] fetching legislature %d (uf=%s)", leg, uf_upper)
+        payload = _http_get_json(url, timeout=timeout)
+        if not payload:
+            continue
+        rows = _parse_senator_list(payload)
+        # Defensive client-side filter (API already filters via ?uf=): keep a
+        # senator only when the mandate roster or current UF matches.
+        rows = [
+            r for r in rows
+            if r["uf"] == uf_upper or uf_upper in r["mandate_ufs"]
+        ]
+        per_leg[leg] = rows
+        for r in rows:
+            cod = r["codigo"]
+            if not cod:
+                continue
+            existing = unique.setdefault(cod, {**r, "legislaturas": []})
+            if leg not in existing["legislaturas"]:
+                existing["legislaturas"].append(leg)
+        _time.sleep(0.3)  # polite to the API
+
+    if not unique:
+        logger.warning("[senado] no senators found for uf=%s in legislatures %s", uf_upper, legs)
+        return written
+
+    logger.info("[senado] collected %d unique %s senators", len(unique), uf_upper)
+
+    # Deterministic order (by codigo), so smoke runs with ``--limit`` are
+    # reproducible and the roster used for CEAPS matching is stable.
+    def _codigo_sort_key(s: dict[str, Any]) -> int:
+        cod = str(s.get("codigo", ""))
+        return int(cod) if cod.isdigit() else 0
+
+    senators = sorted(unique.values(), key=_codigo_sort_key)
+
+    # ``limit`` caps the per-senator enrichment (detail + mandatos API calls)
+    # but NOT the roster used for CEAPS matching — otherwise a smoke run with
+    # ``--limit 10`` would silently drop Marconi/Caiado/etc. from the filter.
+    roster_for_enrichment = senators[:limit] if (limit and limit > 0) else senators
+
+    # ------------------------------------------------------------------
+    # 2) Enrich each senator via the detail endpoint + fetch mandates.
+    # ------------------------------------------------------------------
+    enriched: list[dict[str, Any]] = []
+    mandates_all: list[dict[str, Any]] = []
+    for idx, sen in enumerate(roster_for_enrichment, 1):
+        codigo = sen["codigo"]
+        entry: dict[str, Any] = {
+            "codigo": codigo,
+            "nome_parlamentar": sen.get("nome_parlamentar", ""),
+            "nome_completo": sen.get("nome_completo", ""),
+            "uf": sen.get("uf", uf_upper),
+            "partido": sen.get("partido", ""),
+            "legislaturas": sen.get("legislaturas", []),
+            "cpf": "",
+        }
+        if fetch_details:
+            detail = _http_get_json(
+                f"{_SENADO_API_BASE}/senador/{codigo}", timeout=timeout,
+            )
+            if detail:
+                parsed = _parse_senator_detail(detail)
+                entry.update({k: v for k, v in parsed.items() if v})
+            _time.sleep(0.25)
+
+            mand = _http_get_json(
+                f"{_SENADO_API_BASE}/senador/{codigo}/mandatos", timeout=timeout,
+            )
+            if mand:
+                for m in _parse_mandates(mand):
+                    mandates_all.append({"codigo": codigo, **m})
+            _time.sleep(0.25)
+
+        enriched.append(entry)
+        if idx % 20 == 0:
+            logger.info(
+                "[senado] enriched %d/%d senators", idx, len(roster_for_enrichment),
+            )
+
+    # Senators that were collected but not enriched (because of ``limit``)
+    # still contribute their un-enriched names to the roster used for CEAPS
+    # filtering below — their nome_parlamentar/nome_completo already comes
+    # from the lista/legislatura payload.
+    enriched_codigos = {e["codigo"] for e in enriched}
+    full_roster = enriched + [
+        s for s in senators if s["codigo"] not in enriched_codigos
+    ]
+
+    # ------------------------------------------------------------------
+    # 3) Persist senator metadata files.
+    # ------------------------------------------------------------------
+    parlamentares_path = output_dir / "parlamentares.json"
+    parlamentares_path.write_text(
+        json.dumps(enriched, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+    written.append(parlamentares_path)
+    logger.info("[senado] wrote %d senators → %s", len(enriched), parlamentares_path)
+
+    senadores_uf_path = output_dir / f"senadores_{uf_upper.lower()}.json"
+    senadores_uf_path.write_text(
+        json.dumps(per_leg, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+    written.append(senadores_uf_path)
+
+    if mandates_all:
+        mandates_path = output_dir / f"mandatos_{uf_upper.lower()}.json"
+        mandates_path.write_text(
+            json.dumps(mandates_all, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+        written.append(mandates_path)
+
+    # ------------------------------------------------------------------
+    # 4) Optionally download + filter CEAPS CSVs to the UF senator roster.
+    # ------------------------------------------------------------------
+    if not fetch_ceaps:
+        return written
+
+    # Build set of normalized senator names (both parliamentary + civil)
+    # from the FULL roster so ``--limit`` doesn't shrink CEAPS matches.
+    roster_names: set[str] = set()
+    for s in full_roster:
+        for key in ("nome_parlamentar", "nome_completo"):
+            nm = normalize_name(str(s.get(key, "")))
+            if nm:
+                roster_names.add(nm)
+    if not roster_names:
+        logger.warning("[senado] empty roster — skipping CEAPS filter")
+        return written
+
+    for year in ceaps_years:
+        raw_csv = raw_dir / f"despesa_ceaps_{year}.csv"
+        if not (skip_existing and raw_csv.exists() and raw_csv.stat().st_size > 0):
+            url = _CEAPS_CSV_BASE.format(year=year)
+            logger.info("[senado] downloading %s", url)
+            if _http_download(url, raw_csv, timeout=timeout) is None:
+                continue
+
+        try:
+            df = pd.read_csv(
+                raw_csv,
+                sep=";",
+                dtype=str,
+                encoding="latin-1",
+                keep_default_na=False,
+                skiprows=1,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[senado] skip %s: %s", raw_csv.name, exc)
+            continue
+
+        if df.empty or "SENADOR" not in df.columns:
+            logger.info("[senado] %s empty or no SENADOR column", raw_csv.name)
+            continue
+
+        norm_col = df["SENADOR"].map(lambda v: normalize_name(str(v)))
+        mask = norm_col.isin(roster_names)
+        filtered = df[mask]
+        if filtered.empty:
+            logger.info(
+                "[senado] year=%d uf=%s: no CEAPS rows matched roster",
+                year, uf_upper,
+            )
+            continue
+
+        out_path = output_dir / f"despesa_ceaps_{year}_{uf_upper.lower()}.csv"
+        # Write with ';' sep + latin-1 to stay compatible with the pipeline's
+        # reader (see ``SenadoPipeline.extract``). We prepend the original
+        # "ULTIMA ATUALIZACAO" preamble so the pipeline's ``skiprows=1`` still
+        # works.
+        with open(out_path, "w", encoding="latin-1", newline="") as fh:
+            fh.write("ULTIMA ATUALIZACAO;FISCAL_CIDADAO_FILTERED\n")
+            filtered.to_csv(fh, sep=";", index=False, encoding="latin-1")
+        written.append(out_path)
+        logger.info(
+            "[senado] year=%d uf=%s rows=%d → %s",
+            year, uf_upper, len(filtered), out_path.name,
+        )
+
+    return written

@@ -3,18 +3,47 @@
   "contract_mode": "subset",
   "subset_scope": "goias_only",
   "full_historical_default": true,
-  "expected_implemented_count": 8,
+  "expected_implemented_count": 15,
   "core_sources": [
+    "alego",
+    "camara",
     "camara_goiania",
     "folha_go",
     "pncp_go",
     "querido_diario_go",
+    "senado",
+    "ssp_go",
     "tcm_go",
+    "tcmgo_sancoes",
     "tse",
     "tse_bens",
     "tse_filiados"
   ],
   "sources": [
+    {
+      "pipeline_id": "alego",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/alego/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_alego.py --output-dir ../data/alego"
+      ]
+    },
+    {
+      "pipeline_id": "camara",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/camara/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_camara.py --uf GO --output-dir ../data/camara"
+      ]
+    },
     {
       "pipeline_id": "camara_goiania",
       "acquisition_mode": "script_download",
@@ -64,6 +93,30 @@
       ]
     },
     {
+      "pipeline_id": "senado",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/senado/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_senado.py --uf GO --output-dir ../data/senado"
+      ]
+    },
+    {
+      "pipeline_id": "ssp_go",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/ssp_go/*"
+      ],
+      "blocking_reason_if_any": "Upstream only publishes PDF bulletins (no CSV/XLSX); wrapper downloads estatisticas_<YYYY>.pdf + doacoes_ssp.csv. PDF-to-CSV extractor still pending for full pipeline load.",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_ssp_go.py --output-dir ../data/ssp_go"
+      ]
+    },
+    {
       "pipeline_id": "tcm_go",
       "acquisition_mode": "script_download",
       "required_inputs": [
@@ -73,6 +126,30 @@
       "core": true,
       "download_commands": [
         "cd /workspace/etl && uv run python ../scripts/download_tcm_go.py --output-dir ../data/tcm_go"
+      ]
+    },
+    {
+      "pipeline_id": "tcmgo_sancoes",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/tcmgo_sancoes/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tcmgo_sancoes.py --output-dir ../data/tcmgo_sancoes"
+      ]
+    },
+    {
+      "pipeline_id": "siop",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/siop/*"
+      ],
+      "blocking_reason_if_any": "Federal dataset GO-filtered by destination/author UF heuristic (upstream has no author-UF column).",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_siop.py --output-dir ../data/siop --uf GO --year 2021 --year 2022 --year 2023 --year 2024 --year 2025"
       ]
     },
     {
@@ -112,6 +189,18 @@
       ],
       "download_commands": [
         "cd /workspace/etl && uv run python ../scripts/download_tse_filiados.py --output-dir ../data/tse_filiados --uf GO --billing-project $GCP_BILLING_PROJECT"
+      ]
+    },
+    {
+      "pipeline_id": "tesouro_emendas",
+      "acquisition_mode": "script_download",
+      "required_inputs": [
+        "data/tesouro_emendas/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tesouro_emendas.py --output-dir ../data/tesouro_emendas --uf GO"
       ]
     }
   ],

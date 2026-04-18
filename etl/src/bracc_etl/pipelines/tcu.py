@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import csv
+import html as _html
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -21,6 +25,309 @@ if TYPE_CHECKING:
     from neo4j import Driver
 
 logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------
+# Module-level constants + fetch_to_disk (best-effort public scraper).
+# --------------------------------------------------------------------------
+#
+# The TCU publishes its Sistema de Inabilitados e Inidôneos as an Oracle
+# APEX 18 application at https://contas.tcu.gov.br/ords/f?p=1660:
+#   * page 1 -> "Relação de inabilitados"  (704 rows nationally)
+#   * page 2 -> "Relação de inidôneos"     (104 rows nationally)
+#
+# Neither page exposes a stable CSV/XLSX export or REST endpoint (the APEX
+# App Builder is blocked outside TCU's internal network, and no Interactive
+# Report export button is rendered in the public skin). The two other
+# datasets the pipeline consumes — "contas julgadas irregulares" and the
+# electoral variant — are not exposed publicly at all.
+#
+# ``fetch_to_disk`` therefore does a best-effort HTML scrape of the first
+# page of each public APEX report (100 rows each, which is already the
+# majority of the inidôneos universe and ~14% of inabilitados) and writes
+# empty, header-only stubs for the two non-public datasets so that
+# ``TcuPipeline.extract()`` does not FileNotFoundError when data/tcu/ has
+# just been bootstrapped. See ``scripts/download_tcu.py`` for the CLI.
+#
+# UF filtering:
+#   * inidôneos has a UF column on the public report, so rows are filtered
+#     when ``uf`` is set (default "GO").
+#   * inabilitados does NOT expose UF/MUNICIPIO publicly; ``uf`` is ignored
+#     for that file (rows are emitted with empty UF/MUNICIPIO columns).
+#
+# This script is intentionally narrow — when the two blocked datasets
+# become available (or an official CSV bulk endpoint is published), drop
+# the existing file-manifest drops into data/tcu/ and fetch_to_disk will
+# happily be superseded by them.
+
+TCU_APEX_BASE = "https://contas.tcu.gov.br/ords"
+TCU_APP_ID = 1660
+TCU_INABILITADOS_PAGE = 1
+TCU_INIDONEOS_PAGE = 2
+
+# Columns the ETL pipeline (TcuPipeline.extract -> _read_csv) expects.
+_INABILITADOS_COLS = [
+    "CPF", "NOME", "PROCESSO", "DELIBERACAO",
+    "DATA TRANSITO JULGADO", "DATA FINAL", "DATA ACORDAO",
+    "UF", "MUNICIPIO",
+]
+_INIDONEOS_COLS = [
+    "CPF_CNPJ", "NOME", "PROCESSO", "DELIBERACAO",
+    "DATA TRANSITO JULGADO", "DATA FINAL", "DATA ACORDAO",
+    "UF", "MUNICIPIO",
+]
+_IRREGULARES_COLS = [
+    "CPF_CNPJ", "NOME", "PROCESSO", "DELIBERACAO",
+    "DATA TRANSITO JULGADO", "UF", "MUNICIPIO",
+]
+_IRREGULARES_ELEITORAIS_COLS = [
+    "CPF", "NOME", "PROCESSO", "DELIBERACAO",
+    "DATA TRANSITO JULGADO", "DATA FINAL",
+    "UF", "MUNICIPIO", "CARGO/FUNCAO",
+]
+
+_HEADER_RE = re.compile(
+    r'<th[^>]*id="([^"]+)"[^>]*>.*?<a[^>]*>([^<]+)</a>', re.DOTALL,
+)
+_ROW_RE = re.compile(r'<tr\s[^>]*>(.*?)</tr>', re.DOTALL)
+_CELL_RE = re.compile(
+    r'<td[^>]*headers="([^"]+)"[^>]*>(.*?)</td>', re.DOTALL,
+)
+_TOTAL_RE = re.compile(r'Total de Linhas = (\d+)')
+
+
+def _clean_cell(raw: str) -> str:
+    """Strip inner tags, unescape HTML entities, collapse whitespace."""
+    no_tags = re.sub(r'<[^>]+>', '', raw)
+    return re.sub(r'\s+', ' ', _html.unescape(no_tags)).strip()
+
+
+def _scrape_apex_ir_page(
+    client: httpx.Client, page_id: int, timeout: float = 30.0,
+) -> tuple[list[str], list[list[str]], int | None]:
+    """Fetch a public APEX IR page and return (header_ids, rows, total_rows).
+
+    ``rows`` is a list of cell-value lists indexed in the same order as
+    ``header_ids``. ``total_rows`` is the server-reported universe size
+    (None if the summary banner is absent).
+    """
+    url = f"{TCU_APEX_BASE}/f?p={TCU_APP_ID}:{page_id}"
+    resp = client.get(url, timeout=timeout)
+    resp.raise_for_status()
+    html = resp.text
+
+    # Locate the IR table block (open tag + body, to preserve summary attr).
+    open_tag = re.search(r'<table[^>]*class="a-IRR-table"[^>]*>', html)
+    if not open_tag:
+        raise RuntimeError(
+            f"TCU APEX IR table not found on page {page_id}; upstream skin "
+            "may have changed."
+        )
+    table_body = re.search(
+        r'<table[^>]*class="a-IRR-table"[^>]*>(.+?)</table>',
+        html, re.DOTALL,
+    )
+    assert table_body is not None  # matched above
+    table = table_body.group(1)
+
+    headers: list[tuple[str, str]] = _HEADER_RE.findall(table)
+    header_ids = [h[0] for h in headers]
+
+    rows: list[list[str]] = []
+    for tr in _ROW_RE.findall(table):
+        cells = _CELL_RE.findall(tr)
+        if not cells:
+            continue
+        by_header = {k: _clean_cell(v) for k, v in cells}
+        rows.append([by_header.get(h, "") for h in header_ids])
+
+    # Server-reported universe size lives in the <table summary="..."> attr,
+    # e.g. 'Total de Linhas = 704' (HTML-entity-escaped as '=').
+    banner = _html.unescape(open_tag.group(0))
+    total = _TOTAL_RE.search(banner)
+    total_rows = int(total.group(1)) if total else None
+    return header_ids, rows, total_rows
+
+
+# Header-id → pipeline-column mapping for each dataset. Header ids come
+# straight from the APEX markup and are stable as long as the underlying
+# worksheet is not rebuilt.
+_INABILITADOS_MAP: dict[str, str] = {
+    "NOME": "NOME",
+    "NUM_CPFCNPJ": "CPF",
+    "TC": "PROCESSO",
+    "NUMDELIB": "DELIBERACAO",
+    "TJ": "DATA TRANSITO JULGADO",
+    "DATA_FINAL": "DATA FINAL",
+    # "Data do acórdão" header id is a numeric column id; matched loosely.
+}
+_INIDONEOS_MAP: dict[str, str] = {
+    "NOME": "NOME",
+    "NUM_CPFCNPJ": "CPF_CNPJ",
+    "UF": "UF",
+    "TC": "PROCESSO",
+    "NUMDELIB": "DELIBERACAO",
+    "TJ": "DATA TRANSITO JULGADO",
+    "DATA_FINAL": "DATA FINAL",
+}
+
+
+def _remap_row(
+    header_ids: list[str],
+    values: list[str],
+    mapping: dict[str, str],
+    all_cols: list[str],
+) -> dict[str, str]:
+    """Project a scraped row onto the pipeline's canonical schema.
+
+    Unknown APEX columns (e.g. "Data do acórdão" with its numeric id) are
+    heuristically routed to ``DATA ACORDAO`` when that column is empty.
+    """
+    out: dict[str, str] = {c: "" for c in all_cols}
+    for hid, val in zip(header_ids, values, strict=False):
+        canonical = mapping.get(hid)
+        if canonical and canonical in out:
+            out[canonical] = val
+        elif "DATA ACORDAO" in out and not out["DATA ACORDAO"] and val:
+            # Heuristic: the trailing "Data do acórdão" column has a
+            # numeric header id; map it here if we haven't already.
+            out["DATA ACORDAO"] = val
+    return out
+
+
+def _write_pipe_csv(path: Path, columns: list[str], rows: list[dict[str, str]]) -> None:
+    """Write ``rows`` as pipe-delimited UTF-8, matching _read_csv's dialect."""
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns, delimiter="|")
+        writer.writeheader()
+        for r in rows:
+            writer.writerow({c: r.get(c, "") for c in columns})
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    uf: str | None = "GO",
+    years: list[int] | None = None,
+    limit: int | None = None,
+) -> list[Path]:
+    """Download TCU sanction data to ``output_dir`` (best-effort).
+
+    Writes the four CSVs ``TcuPipeline.extract`` looks for, using the
+    canonical pipe-delimited / UTF-8 dialect:
+
+    * ``inabilitados-funcao-publica.csv`` — scraped from APEX page 1.
+      UF/MUNICIPIO columns are left empty (source does not expose them on
+      the public report). No source-side UF filter possible here.
+    * ``licitantes-inidoneos.csv`` — scraped from APEX page 2. Rows are
+      filtered by ``uf`` when set (default "GO").
+    * ``resp-contas-julgadas-irregulares.csv`` — header-only stub; the
+      upstream dataset is not exposed publicly.
+    * ``resp-contas-julgadas-irreg-implicacao-eleitoral.csv`` — header-only
+      stub for the same reason.
+
+    Parameters
+    ----------
+    output_dir:
+        Destination. Created if missing.
+    uf:
+        UF code (two-letter) to keep when filtering the inidôneos file.
+        Pass ``None`` (or ``"ALL"``) to keep every UF — the pipeline will
+        then ingest the full-national slice.
+    years:
+        Accepted for API symmetry with other ``fetch_to_disk`` callers;
+        the TCU reports do not expose a year filter, so this is informational
+        only (logged).
+    limit:
+        If set, truncate the scraped rows of each public report to the
+        first N (applied after UF filtering). Useful for smoke tests.
+
+    Returns
+    -------
+    List of absolute paths to every CSV written (always 4 files, even
+    when some are header-only stubs).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if years is not None:
+        logger.info(
+            "[tcu.fetch_to_disk] --years=%s ignored (TCU reports are "
+            "rolling snapshots without a year filter)", years,
+        )
+
+    uf_token = (uf or "").strip().upper() or None
+    if uf_token in {"ALL", "*"}:
+        uf_token = None
+
+    written: list[Path] = []
+    with httpx.Client(
+        follow_redirects=True,
+        headers={"User-Agent": "br-acc/bracc-etl download_tcu (httpx)"},
+    ) as client:
+        # --- inabilitados ---
+        hdrs, raw_rows, total = _scrape_apex_ir_page(client, TCU_INABILITADOS_PAGE)
+        logger.info(
+            "[tcu.fetch_to_disk] inabilitados: %d scraped / %s total "
+            "(APEX public report exposes only the first page)",
+            len(raw_rows), total,
+        )
+        inab_rows = [
+            _remap_row(hdrs, v, _INABILITADOS_MAP, _INABILITADOS_COLS)
+            for v in raw_rows
+        ]
+        # The public inabilitados report has no UF column — ``uf_token`` is
+        # not applied here. Document this in the file by leaving UF empty.
+        if limit is not None:
+            inab_rows = inab_rows[:limit]
+        inab_path = output_dir / "inabilitados-funcao-publica.csv"
+        _write_pipe_csv(inab_path, _INABILITADOS_COLS, inab_rows)
+        written.append(inab_path.resolve())
+
+        # --- inidôneos ---
+        hdrs2, raw_rows2, total2 = _scrape_apex_ir_page(client, TCU_INIDONEOS_PAGE)
+        logger.info(
+            "[tcu.fetch_to_disk] inidôneos: %d scraped / %s total "
+            "(APEX public report exposes only the first page)",
+            len(raw_rows2), total2,
+        )
+        inid_rows = [
+            _remap_row(hdrs2, v, _INIDONEOS_MAP, _INIDONEOS_COLS)
+            for v in raw_rows2
+        ]
+        if uf_token:
+            before = len(inid_rows)
+            inid_rows = [r for r in inid_rows if r.get("UF", "").upper() == uf_token]
+            logger.info(
+                "[tcu.fetch_to_disk] inidôneos: kept %d/%d rows matching UF=%s",
+                len(inid_rows), before, uf_token,
+            )
+        if limit is not None:
+            inid_rows = inid_rows[:limit]
+        inid_path = output_dir / "licitantes-inidoneos.csv"
+        _write_pipe_csv(inid_path, _INIDONEOS_COLS, inid_rows)
+        written.append(inid_path.resolve())
+
+    # --- blocked datasets: write header-only stubs so the pipeline does
+    # not crash on missing files. These are intentionally empty. When the
+    # TCU publishes the upstream CSV (or when a privileged bootstrap run
+    # drops the real files here), TcuPipeline.extract() picks them up
+    # transparently.
+    irr_path = output_dir / "resp-contas-julgadas-irregulares.csv"
+    _write_pipe_csv(irr_path, _IRREGULARES_COLS, [])
+    written.append(irr_path.resolve())
+    logger.warning(
+        "[tcu.fetch_to_disk] resp-contas-julgadas-irregulares.csv: "
+        "header-only stub (upstream dataset is not exposed publicly)",
+    )
+
+    irr_el_path = output_dir / "resp-contas-julgadas-irreg-implicacao-eleitoral.csv"
+    _write_pipe_csv(irr_el_path, _IRREGULARES_ELEITORAIS_COLS, [])
+    written.append(irr_el_path.resolve())
+    logger.warning(
+        "[tcu.fetch_to_disk] resp-contas-julgadas-irreg-implicacao-eleitoral.csv: "
+        "header-only stub (upstream dataset is not exposed publicly)",
+    )
+
+    return written
 
 
 class TcuPipeline(Pipeline):

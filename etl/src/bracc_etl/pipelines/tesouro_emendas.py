@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -29,6 +30,169 @@ _COL_RENAME = {
     "CNPJ do Favorecido": "cnpj_favorecido",
     "Nome Favorecido": "nome_favorecido",
 }
+
+# Tesouro Transparente CKAN resource for "emendas-parlamentares".
+# Dataset: https://www.tesourotransparente.gov.br/ckan/dataset/emendas-parlamentares
+# Resource: emendas-parlamentares.csv (Latin-1, semicolon-separated, ~60MB,
+# national scope — columns include UF and Ano that we use to subset at
+# download time so downstream ``TesouroEmendasPipeline.extract`` consumes
+# a GO-only ``emendas_tesouro.csv``).
+_CKAN_CSV_URL = (
+    "https://www.tesourotransparente.gov.br/ckan/dataset/"
+    "83e419da-1552-46bf-bfc3-05160b2c46c9/resource/"
+    "66d69917-a5d8-4500-b4b2-ef1f5d062430/download/"
+    "emendas-parlamentares.csv"
+)
+_HTTP_TIMEOUT = 120.0
+# Stream + filter in pandas chunks so we never hold the full national CSV
+# (~60MB but can grow) in memory — and so we can cheaply apply
+# ``uf`` / ``years`` subsetting row-by-row.
+_READ_CHUNK_SIZE = 50_000
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    uf: str | None = "GO",
+    years: list[int] | list[str] | None = None,
+    url: str = _CKAN_CSV_URL,
+    timeout: float = _HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download the Tesouro Transparente emendas CSV and filter by UF/years.
+
+    Writes a single ``emendas_tesouro.csv`` under ``output_dir`` using the
+    same Latin-1/semicolon encoding the Tesouro publishes, so that
+    ``TesouroEmendasPipeline.extract`` reads it without any further
+    transformation. Also persists the raw national file as
+    ``emendas_parlamentares_raw.csv`` so re-filtering different UFs or
+    year windows doesn't require re-downloading ~60MB.
+
+    Args:
+        output_dir: Directory to write outputs into. Created if missing.
+            Defaults to the pipeline's expected path
+            (``data/tesouro_emendas/``).
+        uf: UF code to retain (default ``"GO"``). Pass ``None`` (or an
+            empty string) to keep all UFs — the national dump.
+        years: Optional list of years (``int`` or string) to keep. ``None``
+            keeps every year present in the national dump.
+        url: Override for the CKAN resource URL (kept public for tests and
+            future URL rotations; defaults to the production resource).
+        timeout: Per-request HTTP timeout in seconds.
+
+    Returns:
+        List of ``Path`` objects for files written (sorted).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    raw_path = output_dir / "emendas_parlamentares_raw.csv"
+    out_path = output_dir / "emendas_tesouro.csv"
+
+    uf_norm = (uf or "").strip().upper() or None
+    years_norm: set[str] | None = (
+        {str(y).strip() for y in years if str(y).strip()}
+        if years
+        else None
+    )
+
+    logger.info(
+        "[tesouro_emendas] Downloading %s (uf=%s, years=%s) -> %s",
+        url, uf_norm or "ALL", sorted(years_norm) if years_norm else "ALL",
+        out_path,
+    )
+
+    # Stream download to ``raw_path`` so we never buffer the full body.
+    # ``verify=False`` mirrors the legacy etl/scripts downloader, which
+    # was tolerant of the Tesouro's cert chain quirks.
+    with (
+        httpx.Client(
+            timeout=timeout, verify=False, follow_redirects=True,
+        ) as client,
+        raw_path.open("wb") as fh,
+        client.stream("GET", url) as resp,
+    ):
+        resp.raise_for_status()
+        total = 0
+        for chunk in resp.iter_bytes(chunk_size=1 << 16):
+            if chunk:
+                fh.write(chunk)
+                total += len(chunk)
+    logger.info(
+        "[tesouro_emendas] Raw CSV written: %s (%.2f MB)",
+        raw_path, raw_path.stat().st_size / 1024 / 1024,
+    )
+
+    # Iterate the raw CSV in chunks, keep only rows matching the requested
+    # UF/years, and re-serialise with the *pipeline's* expected column
+    # subset (so no extra rename step is needed downstream).
+    kept_total = 0
+    scanned_total = 0
+    header_written = False
+
+    pipeline_columns = list(_COL_RENAME.keys())
+
+    with pd.read_csv(
+        raw_path,
+        dtype=str,
+        encoding="latin-1",
+        sep=";",
+        keep_default_na=False,
+        chunksize=_READ_CHUNK_SIZE,
+    ) as reader, out_path.open("w", encoding="latin-1", newline="") as out_fh:
+        for chunk in reader:
+            scanned_total += len(chunk)
+
+            mask = pd.Series(True, index=chunk.index)
+            if uf_norm and "UF" in chunk.columns:
+                mask &= chunk["UF"].str.upper().str.strip() == uf_norm
+            if years_norm and "Ano" in chunk.columns:
+                mask &= chunk["Ano"].astype(str).str.strip().isin(years_norm)
+
+            subset = chunk.loc[mask, :]
+            if subset.empty:
+                continue
+
+            # Keep only the columns the pipeline actually consumes, in the
+            # same order and with the same headers. Any missing upstream
+            # columns (future schema drift) default to empty strings so the
+            # pipeline's ``dtype=str`` read is preserved.
+            projected = pd.DataFrame(
+                {col: subset.get(col, "") for col in pipeline_columns},
+            )
+
+            projected.to_csv(
+                out_fh,
+                sep=";",
+                index=False,
+                header=not header_written,
+                lineterminator="\r\n",
+            )
+            header_written = True
+            kept_total += len(projected)
+
+    if not header_written:
+        # No rows matched: still leave an empty CSV with the right header so
+        # contract checks for ``data/tesouro_emendas/*`` pass and downstream
+        # extract() can at least read a valid but empty file.
+        header_line = ";".join(pipeline_columns) + "\r\n"
+        out_path.write_bytes(header_line.encode("latin-1"))
+        logger.warning(
+            "[tesouro_emendas] 0 rows matched uf=%s years=%s (scanned %d). "
+            "Wrote header-only CSV: %s",
+            uf_norm or "ALL",
+            sorted(years_norm) if years_norm else "ALL",
+            scanned_total,
+            out_path,
+        )
+    else:
+        logger.info(
+            "[tesouro_emendas] Kept %d / %d rows (uf=%s years=%s) -> %s",
+            kept_total, scanned_total,
+            uf_norm or "ALL",
+            sorted(years_norm) if years_norm else "ALL",
+            out_path,
+        )
+
+    return sorted([raw_path, out_path])
 
 
 def _parse_excel_date(date_val: str) -> str:

@@ -3,15 +3,23 @@
 Ingests CEAP (Cota para o Exercicio da Atividade Parlamentar) expenses.
 Creates Expense nodes linked to Person (deputy) via GASTOU
 and to Company (supplier) via FORNECEU.
+
+The module also exposes :func:`fetch_to_disk`, a thin wrapper around the
+Camara dos Deputados open-data API v2 used by the GO-scoped bootstrap
+contract to materialize JSON snapshots of the five canonical endpoints
+(deputados, CEAP despesas, proposicoes, votacoes, orgaos) under
+``data/camara/`` without requiring the CEAP CSV annual dumps.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -32,10 +40,225 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+_API_BASE = "https://dadosabertos.camara.leg.br/api/v2"
+_HTTP_TIMEOUT = 30.0
+_PAGE_SIZE = 100
+# Cap per-deputy sub-resource pages to avoid hammering the API in smoke
+# runs; ``limit`` in :func:`fetch_to_disk` further trims each endpoint.
+_MAX_PAGES_PER_DEPUTY = 50
+_MAX_PAGES_GLOBAL = 10
+_DEFAULT_HEADERS = {"Accept": "application/json"}
+
+
 def _make_expense_id(deputy_id: str, date: str, supplier_doc: str, value: str) -> str:
     """Generate a stable expense ID from key fields."""
     raw = f"camara_{deputy_id}_{date}_{supplier_doc}_{value}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _paginate(
+    client: httpx.Client,
+    path: str,
+    params: dict[str, str | int],
+    *,
+    max_pages: int,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """Walk through a Camara v2 paginated endpoint, returning ``dados`` rows.
+
+    Stops at ``max_pages`` (safety net) or once ``limit`` records have been
+    accumulated. Non-200 responses and JSON decode errors are logged and
+    treated as end-of-stream so the caller still gets whatever pages
+    succeeded before the failure.
+    """
+    rows: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        query = dict(params)
+        query.setdefault("itens", _PAGE_SIZE)
+        query["pagina"] = page
+        url = f"{_API_BASE}{path}"
+        try:
+            resp = client.get(url, params=query, headers=_DEFAULT_HEADERS)
+        except httpx.HTTPError as exc:
+            logger.warning("[camara] HTTP error on %s page %d: %s", path, page, exc)
+            break
+        if resp.status_code != 200:
+            logger.warning(
+                "[camara] non-200 on %s page %d: %s", path, page, resp.status_code,
+            )
+            break
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError as exc:
+            logger.warning("[camara] JSON decode error on %s page %d: %s", path, page, exc)
+            break
+        batch = payload.get("dados") or []
+        if not isinstance(batch, list) or not batch:
+            break
+        rows.extend(r for r in batch if isinstance(r, dict))
+        if limit is not None and len(rows) >= limit:
+            rows = rows[:limit]
+            break
+        # Stop when we've consumed every page available.
+        if len(batch) < int(query.get("itens", _PAGE_SIZE)):
+            break
+        page += 1
+    return rows
+
+
+def _write_json(path: Path, records: list[dict[str, Any]]) -> None:
+    path.write_text(
+        json.dumps({"dados": records}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def fetch_to_disk(
+    output_dir: Path,
+    uf: str | None = None,
+    limit: int | None = None,
+) -> list[Path]:
+    """Download Camara dos Deputados v2 API snapshots to ``output_dir``.
+
+    Hits the five canonical endpoints — ``/deputados`` (optionally filtered
+    by ``siglaUf=<uf>``), ``/deputados/{id}/despesas`` (CEAP), per-deputy
+    ``/deputados/{id}/proposicoes``, and the global ``/votacoes`` /
+    ``/orgaos`` — and writes each as a single JSON file under
+    ``output_dir``. Filenames are namespaced by UF when provided so
+    multiple scoped snapshots can coexist (``deputados_GO.json`` etc.).
+
+    Args:
+        output_dir: Directory where JSON files are written. Created if
+            missing. Files coexist with the legacy CEAP CSV annual dumps
+            that :class:`CamaraPipeline.extract` consumes (the CSV glob
+            ignores ``*.json``).
+        uf: Two-letter UF filter applied to ``/deputados`` via the API's
+            ``siglaUf`` parameter. When set, per-deputy sub-resources are
+            scoped to the matching set of deputies. ``None`` pulls the
+            full national roster.
+        limit: Optional record cap applied per endpoint (deputados,
+            despesas, proposicoes, votacoes, orgaos). Useful for smoke
+            tests; ``None`` means no cap.
+
+    Returns:
+        List of JSON file paths written to disk (sorted). Endpoints that
+        returned zero rows are skipped so the caller can tell success
+        apart from empty responses.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    uf_norm = uf.strip().upper() if uf else None
+    suffix = f"_{uf_norm}" if uf_norm else ""
+
+    written: list[Path] = []
+
+    with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
+        # --- /deputados (filtered by UF when provided) ---
+        dep_params: dict[str, str | int] = {"ordem": "ASC", "ordenarPor": "nome"}
+        if uf_norm:
+            dep_params["siglaUf"] = uf_norm
+        deputies = _paginate(
+            client, "/deputados", dep_params,
+            max_pages=_MAX_PAGES_GLOBAL, limit=limit,
+        )
+        if deputies:
+            path = output_dir / f"deputados{suffix}.json"
+            _write_json(path, deputies)
+            written.append(path)
+            logger.info(
+                "[camara] wrote %s (%d deputies, uf=%s)",
+                path.name, len(deputies), uf_norm or "ALL",
+            )
+        else:
+            logger.warning("[camara] no deputies returned for uf=%s", uf_norm or "ALL")
+
+        deputy_ids = [
+            str(d.get("id")) for d in deputies if d.get("id") is not None
+        ]
+
+        # --- /deputados/{id}/despesas (CEAP) ---
+        expenses: list[dict[str, Any]] = []
+        for dep_id in deputy_ids:
+            if limit is not None and len(expenses) >= limit:
+                break
+            remaining = None if limit is None else max(0, limit - len(expenses))
+            if remaining == 0:
+                break
+            dep_expenses = _paginate(
+                client,
+                f"/deputados/{dep_id}/despesas",
+                {"ordem": "DESC", "ordenarPor": "ano"},
+                max_pages=_MAX_PAGES_PER_DEPUTY,
+                limit=remaining,
+            )
+            # Tag with deputy id so downstream consumers can link without
+            # re-querying /deputados.
+            for row in dep_expenses:
+                row["_deputy_id"] = dep_id
+            expenses.extend(dep_expenses)
+        if expenses:
+            path = output_dir / f"despesas{suffix}.json"
+            _write_json(path, expenses[: limit] if limit is not None else expenses)
+            written.append(path)
+            logger.info("[camara] wrote %s (%d despesas)", path.name, len(expenses))
+
+        # --- /deputados/{id}/proposicoes (proposals authored) ---
+        proposicoes: list[dict[str, Any]] = []
+        for dep_id in deputy_ids:
+            if limit is not None and len(proposicoes) >= limit:
+                break
+            remaining = None if limit is None else max(0, limit - len(proposicoes))
+            if remaining == 0:
+                break
+            # The /proposicoes endpoint accepts idDeputadoAutor as filter.
+            props = _paginate(
+                client,
+                "/proposicoes",
+                {"idDeputadoAutor": dep_id, "ordem": "DESC", "ordenarPor": "id"},
+                max_pages=_MAX_PAGES_PER_DEPUTY,
+                limit=remaining,
+            )
+            for row in props:
+                row["_deputy_id"] = dep_id
+            proposicoes.extend(props)
+        if proposicoes:
+            path = output_dir / f"proposicoes{suffix}.json"
+            _write_json(
+                path,
+                proposicoes[: limit] if limit is not None else proposicoes,
+            )
+            written.append(path)
+            logger.info(
+                "[camara] wrote %s (%d proposicoes)", path.name, len(proposicoes),
+            )
+
+        # --- /votacoes (global — not UF-scoped by the API) ---
+        votacoes = _paginate(
+            client, "/votacoes",
+            {"ordem": "DESC", "ordenarPor": "dataHoraRegistro"},
+            max_pages=_MAX_PAGES_GLOBAL, limit=limit,
+        )
+        if votacoes:
+            path = output_dir / f"votacoes{suffix}.json"
+            _write_json(path, votacoes)
+            written.append(path)
+            logger.info("[camara] wrote %s (%d votacoes)", path.name, len(votacoes))
+
+        # --- /orgaos (committees / global) ---
+        orgaos = _paginate(
+            client, "/orgaos",
+            {"ordem": "ASC", "ordenarPor": "id"},
+            max_pages=_MAX_PAGES_GLOBAL, limit=limit,
+        )
+        if orgaos:
+            path = output_dir / f"orgaos{suffix}.json"
+            _write_json(path, orgaos)
+            written.append(path)
+            logger.info("[camara] wrote %s (%d orgaos)", path.name, len(orgaos))
+
+    return sorted(written)
 
 
 class CamaraPipeline(Pipeline):

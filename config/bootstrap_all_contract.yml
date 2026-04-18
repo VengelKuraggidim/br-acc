@@ -41,12 +41,15 @@
     },
     {
       "pipeline_id": "camara",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/camara/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_camara.py --output-dir ../data/camara"
+      ]
     },
     {
       "pipeline_id": "camara_goiania",
@@ -368,12 +371,15 @@
     },
     {
       "pipeline_id": "senado",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/senado/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": true
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_senado.py --uf GO --output-dir ../data/senado"
+      ]
     },
     {
       "pipeline_id": "senado_cpis",
@@ -395,12 +401,15 @@
     },
     {
       "pipeline_id": "siop",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/siop/*"
       ],
-      "blocking_reason_if_any": "Author linkage limited",
-      "core": false
+      "blocking_reason_if_any": "Author linkage limited; federal dataset (no author-UF column upstream — strict author-UF filtering requires TSE join downstream).",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_siop.py --output-dir ../data/siop --year 2021 --year 2022 --year 2023 --year 2024 --year 2025"
+      ]
     },
     {
       "pipeline_id": "stf",
@@ -437,21 +446,27 @@
     },
     {
       "pipeline_id": "tcu",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tcu/*"
       ],
-      "blocking_reason_if_any": "-",
-      "core": false
+      "blocking_reason_if_any": "Public APEX app exposes only first 100 rows of inabilitados (704 total) and inidôneos (104 total); contas-irregulares datasets not published publicly — wrapper emits header-only stubs.",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tcu.py --output-dir ../data/tcu"
+      ]
     },
     {
       "pipeline_id": "tesouro_emendas",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tesouro_emendas/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tesouro_emendas.py --output-dir ../data/tesouro_emendas --uf GO"
+      ]
     },
     {
       "pipeline_id": "transferegov",
@@ -539,21 +554,27 @@
     },
     {
       "pipeline_id": "alego",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/alego/*"
       ],
-      "blocking_reason_if_any": "Pending public API discovery",
-      "core": false
+      "blocking_reason_if_any": "-",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_alego.py --output-dir ../data/alego"
+      ]
     },
     {
       "pipeline_id": "ssp_go",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/ssp_go/*"
       ],
-      "blocking_reason_if_any": "Pending machine-readable crime statistics export",
-      "core": false
+      "blocking_reason_if_any": "Upstream only publishes PDF bulletins (no CSV/XLSX); wrapper downloads estatisticas_<YYYY>.pdf + doacoes_ssp.csv. PDF-to-CSV extractor still pending for full pipeline load.",
+      "core": true,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_ssp_go.py --output-dir ../data/ssp_go"
+      ]
     },
     {
       "pipeline_id": "state_portal_go",
@@ -575,12 +596,15 @@
     },
     {
       "pipeline_id": "tcmgo_sancoes",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/tcmgo_sancoes/*"
       ],
-      "blocking_reason_if_any": "Pending CSV export schema from TCM-GO",
-      "core": false
+      "blocking_reason_if_any": "-",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_tcmgo_sancoes.py --output-dir ../data/tcmgo_sancoes"
+      ]
     }
   ]
 }
