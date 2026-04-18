@@ -2,7 +2,10 @@
 // ConexoesService (Fase 04.B) classificar.
 //
 // Parâmetros:
-//   $entity_id STRING — elementId(p) do político focal
+//   $entity_id STRING — aceita três formatos (compatibilidade com o PWA):
+//     1. elementId(p)             — default dos links internos da API
+//     2. p.id_camara              — ID da API da Câmara (:FederalLegislator)
+//     3. p.legislator_id          — ID estável "camara_{id_camara}"
 //
 // Shape de retorno:
 //   politico {dict}    — properties + element_id + labels do político
@@ -25,6 +28,9 @@
 // Timeout de 30s deve ser aplicado no driver na hora da chamada.
 MATCH (p)
 WHERE elementId(p) = $entity_id
+   OR p.id_camara = $entity_id
+   OR p.legislator_id = $entity_id
+WITH p LIMIT 1
 OPTIONAL MATCH (p)-[r]-(t)
 WHERE NOT (t:User OR t:Investigation OR t:Annotation OR t:Tag)
 WITH p, r, t,
