@@ -416,10 +416,7 @@ def _row_matches_uf(row: pd.Series, uf_tokens: tuple[str, ...], uf_sigla: str) -
         or ""
     ).upper()
     m = _UF_SUFFIX_RE.search(loc)
-    if m and m.group(1) == uf_sigla:
-        return True
-
-    return False
+    return bool(m and m.group(1) == uf_sigla)
 
 
 def fetch_to_disk(

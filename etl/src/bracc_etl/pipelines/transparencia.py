@@ -154,7 +154,11 @@ class TransparenciaPipeline(Pipeline):
             numero = str(row.get("numero", "")).strip()
             municipio = str(row.get("municipio", "")).strip()
             ano = str(row.get("ano", "")).strip()
-            aid = f"{author_key}_{ano}_{numero}_{municipio}" if numero else f"{author_key}_{objeto}_{municipio}"
+            aid = (
+                f"{author_key}_{ano}_{numero}_{municipio}"
+                if numero
+                else f"{author_key}_{objeto}_{municipio}"
+            )
 
             amendments.append({
                 "amendment_id": aid,
@@ -167,7 +171,9 @@ class TransparenciaPipeline(Pipeline):
                 "municipality": municipio,
                 "uf": str(row.get("uf", "")).strip(),
                 "year": ano,
-                "value_committed": parse_brl_flexible(str(row.get("valor_empenhado", row["valor"]))),
+                "value_committed": parse_brl_flexible(
+                    str(row.get("valor_empenhado", row["valor"])),
+                ),
                 "value_paid": parse_brl_flexible(str(row.get("valor_pago", "0"))),
             })
         self.amendments = deduplicate_rows(amendments, ["amendment_id"])

@@ -378,10 +378,9 @@ def fetch_to_disk(
     written_paths: list[Path] = []
     seen_names: set[str] = set()
     for rid, period in resources:
-        if period:
-            filename = f"servidores_{period}.csv"
-        else:
-            filename = f"servidores_{rid[:8]}.csv"
+        filename = (
+            f"servidores_{period}.csv" if period else f"servidores_{rid[:8]}.csv"
+        )
         # Defensive: two resources could theoretically map to the same
         # slug (e.g. corrected re-uploads). Disambiguate by appending
         # the short id so we never silently overwrite another snapshot.
