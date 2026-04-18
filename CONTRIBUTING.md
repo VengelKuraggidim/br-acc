@@ -17,14 +17,14 @@ Thanks for helping improve Fiscal Cidadão — a fork of [`brunoclz/br-acc`](htt
 ```bash
 cd api && uv sync --dev
 cd ../etl && uv sync --dev
-cd ../frontend && npm install
 ```
+
+The frontend lives in `pwa/` as a static PWA (vanilla HTML/JS + service worker) — no npm install step. Open `pwa/index.html` directly against a running FastAPI backend on `http://localhost:8000` during development.
 
 ## Security and environment
 
-- **Frontend env:** Only `VITE_*` variables are exposed in the client bundle. Do not put secrets in `VITE_*`; use them only for public config (e.g. `VITE_API_URL`, `VITE_PUBLIC_MODE`).
+- **Frontend config:** The PWA reads its API base URL from a small inline config in `pwa/index.html`; keep it pointed at a public-mode FastAPI. Never embed secrets in the PWA bundle.
 - **Auth:** Keep tokens in memory or HttpOnly cookies only; do not persist JWT in `localStorage` or `sessionStorage`.
-- **Releases:** Before releases, run `npm audit` in `frontend/` and address high/critical findings.
 
 ## Quality Checks
 

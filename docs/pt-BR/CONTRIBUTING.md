@@ -17,8 +17,9 @@ Obrigado por contribuir com o Fiscal Cidadão — fork de [`brunoclz/br-acc`](ht
 ```bash
 cd api && uv sync --dev
 cd ../etl && uv sync --dev
-cd ../frontend && npm install
 ```
+
+O frontend vive em `pwa/` como PWA estática (HTML/JS vanilla + service worker) — sem etapa `npm install`. Abra `pwa/index.html` direto contra o FastAPI rodando em `http://localhost:8000` em desenvolvimento.
 
 ## Checagens de Qualidade
 

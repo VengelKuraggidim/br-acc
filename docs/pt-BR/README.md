@@ -22,9 +22,12 @@ O objetivo de longo prazo é uma plataforma cívica focada em cidadãos de Goiá
 
 ## Funcionalidades
 
-- **Módulos ETL implementados** — status rastreado em `docs/source_registry_br_v1.csv` (loaded/partial/stale/blocked/not_built), incluindo pipelines específicos de Goiás (`camara_goiania`, `folha_go`, `mides`, `siop`, etc.)
+- **Módulos ETL implementados** — 62 pipelines em `etl/src/bracc_etl/pipelines/`, status rastreado em `docs/source_registry_br_v1.csv` (loaded/partial/stale/blocked/not_built), incluindo fontes específicas de Goiás (`camara_goiania`, `folha_go`, `mides`, `siop`, `tcm_go`, `alego`, `camara_politicos_go`, `emendas_parlamentares_go`, `tse_prestacao_contas_go`, `querido_diario_go`, etc.)
+- **Camada de archival content-addressed** — `bracc_etl.archival` salva snapshot imutável do payload HTTP na ingestão; `source_snapshot_uri` é carimbado no `ProvenanceBlock` pra todo fato exibido ao usuário continuar verificável mesmo se o portal original mudar ou sair do ar (ver [`docs/archival.md`](../archival.md)).
 - **Infraestrutura de grafo Neo4j** — schema, loaders e superfície de consulta para entidades e relacionamentos
-- **Frontend React** — busque e explore redes e conexões entre entidades
+- **Backend FastAPI único** — o serviço Flask `backend/` foi removido; o FastAPI em `api/` agora serve todos os endpoints PWA-parity (`/status`, `/buscar-tudo`, `/politico/{id}`)
+- **PWA vanilla** — `pwa/` (HTML/JS single-page com service worker, servida por nginx em produção)
+- **Alertas cívicos automatizados** — ver [Alertas automatizados](#alertas-automatizados) abaixo
 - **API pública** — acesso programático aos dados do grafo via FastAPI
 - **Ferramentas de reprodutibilidade** — bootstrap local em um comando e fluxo BYO-data para ETL
 - **Privacy-first** — compatível com LGPD, defaults públicos seguros, sem exposição de dados pessoais
@@ -43,12 +46,12 @@ Esse comando inicia os serviços Docker, espera Neo4j/API ficarem saudáveis e c
 Verifique em:
 
 - API: http://localhost:8000/health
-- Frontend: http://localhost:3000
+- Frontend (PWA): abra `pwa/index.html` direto no navegador (dev) ou sirva via nginx do `docker-compose.prod.yml` (prod)
 - Neo4j Browser: http://localhost:7474
 
 ### Subir com Docker
 
-Você pode subir a stack (Neo4j, API, frontend) com Docker Compose sem rodar o bootstrap completo:
+Você pode subir a stack (Neo4j + FastAPI) com Docker Compose sem rodar o bootstrap completo. A PWA é estática e pode ser aberta direto via `pwa/index.html` em dev, ou servida via nginx do `docker-compose.prod.yml` em produção:
 
 ```bash
 cp .env.example .env
@@ -120,28 +123,33 @@ Contadores de escala de produção são publicados como **snapshot de referencia
 | Camada | Tecnologia |
 |---|---|
 | Banco de Grafo | Neo4j 5 Community |
-| Backend | FastAPI (Python 3.12+, async) |
-| Frontend | Vite + React 19 + TypeScript |
-| ETL | Python (pandas, httpx) |
+| Backend | FastAPI (Python 3.12+, async) — backend único; Flask `backend/` legado foi deletado |
+| Frontend | PWA vanilla (`pwa/index.html` + `sw.js`, servida por nginx em produção) |
+| ETL | Python (pandas, httpx) + archival content-addressed (`bracc_etl.archival`) |
+| Proveniência | Todo nó/edge persistido carrega `source_id`, `source_record_id`, `source_url`, `ingested_at`, `run_id` + `source_snapshot_uri` opcional ([contrato](../provenance.md)) |
 | Infra | Docker Compose |
 
 ```mermaid
 graph LR
     A[Fontes de Dados Públicos] --> B[Pipelines ETL]
+    B --> B2[Snapshot Archival<br/>content-addressed]
     B --> C[(Neo4j)]
+    B2 -.source_snapshot_uri.-> C
     C --> D[FastAPI]
-    D --> E[Frontend React]
+    D --> E[PWA Vanilla]
     D --> F[API Pública]
 ```
+
+O backend FastAPI está organizado em 17 serviços em `api/src/bracc/services/` (perfil, conexoes, despesas, emendas, alertas, analise, validacao_tse, teto, formatacao, traducao, rfb_status, ...) e expõe as rotas PWA-parity (`/status`, `/buscar-tudo`, `/politico/{id}`) via `bracc.routers.pwa_parity`.
 
 ---
 
 ## Mapa do Repositório
 
 ```
-api/          Backend FastAPI (rotas, serviços, modelos)
-etl/          Pipelines ETL e scripts de download
-frontend/     App React (Vite + TypeScript)
+api/          Backend FastAPI (rotas, serviços, modelos) — o único backend
+etl/          Pipelines ETL, scripts de download e archival content-addressed
+pwa/          PWA vanilla (index.html, manifest.json, service worker)
 infra/        Docker, schema Neo4j, scripts de seed
 scripts/      Scripts utilitários e de automação
 docs/         Documentação, assets de marca, índice legal
@@ -160,8 +168,33 @@ Pacotes Python internos (`bracc`, `bracc_etl`) e a CLI `bracc-etl` mantêm os no
 | GET | `/api/v1/public/meta` | Métricas agregadas e saúde das fontes |
 | GET | `/api/v1/public/graph/company/{cnpj_or_id}` | Subgrafo público de empresa |
 | GET | `/api/v1/public/patterns/company/{cnpj_or_id}` | Análise de padrões (quando habilitado) |
+| GET | `/politico/{entity_id}` | `PerfilPolitico` completo (22 campos: alertas, emendas, doadores empresa/pessoa, sócios, família, contratos, despesas_gabinete, comparacao_cidada, validacao_tse, teto_gastos, status_contas_tse, …) |
 
 Documentação interativa completa em `http://localhost:8000/docs` após iniciar a API.
+
+---
+
+## Alertas automatizados
+
+Fiscal Cidadão computa uma lista curta de alertas determinísticos e atribuídos à fonte em cada chamada `/politico/{entity_id}`. Nada é inferido por modelo de ML — todo alerta é uma regra sobre dado já ingerido, e todo alerta carrega referência ao fato subjacente (com `source_url` / `source_snapshot_uri`) pra quem lê poder verificar.
+
+Sinais atuais (de `api/src/bracc/services/alertas_service.py`):
+
+| Sinal | Severidade | Fonte / base legal |
+|---|---|---|
+| Doador de campanha com situação RFB `BAIXADA`, `SUSPENSA` ou `INAPTA` | `grave` | Snapshot BrasilAPI RFB (pipeline `brasilapi_cnpj_status`), cache 7 dias |
+| Gasto de campanha acima do teto legal | `grave` / `atencao` | Resolução TSE 23.607/2019 (`teto_service`) |
+| Contas TSE julgadas `desaprovada` / `nao_prestada` | `grave` | `prestacao_contas` TSE (placeholder até `status_contas_tse` ficar totalmente conectado) |
+| Gasto de gabinete muito acima da média do grupo par | `atencao` | Câmara CEAP + agregação peer (`despesas_service`) |
+| Picos mensais de gasto CEAP | `atencao` | Série temporal Câmara CEAP |
+| Evolução patrimonial incompatível com renda declarada | `atencao` | TSE bens declarados (`analisar_patrimonio`) |
+| Concentração de emendas em um único fornecedor | `atencao` | Portal da Transparência + SIOP |
+
+Cobertura "quanto esse político custa pra nós?" em três níveis:
+
+- **Federal** — CEAP (cota para exercício da atividade parlamentar)
+- **Estadual (Goiás)** — ALEGO verba indenizatória
+- **Municipal (Goiânia)** — cota da Câmara Municipal
 
 ---
 
