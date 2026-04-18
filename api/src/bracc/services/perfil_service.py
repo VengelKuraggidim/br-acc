@@ -58,6 +58,7 @@ from bracc.services.alertas_service import (
     analisar_despesas_gabinete,
     analisar_despesas_vs_media,
     analisar_picos_mensais,
+    analisar_teto_gastos,
     gerar_alertas_completos,
 )
 from bracc.services.analise_service import (
@@ -72,6 +73,7 @@ from bracc.services.despesas_service import (
 from bracc.services.emendas_service import obter_emendas_deputado
 from bracc.services.formatacao_service import fmt_brl
 from bracc.services.neo4j_service import execute_query_single
+from bracc.services.teto_service import calcular_teto
 from bracc.services.traducao_service import traduzir_cargo
 from bracc.services.validacao_tse_service import gerar_validacao_tse
 
@@ -531,6 +533,26 @@ async def obter_perfil(
 
     validacao_tse = gerar_validacao_tse(props, total_doacoes)
 
+    # Teto de gastos de campanha vs despesas declaradas (Resolução TSE
+    # 23.607/2019 — MVP só cobre eleição 2022). ``total_despesas_tse_2022``
+    # e ``cargo_tse_2022`` vêm do pipeline ``tse_prestacao_contas_go``.
+    # Sem pipeline rodado em prod → props ausentes → calcular_teto retorna
+    # None (degradação silenciosa, seção omitida no PWA).
+    # TODO: parametrizar o ano quando adicionarmos ``TETOS_2026``.
+    teto_ano = 2022
+    total_despesas_tse_raw = props.get(f"total_despesas_tse_{teto_ano}") or 0.0
+    try:
+        total_despesas_tse = float(total_despesas_tse_raw)
+    except (TypeError, ValueError):
+        total_despesas_tse = 0.0
+    cargo_tse = props.get(f"cargo_tse_{teto_ano}") or props.get("role") or props.get("cargo")
+    teto_gastos = calcular_teto(
+        cargo=str(cargo_tse) if cargo_tse else None,
+        uf=politico.uf,
+        ano_eleicao=teto_ano,
+        total_despesas_declaradas=total_despesas_tse,
+    )
+
     # --- 6. Alertas (orquestração completa) ----------------------------------
     entidade_para_alertas = _build_entidade_for_alertas(props)
     emendas_raw_alertas = _emendas_to_raw_dicts(emendas)
@@ -540,6 +562,10 @@ async def obter_perfil(
         entidades_conectadas,
         emendas_raw_alertas,
     )
+
+    # Alerta sobre teto de gastos (grave se ultrapassou, info/atenção
+    # nos buckets inferiores). Sem ``teto_gastos`` → lista vazia.
+    alertas.extend(analisar_teto_gastos(teto_gastos))
 
     uf_deputado = politico.uf
     if despesas_raw:
@@ -615,4 +641,5 @@ async def obter_perfil(
         familia=resultado.familia,
         aviso_despesas=aviso_despesas,
         validacao_tse=validacao_tse,
+        teto_gastos=teto_gastos,
     )

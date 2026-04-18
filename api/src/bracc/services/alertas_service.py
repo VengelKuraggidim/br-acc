@@ -15,7 +15,7 @@ recebe valores já computados; a busca em si é 04.D.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bracc.services.formatacao_service import fmt_brl, nomear_mes
 from bracc.services.traducao_service import (
@@ -23,6 +23,9 @@ from bracc.services.traducao_service import (
     traduzir_cargo,
     traduzir_despesa,
 )
+
+if TYPE_CHECKING:
+    from bracc.models.perfil import TetoGastos
 
 # --- Constantes de análise ---------------------------------------------------
 
@@ -370,6 +373,62 @@ def analisar_picos_mensais(despesas: list[dict[str, Any]]) -> list[dict[str, str
             })
 
     return alertas
+
+
+def analisar_teto_gastos(
+    teto: TetoGastos | None,
+) -> list[dict[str, str]]:
+    """Alerta baseado no teto legal de gastos de campanha (TSE).
+
+    Fonte legal: Resolução TSE nº 23.607/2019 (e atualizações). Entrada
+    produzida por ``bracc.services.teto_service.calcular_teto``.
+
+    Severidade:
+
+    * ``ultrapassou`` (> 100%) → alerta ``grave`` (infração eleitoral
+      sujeita a multa, cassação e desaprovação de contas).
+    * ``limite`` (90-100%)     → alerta ``atencao``.
+    * ``alto`` (70-90%)        → alerta ``info``.
+    * ``ok`` (< 70%)           → lista vazia (não gera ruído).
+    * ``None``                  → lista vazia (cargo/UF não mapeados).
+    """
+    if teto is None:
+        return []
+
+    classificacao = teto.classificacao
+    if classificacao == "ultrapassou":
+        excedente = teto.valor_gasto - teto.valor_limite
+        return [{
+            "tipo": "grave",
+            "icone": "teto",
+            "texto": (
+                f"Ultrapassou o teto legal de gastos de campanha para "
+                f"{teto.cargo} ({teto.ano_eleicao}): gastou "
+                f"{teto.valor_gasto_fmt} — {teto.pct_usado_fmt} do limite "
+                f"de {teto.valor_limite_fmt} ({fmt_brl(excedente)} acima). "
+                f"Infracao eleitoral grave conforme {teto.fonte_legal}"
+            ),
+        }]
+    if classificacao == "limite":
+        return [{
+            "tipo": "atencao",
+            "icone": "teto",
+            "texto": (
+                f"No limite do teto legal: gastou {teto.valor_gasto_fmt} "
+                f"({teto.pct_usado_fmt} dos {teto.valor_limite_fmt} permitidos "
+                f"para {teto.cargo} em {teto.ano_eleicao})"
+            ),
+        }]
+    if classificacao == "alto":
+        return [{
+            "tipo": "info",
+            "icone": "teto",
+            "texto": (
+                f"Gastou {teto.pct_usado_fmt} do teto legal de campanha "
+                f"({teto.valor_gasto_fmt} de {teto.valor_limite_fmt})"
+            ),
+        }]
+    return []
 
 
 # --- Orquestração -----------------------------------------------------------

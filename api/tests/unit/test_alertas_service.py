@@ -5,6 +5,7 @@ Testa cada regra de alerta individualmente + orquestração.
 
 from __future__ import annotations
 
+from bracc.models.perfil import TetoGastos
 from bracc.services.alertas_service import (
     COTA_CEAP_MENSAL,
     analisar_conexoes,
@@ -13,6 +14,7 @@ from bracc.services.alertas_service import (
     analisar_emendas,
     analisar_patrimonio,
     analisar_picos_mensais,
+    analisar_teto_gastos,
     gerar_alertas_completos,
 )
 
@@ -205,3 +207,50 @@ class TestGerarAlertasCompletos:
     def test_sem_emendas_nao_gera_alertas_de_emenda(self) -> None:
         alertas = gerar_alertas_completos({"properties": {}}, [], {}, [])
         assert not any("emenda" in a.get("texto", "").lower() for a in alertas)
+
+
+def _teto(classificacao: str, pct: float = 50.0) -> TetoGastos:
+    """Factory pra ``TetoGastos`` com classificação pré-definida."""
+    valor_limite = 2_100_000.0
+    valor_gasto = valor_limite * (pct / 100)
+    return TetoGastos(
+        valor_limite=valor_limite,
+        valor_limite_fmt="R$ 2.10 mi",
+        valor_gasto=valor_gasto,
+        valor_gasto_fmt="R$ 1.05 mi",
+        pct_usado=pct,
+        pct_usado_fmt=f"{pct:.0f}%",
+        cargo="DEPUTADO FEDERAL",
+        ano_eleicao=2022,
+        classificacao=classificacao,
+        fonte_legal="Resolução TSE nº 23.607/2019 (Eleições 2022)",
+    )
+
+
+class TestAnalisarTetoGastos:
+    def test_none_retorna_lista_vazia(self) -> None:
+        assert analisar_teto_gastos(None) == []
+
+    def test_ok_sem_alerta(self) -> None:
+        """Abaixo de 70% do teto não gera ruído."""
+        assert analisar_teto_gastos(_teto("ok", pct=50.0)) == []
+
+    def test_alto_gera_info(self) -> None:
+        alertas = analisar_teto_gastos(_teto("alto", pct=85.0))
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "info"
+        assert "teto legal" in alertas[0]["texto"].lower()
+
+    def test_limite_gera_atencao(self) -> None:
+        alertas = analisar_teto_gastos(_teto("limite", pct=95.0))
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "atencao"
+        assert "limite" in alertas[0]["texto"].lower()
+
+    def test_ultrapassou_gera_grave(self) -> None:
+        alertas = analisar_teto_gastos(_teto("ultrapassou", pct=119.0))
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "grave"
+        assert "ultrapassou" in alertas[0]["texto"].lower()
+        # Cita a fonte legal pro usuário verificar.
+        assert "23.607/2019" in alertas[0]["texto"]

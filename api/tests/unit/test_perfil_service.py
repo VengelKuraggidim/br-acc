@@ -440,3 +440,88 @@ class TestProvenance:
             perfil = await obter_perfil(driver, "4:abc:1")
 
         assert perfil.provenance is None
+
+
+# --- 6. Teto de gastos (novo campo TetoGastos) -----------------------------
+
+
+class TestTetoGastos:
+    @pytest.mark.anyio
+    async def test_com_despesas_tse_teto_populado(self) -> None:
+        """``total_despesas_tse_2022`` + ``cargo_tse_2022`` no grafo → teto preenchido."""
+        driver = _build_driver()
+        legislator = _legislator_node(
+            total_despesas_tse_2022=1_800_000.0,
+            cargo_tse_2022="DEPUTADO FEDERAL",
+        )
+        record = _mock_record({"politico": legislator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2],
+        ):
+            perfil = await obter_perfil(driver, "4:abc:1")
+
+        assert perfil.teto_gastos is not None
+        assert perfil.teto_gastos.valor_limite == 2_100_000.0
+        assert perfil.teto_gastos.classificacao == "alto"
+        assert perfil.teto_gastos.ano_eleicao == 2022
+        # Alerta info associado (alto < limite = 'info').
+        assert any(
+            a.get("tipo") == "info" and "teto" in a.get("texto", "").lower()
+            for a in perfil.alertas
+        )
+
+    @pytest.mark.anyio
+    async def test_sem_despesas_tse_teto_none(self) -> None:
+        """Sem ``total_despesas_tse_2022`` no grafo → ``teto_gastos=None``."""
+        driver = _build_driver()
+        legislator = _legislator_node()  # sem total_despesas_tse_2022
+        record = _mock_record({"politico": legislator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2],
+        ):
+            perfil = await obter_perfil(driver, "4:abc:1")
+
+        assert perfil.teto_gastos is None
+
+    @pytest.mark.anyio
+    async def test_ultrapassou_gera_alerta_grave(self) -> None:
+        """Gasto > 100% do teto → alerta ``grave`` no perfil."""
+        driver = _build_driver()
+        legislator = _legislator_node(
+            total_despesas_tse_2022=2_500_000.0,  # 119% do teto 2.1M
+            cargo_tse_2022="DEPUTADO FEDERAL",
+        )
+        record = _mock_record({"politico": legislator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2],
+        ):
+            perfil = await obter_perfil(driver, "4:abc:1")
+
+        assert perfil.teto_gastos is not None
+        assert perfil.teto_gastos.classificacao == "ultrapassou"
+        # Deve existir um alerta grave com a fonte legal citada.
+        graves = [a for a in perfil.alertas if a.get("tipo") == "grave"]
+        assert any(
+            "23.607/2019" in a.get("texto", "") for a in graves
+        ), f"Nao encontrou alerta grave com fonte legal: {graves}"
