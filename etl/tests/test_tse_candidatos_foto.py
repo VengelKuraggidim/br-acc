@@ -222,7 +222,7 @@ class TestDiscovery:
     def test_discover_skips_empty_sq_candidato(
         self, archival_root: Path,  # noqa: ARG002
     ) -> None:
-        targets = [
+        targets: list[dict[str, Any]] = [
             {"sq_candidato": "90001646326", "name": "VALIDO", "year": 2022},
             {"sq_candidato": "", "name": "VAZIO", "year": 2022},
             {"sq_candidato": "90001615815", "name": "OUTRO", "year": None},

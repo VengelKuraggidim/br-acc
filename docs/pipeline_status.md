@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T21:07:34Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T21:25:02Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -11,7 +11,7 @@ Status buckets:
 | Source ID | Pipeline ID | Status Bucket | Load State | Source Format | Required Input | Known Blockers |
 |---|---|---|---|---|---|---|
 | alego | alego | implemented_partial | not_loaded | api_json | API payload from https://transparencia.al.go.leg.br/ | Angular SPA public JSON API under /api/transparencia/ (verbas_indenizatorias + processos); downloader at scripts/download_alego.py |
-| alego_deputados_foto | alego_deputados_foto | implemented_partial | partial | web_portal | HTML scraped from https://portal.al.go.leg.br/deputados/perfil/{id} | Photos for in-exercise GO state deputies via portal.al.go.leg.br HTML scraping (selector img.foto); updates :StateLegislator nodes with foto_url+foto_snapshot_uri |
+| alego_deputados_foto | alego_deputados_foto | implemented_partial | partial | web_portal | Portal export/scrape output under data/alego_deputados_foto/ | HTML scraping do portal.al.go.leg.br/deputados/perfil/{id} para extrair foto principal (img.foto) e atualizar :StateLegislator existentes com foto_url+foto_snapshot_uri |
 | ana_water_grants | ana_water_grants | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/ana | Water use rights |
 | anac_aviation_concessions | anac_aviation_concessions | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anac | Aviation contracts |
 | anatel_telecom_licenses | anatel_telecom_licenses | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anatel | Telecom operators |
@@ -127,10 +127,10 @@ Status buckets:
 | transparencia | transparencia | implemented_loaded | loaded | file_batch | data/transparencia/* | - |
 | tse | tse | implemented_loaded | loaded | file_batch | data/tse/* | - |
 | tse_bens | tse_bens | implemented_loaded | loaded | file_batch | data/tse_bens/* | - |
-| tse_candidatos_foto | tse_candidatos_foto | implemented_partial | partial | api_json | API payload from https://divulgacandcontas.tse.jus.br/divulga/rest/arquivo/img/ | Foto oficial de candidatos GO via divulgacandcontas (cd_eleicao+sq_candidato+uf); skip silencioso de placeholder TSE; bienal alinhado com eleicoes |
+| tse_candidatos_foto | tse_candidatos_foto | implemented_partial | partial | api_json | API payload from https://divulgacandcontas.tse.jus.br/divulga/rest/arquivo/img/ | Foto oficial por sq_candidato+ano (cd_eleicao mapeado 2018/2020/2022/2024); skip silencioso de placeholder TSE (silhueta SHA 267865f1); archival binario JPG/PNG content-addressed; nao cria nodes (SET em :Person GO existentes do pipeline tse) |
 | tse_filiados | tse_filiados | implemented_loaded | loaded | file_batch | data/tse_filiados/* | - |
 | tse_prestacao_contas | tse_prestacao_contas_go | implemented_partial | partial | file_batch | data/tse_prestacao_contas_go/* | Receitas + despesas + bens de candidatos GO (CSV anual pos-eleicao); popula validacao_tse do Flask |
 | un_sanctions | un_sanctions | implemented_loaded | loaded | file_batch | data/un_sanctions/* | - |
 | viagens | viagens | implemented_loaded | loaded | file_batch | data/viagens/* | - |
-| wikidata_politicos_foto | wikidata_politicos_foto | implemented_partial | partial | api_json | API payload from https://query.wikidata.org/sparql | Fallback universal de fotos pra ex-politicos GO via Wikidata SPARQL + Commons FilePath; pula em ambiguidade |
+| wikidata_politicos_foto | wikidata_politicos_foto | implemented_partial | partial | api_json | API payload from https://query.wikidata.org/sparql | Fallback universal de fotos pra ex-governadores ex-senadores ex-deputados GO; SPARQL Wikidata + Special:FilePath Commons; pula em ambiguidade pra nao atribuir Q-id errado; archival do JSON SPARQL + entity + binario |
 | world_bank | world_bank | implemented_loaded | loaded | file_batch | data/world_bank/* | - |

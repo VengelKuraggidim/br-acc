@@ -727,30 +727,30 @@
       "core": false
     },
     {
-<<<<<<< HEAD
-<<<<<<< HEAD
       "pipeline_id": "alego_deputados_foto",
       "acquisition_mode": "api_call",
       "required_inputs": [
         "data/alego_deputados_foto/*"
       ],
       "blocking_reason_if_any": "HTML scraping do portal.al.go.leg.br/deputados — selector img.foto pode quebrar se Rails template mudar; cadência mensal porque fotos quase nunca mudam.",
-=======
+      "core": false
+    },
+    {
       "pipeline_id": "wikidata_politicos_foto",
       "acquisition_mode": "api_call",
       "required_inputs": [
         "data/wikidata_politicos_foto/*"
       ],
       "blocking_reason_if_any": "graph-dependent: needs FederalLegislator/StateLegislator/Person GO populated first; throttled 1s/req per Wikidata UA policy; quarterly cadence",
->>>>>>> 26ff313 (feat(etl): wikidata como fallback de fotos pra ex-politicos GO)
-=======
+      "core": false
+    },
+    {
       "pipeline_id": "tse_candidatos_foto",
       "acquisition_mode": "api_call",
       "required_inputs": [
         "data/tse_candidatos_foto/*"
       ],
       "blocking_reason_if_any": "graph-dependent: needs :Person GO with sq_candidato (output of tse pipeline) populated first; throttled 1s/req; biennial cadence aligned with election calendar (2018/2020/2022/2024 supported, add 2026+ post-pleito)",
->>>>>>> 48c74c6 (feat(etl): pipeline tse_candidatos_foto pra fotos historicas)
       "core": false
     }
   ]
