@@ -1,4 +1,11 @@
-# Retrofit archival nos 10 pipelines GO legados
+# Retrofit archival nos 10 pipelines GO legados — **✅ CONCLUÍDO (2026-04-18)**
+
+> Todos os 10 pipelines GO retrofitados. Ver [`docs/archival.md`](../../docs/archival.md)
+> seção "Retrofit nos 10 pipelines GO legados — CONCLUÍDO" para a tabela
+> de commits e padrões aplicados. Este arquivo fica como registro
+> histórico do plano original.
+
+---
 
 ## Contexto
 

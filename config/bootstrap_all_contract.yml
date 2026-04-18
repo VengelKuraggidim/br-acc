@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-17",
   "full_historical_default": true,
-  "expected_implemented_count": 61,
+  "expected_implemented_count": 60,
   "core_sources": [
     "camara",
     "cnpj",
@@ -368,15 +368,6 @@
       "download_commands": [
         "cd /workspace/etl && uv run python ../scripts/download_pncp_go.py --output-dir ../data/pncp_go"
       ]
-    },
-    {
-      "pipeline_id": "querido_diario",
-      "acquisition_mode": "file_manifest",
-      "required_inputs": [
-        "data/querido_diario/*"
-      ],
-      "blocking_reason_if_any": "superseded by querido_diario_go; federal scope (~5570 municipalities, multi-GB backfill) out of Fiscal Cidadao GO-only mission",
-      "core": false
     },
     {
       "pipeline_id": "querido_diario_go",

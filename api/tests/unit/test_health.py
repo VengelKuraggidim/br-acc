@@ -37,7 +37,7 @@ async def test_meta_sources(client: AsyncClient) -> None:
     assert response.status_code == 200
     data = response.json()
     assert "sources" in data
-    assert len(data["sources"]) == 121
+    assert len(data["sources"]) == 120
     source_ids = [s["id"] for s in data["sources"]]
     assert "cnpj" in source_ids
     assert "brasilapi_cnpj" in source_ids
@@ -80,7 +80,7 @@ async def test_meta_sources(client: AsyncClient) -> None:
     assert "senado_cpis" in source_ids
     assert "camara_inquiries" in source_ids
     assert "mides" in source_ids
-    assert "querido_diario" in source_ids
+    assert "querido_diario_go" in source_ids  # querido_diario federal deprecated 2026-04-18
     assert "datajud" in source_ids
     first = data["sources"][0]
     assert "status" in first
@@ -202,8 +202,8 @@ async def test_meta_stats(client: AsyncClient) -> None:
     assert data["source_document_count"] == 0
     assert data["ingestion_run_count"] == 0
     assert data["temporal_violation_count"] == 0
-    assert data["data_sources"] == 121
-    assert data["implemented_sources"] == 62
+    assert data["data_sources"] == 120
+    assert data["implemented_sources"] == 61
     assert data["loaded_sources"] >= 1
     assert data["healthy_sources"] >= 1
     assert data["stale_sources"] >= 0

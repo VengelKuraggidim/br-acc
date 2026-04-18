@@ -45,7 +45,6 @@ from bracc_etl.pipelines.pep_cgu import PepCguPipeline
 from bracc_etl.pipelines.pgfn import PgfnPipeline
 from bracc_etl.pipelines.pncp import PncpPipeline
 from bracc_etl.pipelines.pncp_go import PncpGoPipeline
-from bracc_etl.pipelines.querido_diario import QueridoDiarioPipeline
 from bracc_etl.pipelines.querido_diario_go import QueridoDiarioGoPipeline
 from bracc_etl.pipelines.rais import RaisPipeline
 from bracc_etl.pipelines.renuncias import RenunciasPipeline
@@ -117,7 +116,6 @@ PIPELINES: dict[str, type] = {
     "world_bank": WorldBankPipeline,
     "senado_cpis": SenadoCpisPipeline,
     "mides": MidesPipeline,
-    "querido_diario": QueridoDiarioPipeline,
     "datajud": DatajudPipeline,
     "tesouro_emendas": TesouroEmendasPipeline,
     "stj_dados_abertos": StjPipeline,

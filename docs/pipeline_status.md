@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T09:59:29Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T11:14:30Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -66,7 +66,6 @@ Status buckets:
 | pncp | pncp | implemented_partial | partial | api_json | API payload from https://pncp.gov.br/app/editais | Freshness SLA pending |
 | pncp_go | pncp_go | implemented_loaded | loaded | api_json | API payload from https://pncp.gov.br/api/consulta/v1/ | - |
 | portal_transparencia_emendas | emendas_parlamentares_go | implemented_partial | partial | api_json | API payload from https://api.portaldatransparencia.gov.br/api-de-dados/emendas | GO-scoped parliamentary amendments per federal deputy; substitui live-call Flask buscar_emendas_transparencia (requires TRANSPARENCIA_API_KEY) |
-| querido_diario | querido_diario | implemented_partial | partial | api_json | API payload from https://queridodiario.ok.org.br/api | Text availability gap |
 | querido_diario_go | querido_diario_go | implemented_loaded | loaded | api_json | API payload from https://queridodiario.ok.org.br/api/ | - |
 | rais | rais | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
 | receita_dirbi | receita_dirbi | not_built | not_loaded | file_batch | data/receita_dirbi/* | Tax benefit declarations |
