@@ -454,6 +454,20 @@
       padding-top: 5px;
     }
 
+    .alerta-grupo-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin: 12px 0 6px;
+      padding-left: 2px;
+    }
+    .alerta-grupo-label:first-child { margin-top: 0; }
+    .alerta-grupo-grave   { color: var(--danger); }
+    .alerta-grupo-atencao { color: var(--warning); }
+    .alerta-grupo-info    { color: var(--text-muted); }
+    .alerta-grupo-ok      { color: var(--ok, #00e5a0); }
+
     /* === COMPARACAO CIDADA === */
     .cidadao-card {
       background: var(--bg-card);
@@ -627,6 +641,55 @@
 
     .emenda-card.alert-danger { border-left: 3px solid var(--danger); }
     .emenda-card.alert-warning { border-left: 3px solid var(--warning); }
+
+    .emenda-health {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+      border: 1px solid;
+    }
+    .emenda-health.danger  { background: var(--danger-bg);  border-color: rgba(255,59,92,0.25); }
+    .emenda-health.warning { background: var(--warning-bg); border-color: rgba(255,182,39,0.25); }
+    .emenda-health.ok      { background: var(--ok-bg);      border-color: rgba(0,229,160,0.2); }
+
+    .emenda-health-text {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .emenda-health-gap { color: var(--text-primary); font-size: 13px; }
+    .emenda-health.danger  .emenda-health-gap strong { color: var(--danger); }
+    .emenda-health.warning .emenda-health-gap strong { color: var(--warning); }
+
+    .emenda-health-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .emenda-health-bar-fill {
+      height: 100%;
+      transition: width 0.4s ease;
+    }
+    .emenda-health.ok      .emenda-health-bar-fill { background: var(--ok, #00e5a0); }
+    .emenda-health.warning .emenda-health-bar-fill { background: var(--warning); }
+    .emenda-health.danger  .emenda-health-bar-fill { background: var(--danger); }
+
+    .emenda-health-legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 6px;
+    }
 
     .emenda-status {
       margin-top: 8px;
@@ -1276,6 +1339,14 @@ function renderPerfil(d) {
 
   const alertaIcons = { sancao:"&#9888;", emenda:"&#128176;", patrimonio:"&#128176;", familia:"&#128106;", ok:"&#10004;", despesa:"&#128179;", comparacao:"&#128202;", pico:"&#128200;", empresa:"&#127970;", cidadao:"&#128101;" };
 
+  const fmtBRL = (v) => {
+    const n = Math.abs(v || 0);
+    if (n >= 1e9) return `R$ ${(v / 1e9).toFixed(2)} bi`;
+    if (n >= 1e6) return `R$ ${(v / 1e6).toFixed(2)} mi`;
+    if (n >= 1e3) return `R$ ${(v / 1e3).toFixed(1)} mil`;
+    return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL', maximumFractionDigits:0});
+  };
+
   let html = `
     <button class="back-btn fade-in" onclick="voltarResultados()">&#8249; Voltar aos resultados</button>
 
@@ -1300,22 +1371,32 @@ function renderPerfil(d) {
       <p style="font-size:13px; line-height:1.7; color:var(--text-secondary);">${d.resumo}</p>
     </div>` : ''}`;
 
-  // Alertas
+  // Alertas (agrupados por severidade: graves -> atencao -> info)
   if (d.alertas.length) {
+    const grupos = [
+      { tipo: 'grave',   label: 'Graves',  alertas: d.alertas.filter(a => a.tipo === 'grave') },
+      { tipo: 'atencao', label: 'Atenção', alertas: d.alertas.filter(a => a.tipo === 'atencao') },
+      { tipo: 'info',    label: 'Info',    alertas: d.alertas.filter(a => a.tipo === 'info') },
+      { tipo: 'ok',      label: 'OK',      alertas: d.alertas.filter(a => a.tipo === 'ok') },
+    ].filter(g => g.alertas.length);
+    const badgeCls = d.alertas.some(a => a.tipo === 'grave') ? 'danger' : 'warning';
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:var(--danger-bg);">&#9888;</span>
           Alertas
         </div>
-        <span class="badge badge-${d.alertas.some(a=>a.tipo==='grave')?'danger':'warning'}">${d.alertas.length}</span>
+        <span class="badge badge-${badgeCls}">${d.alertas.length}</span>
       </div>`;
-    d.alertas.forEach(a => {
-      const icon = alertaIcons[a.icone] || "&#9432;";
-      html += `<div class="alerta-card ${a.tipo}">
-        <div class="alerta-icon">${icon}</div>
-        <div class="alerta-text">${a.texto}</div>
-      </div>`;
+    grupos.forEach(g => {
+      html += `<div class="alerta-grupo-label alerta-grupo-${g.tipo}">${g.label} (${g.alertas.length})</div>`;
+      g.alertas.forEach(a => {
+        const icon = alertaIcons[a.icone] || "&#9432;";
+        html += `<div class="alerta-card ${a.tipo}">
+          <div class="alerta-icon">${icon}</div>
+          <div class="alerta-text">${a.texto}</div>
+        </div>`;
+      });
     });
     html += '</div>';
   }
@@ -1325,6 +1406,34 @@ function renderPerfil(d) {
     const fonteLabel = d.fonte_emendas === 'transparencia'
       ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real do Portal da Transparência</div>'
       : '';
+    const totalEmp = d.emendas.reduce((s, e) => s + (e.valor_empenhado || 0), 0);
+    const totalPago = d.emendas.reduce((s, e) => s + (e.valor_pago || 0), 0);
+    const gap = totalEmp - totalPago;
+    const pctPago = totalEmp > 0 ? (totalPago / totalEmp) * 100 : 0;
+    const pctGap = 100 - pctPago;
+    let healthBar = '';
+    if (totalEmp > 0) {
+      let healthCls = 'ok';
+      if (pctGap >= 25) healthCls = 'danger';
+      else if (pctGap >= 10) healthCls = 'warning';
+      const gapTxt = gap > 0
+        ? `<strong>${fmtBRL(gap)} (${Math.round(pctGap)}%)</strong> ainda não chegaram ao destino`
+        : 'Tudo o que foi empenhado já foi pago';
+      healthBar = `
+        <div class="emenda-health ${healthCls}">
+          <div class="emenda-health-text">
+            <span>${fmtBRL(totalEmp)} empenhados</span>
+            <span class="emenda-health-gap">${gapTxt}</span>
+          </div>
+          <div class="emenda-health-bar">
+            <div class="emenda-health-bar-fill" style="width:${pctPago.toFixed(1)}%"></div>
+          </div>
+          <div class="emenda-health-legend">
+            <span>${fmtBRL(totalPago)} pagos (${Math.round(pctPago)}%)</span>
+            <span>${fmtBRL(gap)} pendentes</span>
+          </div>
+        </div>`;
+    }
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
@@ -1334,6 +1443,7 @@ function renderPerfil(d) {
         <span class="badge badge-accent">${d.total_emendas_valor_fmt}</span>
       </div>
       ${fonteLabel}
+      ${healthBar}
       <details class="collapsible">
         <summary>Ver ${d.emendas.length} emenda(s)</summary>
         <div class="collapsible-body">`;

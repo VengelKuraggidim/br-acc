@@ -177,13 +177,6 @@ def analisar_emendas(emendas: list[dict]) -> list[dict]:
 
     total = sum(e.get("value_paid", 0) or e.get("value_committed", 0) or 0 for e in emendas)
 
-    if total > 10_000_000:
-        alertas.append({
-            "tipo": "info",
-            "icone": "emenda",
-            "texto": f"Total de {_fmt(total)} em emendas parlamentares",
-        })
-
     # Concentracao em um municipio
     municipios: dict[str, float] = {}
     for e in emendas:

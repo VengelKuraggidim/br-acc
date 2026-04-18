@@ -156,17 +156,11 @@ class TestAnalisarEmendas:
     def test_lista_vazia(self):
         assert analisar_emendas([]) == []
 
-    def test_total_acima_10mi(self):
+    def test_emendas_sem_problemas_nao_geram_alerta(self):
         emendas = [
-            {"value_paid": 6_000_000, "municipality": "SP"},
-            {"value_paid": 5_000_000, "municipality": "RJ"},
+            {"value_paid": 6_000_000, "value_committed": 6_000_000, "municipality": "SP"},
+            {"value_paid": 5_000_000, "value_committed": 5_000_000, "municipality": "RJ"},
         ]
-        alertas = analisar_emendas(emendas)
-        assert len(alertas) >= 1
-        assert any("emendas parlamentares" in a["texto"].lower() for a in alertas)
-
-    def test_total_abaixo_10mi_sem_alerta(self):
-        emendas = [{"value_paid": 1_000_000, "municipality": "SP"}]
         assert analisar_emendas(emendas) == []
 
     def test_concentracao_municipio(self):
