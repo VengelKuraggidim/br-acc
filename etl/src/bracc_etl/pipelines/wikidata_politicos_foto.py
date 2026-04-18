@@ -95,7 +95,9 @@ _DEFAULT_HEADERS = {
     "User-Agent": _USER_AGENT,
     "Accept": "application/sparql-results+json",
 }
-_HTTP_TIMEOUT = 30.0
+# Timeout explicito com connect curto (DNS/TLS hang != read hang). 30s
+# de read cobre SPARQL lento sem travar o pipeline indefinidamente.
+_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 # Throttle entre requests (em segundos). 1.0s cobre 3 requests por
 # politico (~1 SPARQL + 1 entity + 1 imagem) num ritmo respeitoso.
@@ -104,6 +106,14 @@ _THROTTLE_SECONDS = 1.0
 # Cap defensivo no batch — politicos sem foto sao finitos (~poucas
 # centenas no horizonte), mas o cap ajuda smoke tests e abortos cedo.
 _DEFAULT_BATCH_SIZE = 100
+
+# Sufixos patronimicos brasileiros que aparecem na ficha TSE mas sao
+# omitidos no label publico do Wikidata (ex.: TSE "MARCONI PERILLO
+# JUNIOR" vs Wikidata "Marconi Perillo"). A SPARQL query testa tanto
+# o nome completo quanto a forma sem sufixo.
+_HONORIFIC_SUFFIXES = frozenset({
+    "JUNIOR", "JR", "FILHO", "NETO", "SOBRINHO", "SEGUNDO",
+})
 
 # Content-types aceitos pro binário da imagem (mesma lista de
 # camara_politicos_go pra consistência).
@@ -144,17 +154,34 @@ LIMIT $batch_size
 """
 
 
-def _build_sparql_query(name_normalized: str) -> str:
+def _strip_name_suffixes(normalized_name: str) -> str:
+    """Remove sufixos patronimicos do fim (JUNIOR, FILHO, NETO, ...).
+
+    TSE grava o nome legal completo ("MARCONI PERILLO JUNIOR"), Wikidata
+    costuma ter apenas a forma social ("Marconi Perillo"). Aplicamos
+    apenas no *fim* da string — um sufixo no meio e parte do nome
+    (ex.: "Neto da Silva") e deve permanecer.
+    """
+    parts = normalized_name.split()
+    while parts and parts[-1] in _HONORIFIC_SUFFIXES:
+        parts.pop()
+    return " ".join(parts)
+
+
+def _build_sparql_query(name_variants: list[str]) -> str:
     """Monta SPARQL pra achar humano BR político por nome normalizado.
 
     Usa ``rdfs:label`` + ``skos:altLabel`` em pt e pt-br, comparado em
     upper+sem-accent (espelha o ``normalize_name`` do pipeline) via
-    ``LCASE`` + funções string do SPARQL. Filtros:
+    ``UCASE`` + funções string do SPARQL. Filtros:
 
     - ``P31 = Q5`` (humano)
     - ``P27 = Q155`` (cidadania Brasil)
     - ``P106 / P279*`` envolvendo ``Q82955`` (politician) — cobre
       especializações (deputado, senador, governador, prefeito, etc.)
+
+    ``name_variants`` aceita multiplas formas do mesmo nome (ex.: com
+    e sem sufixo JUNIOR) — qualquer uma bate pela clausula ``IN``.
 
     LIMIT 5 é cap defensivo: nome muito comum (ex.: "JOSE SILVA") pode
     bater em vários, mas se vier >1 o pipeline já pula (ambiguidade).
@@ -165,7 +192,16 @@ def _build_sparql_query(name_normalized: str) -> str:
     # único caractere que precisa cuidado é a aspa dupla — um nome com
     # aspas é absurdo e seria descartado upstream, mas escapamos por
     # garantia.
-    safe = name_normalized.replace('"', '\\"')
+    safe_variants = [v.replace('"', '\\"') for v in name_variants if v]
+    # Dedup preservando ordem (nome completo primeiro, stripped segundo).
+    seen: set[str] = set()
+    dedup_variants: list[str] = []
+    for variant in safe_variants:
+        if variant in seen:
+            continue
+        seen.add(variant)
+        dedup_variants.append(variant)
+    in_list = ", ".join(f'"{v}"' for v in dedup_variants)
     return f"""
 SELECT DISTINCT ?item ?itemLabel WHERE {{
   ?item wdt:P31 wd:Q5 .
@@ -174,11 +210,11 @@ SELECT DISTINCT ?item ?itemLabel WHERE {{
   {{
     ?item rdfs:label ?label .
     FILTER(LANG(?label) IN ("pt", "pt-br", "en"))
-    FILTER(UCASE(STR(?label)) = "{safe}")
+    FILTER(UCASE(STR(?label)) IN ({in_list}))
   }} UNION {{
     ?item skos:altLabel ?alt .
     FILTER(LANG(?alt) IN ("pt", "pt-br", "en"))
-    FILTER(UCASE(STR(?alt)) = "{safe}")
+    FILTER(UCASE(STR(?alt)) IN ({in_list}))
   }}
   SERVICE wikibase:label {{ bd:serviceParam wikibase:language "pt,en". }}
 }}
@@ -255,8 +291,16 @@ class WikidataPoliticosFotoPipeline(Pipeline):
     # ------------------------------------------------------------------
 
     def _discover_targets(self) -> list[dict[str, Any]]:
-        """Le do grafo políticos GO sem foto. Limita por ``batch_size``."""
-        params = {"batch_size": self.batch_size}
+        """Le do grafo políticos GO sem foto. Limita por ``batch_size``.
+
+        Quando ``self.limit`` esta setado (``--limit`` na CLI), o Cypher
+        aplica o menor dos dois — evita puxar 100 nomes do grafo quando
+        so 5 vao ser processados.
+        """
+        effective_limit = self.batch_size
+        if self.limit is not None:
+            effective_limit = min(self.batch_size, self.limit)
+        params = {"batch_size": effective_limit}
         targets: list[dict[str, Any]] = []
         try:
             with self.driver.session(database=self.neo4j_database) as session:
@@ -267,9 +311,11 @@ class WikidataPoliticosFotoPipeline(Pipeline):
                         continue
                     labels = list(record.get("labels") or [])
                     key = record.get("key") or name
+                    normalized = _strip_accents_upper(name)
                     targets.append({
                         "name": name,
-                        "name_normalized": _strip_accents_upper(name),
+                        "name_normalized": normalized,
+                        "name_stripped": _strip_name_suffixes(normalized),
                         "labels": labels,
                         "key": str(key),
                     })
@@ -299,26 +345,31 @@ class WikidataPoliticosFotoPipeline(Pipeline):
     def _sparql_lookup(
         self,
         client: httpx.Client,
-        name_normalized: str,
+        name_variants: list[str],
     ) -> tuple[list[str], str | None]:
         """Retorna (lista de Q-ids candidatos, snapshot_uri do payload SPARQL).
+
+        ``name_variants`` pode carregar varias formas do mesmo nome (ex.:
+        com e sem sufixo JUNIOR) — a query usa ``IN`` pra testar todas.
 
         - Lista vazia: nenhum candidato (ou erro silencioso, logado).
         - Lista com >1: ambíguo (caller deve pular).
         - Lista com 1: única correspondência, caller pode prosseguir.
         """
-        query = _build_sparql_query(name_normalized)
+        query = _build_sparql_query(name_variants)
+        primary_name = name_variants[0] if name_variants else ""
         try:
             resp = client.post(
                 _SPARQL_ENDPOINT,
                 data={"query": query, "format": "json"},
                 headers=_DEFAULT_HEADERS,
+                timeout=_HTTP_TIMEOUT,
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning(
                 "[wikidata_politicos_foto] SPARQL lookup %r failed: %s",
-                name_normalized, exc,
+                primary_name, exc,
             )
             return [], None
 

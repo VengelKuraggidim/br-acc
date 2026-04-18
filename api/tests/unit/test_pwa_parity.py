@@ -117,6 +117,7 @@ async def test_buscar_tudo_maps_person_result_and_filters_non_go(
             "uf": "GO",
             "patrimonio_declarado": 1_234_567.89,
             "is_pep": True,
+            "foto_url": "https://example.test/fulano.jpg",
         },
         score=12.5,
         document_id="12345678900",
@@ -169,6 +170,7 @@ async def test_buscar_tudo_maps_person_result_and_filters_non_go(
     assert item["documento"] == "12345678900"
     assert item["icone"] == "pessoa"
     assert item["is_pep"] is True
+    assert item["foto_url"] == "https://example.test/fulano.jpg"
     assert "Patrimonio" in item["detalhe"]
 
 

@@ -116,6 +116,9 @@ def _format_item(result: dict[str, Any]) -> BuscarTudoItem | None:
             f"Patrimonio: {_fmt_brl(patrimonio)}" if patrimonio else "Pessoa publica"
         )
         item.is_pep = bool(props.get("is_pep", False))
+        foto_raw = props.get("foto_url") or props.get("url_foto")
+        if foto_raw:
+            item.foto_url = str(foto_raw)
     elif tipo_raw in {"state_employee", "stateemployee"}:
         item.icone = "servidor"
         salario = props.get("salary_gross")
