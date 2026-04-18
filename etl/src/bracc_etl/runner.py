@@ -7,35 +7,6 @@ from typing import Any
 import click
 from neo4j import GraphDatabase
 
-
-def _load_dotenv_if_present() -> None:
-    """Carrega ``.env`` do repo root em ``os.environ`` (sem sobrescrever).
-
-    ``uv run`` não carrega ``.env`` automaticamente. Pipelines CLI
-    (``bracc-etl run ...``) precisam de ``GCP_PROJECT_ID`` pro
-    ``load_secret`` funcionar. Procuramos o ``.env`` no cwd e até 3
-    pais — cobre rodar do repo root ou de ``etl/``.
-
-    Parse minimalista (``KEY=VALUE``, ignora ``#`` e linhas vazias,
-    strip de aspas). Evita dep nova só pra isso.
-    """
-    for directory in [Path.cwd(), *Path.cwd().parents[:3]]:
-        env_file = directory / ".env"
-        if not env_file.is_file():
-            continue
-        for raw_line in env_file.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            os.environ.setdefault(key, value)
-        return  # Primeiro .env encontrado vence.
-
-
-_load_dotenv_if_present()
-
 from bracc_etl.linking_hooks import run_post_load_hooks
 from bracc_etl.pipelines.alego import AlegoPipeline
 from bracc_etl.pipelines.bcb import BcbPipeline
@@ -181,10 +152,37 @@ def _pipeline_init_params(pipeline_cls: type) -> set[str]:
     return {name for name in sig.parameters if name != "self"}
 
 
+def _load_dotenv_if_present() -> None:
+    """Carrega ``.env`` do repo root em ``os.environ`` (sem sobrescrever).
+
+    ``uv run`` não carrega ``.env`` automaticamente. Pipelines CLI
+    (``bracc-etl run ...``) precisam de ``GCP_PROJECT_ID`` pro
+    ``load_secret`` funcionar. Procuramos o ``.env`` no cwd e até 3
+    pais — cobre rodar do repo root ou de ``etl/``.
+
+    Parse minimalista (``KEY=VALUE``, ignora ``#`` e linhas vazias,
+    strip de aspas). Evita dep nova só pra isso.
+    """
+    for directory in [Path.cwd(), *Path.cwd().parents[:3]]:
+        env_file = directory / ".env"
+        if not env_file.is_file():
+            continue
+        for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
+        return  # Primeiro .env encontrado vence.
+
+
 @click.group()
 def cli() -> None:
     """BR-ACC ETL — Data ingestion pipelines for Brazilian public data."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    _load_dotenv_if_present()
 
 
 @cli.command()
