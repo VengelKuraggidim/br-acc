@@ -13,6 +13,12 @@ candidatos GO sem pipeline que as popule:
   eleições com PJ permitida; em 2018+ o STF baniu PJ mas o campo fica
   zerado pra manter contrato estável).
 * ``tse_{YYYY}_fin_coletivo`` — financiamento coletivo (vaquinha).
+* ``total_despesas_tse_{YYYY}`` — soma bruta de despesas pagas (cross-check
+  com teto legal de gastos de campanha — consumido por
+  :func:`bracc.services.teto_service.calcular_teto`).
+* ``cargo_tse_{YYYY}`` — cargo do candidato na eleição ``{YYYY}`` (ex.:
+  ``"DEPUTADO FEDERAL"``). Usado pra mapear teto de gastos sem depender
+  de labels de outros pipelines.
 * ``patrimonio_declarado`` / ``patrimonio_ano`` — soma VR_BEM_CANDIDATO
   do arquivo ``bens_candidato``.
 
@@ -378,6 +384,8 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                     _BUCKET_FIN_COLETIVO: 0.0,
                     _BUCKET_OUTROS: 0.0,
                     "patrimonio_declarado": 0.0,
+                    "total_despesas": 0.0,
+                    "cargo": "",
                 }
                 by_cpf[cpf_formatted] = entry
             elif nome and not entry["name"]:
@@ -412,6 +420,18 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             entry = _ensure(cpf_formatted, cpf_digits, nome, sq)
             entry["total_receitas"] += valor
             entry[bucket] += valor
+
+            # Cargo — capturamos da CSV de receitas (DS_CARGO) pra popular
+            # ``cargo_tse_{YYYY}`` no Person. A CSV de despesas também tem
+            # o campo, mas a de receitas é mais consistente (sempre
+            # presente quando há doação). Primeira ocorrência vence.
+            cargo_raw = (
+                row.get("DS_CARGO")
+                or row.get("CARGO")
+                or ""
+            ).strip()
+            if cargo_raw and not entry["cargo"]:
+                entry["cargo"] = cargo_raw
 
             # Node :CampaignDonation (opcional — mantido pra phase-2 tie-in).
             cpf_cnpj_doador_raw = (
@@ -491,7 +511,19 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             valor = parse_numeric_comma(valor_raw)
             if valor <= 0:
                 continue
-            _ensure(cpf_formatted, cpf_digits, nome, sq)
+            entry = _ensure(cpf_formatted, cpf_digits, nome, sq)
+            entry["total_despesas"] += valor
+            # Fallback de cargo: usa a CSV de despesas se receitas não veio
+            # (caso raro — candidato com despesa paga mas sem receita
+            # registrada, provavelmente financiou do próprio bolso antes
+            # da declaração).
+            cargo_desp = (
+                row.get("DS_CARGO")
+                or row.get("CARGO")
+                or ""
+            ).strip()
+            if cargo_desp and not entry["cargo"]:
+                entry["cargo"] = cargo_desp
             cnpj_cpf_fornecedor_raw = (
                 row.get("NR_CPF_CNPJ_FORNECEDOR")
                 or row.get("CPF_CNPJ_FORNECEDOR")
@@ -574,8 +606,14 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 f"tse_{year}_pessoa_juridica": round(entry[_BUCKET_PESSOA_JURIDICA], 2),
                 f"tse_{year}_fin_coletivo": round(entry[_BUCKET_FIN_COLETIVO], 2),
                 f"tse_{year}_outros": round(entry[_BUCKET_OUTROS], 2),
+                f"total_despesas_tse_{year}": round(entry["total_despesas"], 2),
                 "source": _SOURCE_ID,
             }
+            # Cargo é nullable — só adiciona se veio alguma CSV com DS_CARGO.
+            # Facilita cross-check com ``total_despesas_tse_{year}`` vs
+            # teto legal no service :mod:`bracc.services.teto_service`.
+            if entry["cargo"]:
+                props[f"cargo_tse_{year}"] = entry["cargo"]
             node_row = self.attach_provenance(
                 props,
                 record_id=f"{sq}:{year}",

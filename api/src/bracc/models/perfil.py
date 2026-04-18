@@ -144,6 +144,33 @@ class ComparacaoCidada(BaseModel):
     classificacao: str  # "normal" | "elevado" | "abusivo"
 
 
+class TetoGastos(BaseModel):
+    """Comparação entre o gasto declarado ao TSE e o teto legal do cargo.
+
+    Usa a Resolução TSE nº 23.607/2019 (com atualizações) para eleições 2022.
+    Consumido por ``teto_service.calcular_teto`` — retorna ``None`` quando
+    o cargo/UF não está mapeado (degradação silenciosa, seção omitida no PWA).
+
+    ``classificacao`` segue a severidade:
+
+    * ``ok``          — <70% do teto (verde)
+    * ``alto``        — 70-90% do teto (amarelo)
+    * ``limite``      — 90-100% do teto (laranja)
+    * ``ultrapassou`` — >100% do teto (vermelho — infração eleitoral grave)
+    """
+
+    valor_limite: float
+    valor_limite_fmt: str
+    valor_gasto: float
+    valor_gasto_fmt: str
+    pct_usado: float
+    pct_usado_fmt: str  # ex.: "87%"
+    cargo: str
+    ano_eleicao: int
+    classificacao: str  # "ok" | "alto" | "limite" | "ultrapassou"
+    fonte_legal: str  # ex.: "Resolução TSE nº 23.607/2019"
+
+
 class PerfilPolitico(BaseModel):
     """Response principal do endpoint /politico/{entity_id} (22 campos top-level).
 
@@ -177,3 +204,4 @@ class PerfilPolitico(BaseModel):
     familia: list[FamiliarConectado] = []
     aviso_despesas: str = ""
     validacao_tse: ValidacaoTSE | None = None
+    teto_gastos: TetoGastos | None = None
