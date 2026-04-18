@@ -184,6 +184,11 @@ bootstrap-go-noninteractive:
 bootstrap-go-report:
 	python3 scripts/run_bootstrap_all.py --repo-root . --output-label bootstrap-go --report-latest
 
+# Roda os 4 pipelines de fotos GO (senado, alego, wikidata, tse) na ordem
+# correta. Use ARGS pra passar flags (ex: make refresh-photos ARGS="--only senado").
+refresh-photos:
+	python3 scripts/refresh_photos.py $(ARGS)
+
 # ── Quality checks ────────────────────────────────────────
 check-public-claims:
 	python3 scripts/check_public_claims.py --repo-root .
