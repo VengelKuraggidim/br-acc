@@ -26,12 +26,15 @@
     },
     {
       "pipeline_id": "bndes",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/bndes/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_bndes.py --output-dir ../data/bndes"
+      ]
     },
     {
       "pipeline_id": "caged",
@@ -39,7 +42,7 @@
       "required_inputs": [
         "data/caged/*"
       ],
-      "blocking_reason_if_any": "Aggregate-only implementation",
+      "blocking_reason_if_any": "Upstream PDET serve microdados em .7z; py7zr nao esta nos deps. Pipeline aggregate-only/stale — conversao tem ROI baixo. Re-avaliar quando py7zr for aprovado ou quando PDET expor mirror .csv.gz.",
       "core": false
     },
     {
@@ -218,12 +221,15 @@
     },
     {
       "pipeline_id": "holdings",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/holdings/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_holdings.py --output-dir ../data/holdings"
+      ]
     },
     {
       "pipeline_id": "ibama",
@@ -239,12 +245,15 @@
     },
     {
       "pipeline_id": "icij",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/icij/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_icij.py --output-dir ../data/icij"
+      ]
     },
     {
       "pipeline_id": "inep",
@@ -272,7 +281,7 @@
     },
     {
       "pipeline_id": "mides",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/mides/*"
       ],
@@ -280,6 +289,9 @@
       "core": false,
       "credential_env": [
         "GOOGLE_APPLICATION_CREDENTIALS"
+      ],
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_mides.py --output-dir ../data/mides"
       ]
     },
     {
@@ -332,12 +344,15 @@
     },
     {
       "pipeline_id": "pncp",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/pncp/*"
       ],
-      "blocking_reason_if_any": "Freshness SLA pending",
-      "core": false
+      "blocking_reason_if_any": "Freshness SLA pending; upstream tem per-modalidade timeout sensitivities que podem precisar janelas maiores pra full-historical.",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_pncp.py --output-dir ../data/pncp"
+      ]
     },
     {
       "pipeline_id": "pncp_go",
@@ -378,7 +393,7 @@
       "required_inputs": [
         "data/rais/*"
       ],
-      "blocking_reason_if_any": "-",
+      "blocking_reason_if_any": "Multi-GB annual dumps em PDET form-wall; basedosdados.org exige credencial GCP/BigQuery (deps pyarrow + google-cloud-bigquery nao estao no base). Reconsiderar quando creds GCP estiverem disponiveis ou quando PDET expor mirror publico.",
       "core": false,
       "credential_env": [
         "GOOGLE_APPLICATION_CREDENTIALS"
@@ -431,12 +446,15 @@
     },
     {
       "pipeline_id": "siconfi",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/siconfi/*"
       ],
-      "blocking_reason_if_any": "No CNPJ direct links",
-      "core": false
+      "blocking_reason_if_any": "No CNPJ direct links — SICONFI entities sao codigos IBGE, nao empresas. Person/company linkage requer downstream joins.",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_siconfi.py --output-dir ../data/siconfi --states-only"
+      ]
     },
     {
       "pipeline_id": "siop",

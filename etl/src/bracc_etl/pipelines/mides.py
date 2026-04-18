@@ -67,8 +67,8 @@ def fetch_to_disk(
         filter to that single year.
     billing_project:
         GCP project used as the BigQuery billing target. Falls back to the
-        ``GCP_BILLING_PROJECT`` env var, then to ``"icarus-corruptos"``
-        (the project's historical default).
+        ``GCP_BILLING_PROJECT`` env var. If neither is set, raises
+        ``RuntimeError`` — no silent default.
     dataset:
         Either ``MIDES_WORLD_WB_DATASET`` (preferred, default) or
         ``MIDES_LEGACY_DATASET`` (older Base dos Dados MiDES schema).
@@ -109,11 +109,12 @@ def fetch_to_disk(
 
     import os
 
-    project = (
-        billing_project
-        or os.environ.get("GCP_BILLING_PROJECT")
-        or "icarus-corruptos"
-    )
+    project = billing_project or os.environ.get("GCP_BILLING_PROJECT")
+    if not project:
+        raise RuntimeError(
+            "[mides] billing_project arg ausente e GCP_BILLING_PROJECT env var nao "
+            "esta setada. Defina um dos dois pro BigQuery billing target."
+        )
     if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
         # Surface this as a clear error rather than letting google.auth raise
         # the much less actionable DefaultCredentialsError mid-query.
