@@ -1,4 +1,4 @@
-.PHONY: help setup-env dev stop api etl lint type-check test test-api test-api-federal test-etl test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract check-provenance-contract check-archival-usage generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: help setup-env dev stop api etl lint type-check test test-api test-api-federal test-etl test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract check-provenance-contract check-archival-usage check-cpf-masking generate-pipeline-status generate-source-summary generate-reference-metrics
 
 # Default target when running `make` with no arguments.
 .DEFAULT_GOAL := help
@@ -147,7 +147,7 @@ check: lint type-check test
 # Mirror of what CI runs on every PR: lint + type + tests + neutrality +
 # registry/docs governance. Use this before opening a PR to avoid green-
 # local / red-CI surprises.
-pre-commit: check neutrality check-public-claims check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract check-provenance-contract check-archival-usage
+pre-commit: check neutrality check-public-claims check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract check-provenance-contract check-archival-usage check-cpf-masking
 	@echo "Pre-commit bundle passed (lint/type/test + neutrality + governance)."
 
 # ── Neutrality audit ───────────────────────────────────
@@ -205,6 +205,9 @@ check-provenance-contract:
 
 check-archival-usage:
 	python3 scripts/check_archival_usage.py
+
+check-cpf-masking:
+	python3 scripts/check_cpf_masking.py
 
 # ── Generators ────────────────────────────────────────────
 generate-pipeline-status:
