@@ -35,7 +35,26 @@ vermelho-CI.
 
 Alvos individuais também estão disponíveis: `make check` (lint +
 type + testes apenas), `make neutrality`, `make check-public-claims`,
-`make check-pipeline-contracts`, `make check-pipeline-inputs`.
+`make check-pipeline-contracts`, `make check-pipeline-inputs`,
+`make check-provenance-contract`.
+
+## Contrato de proveniência (pipelines ETL)
+
+Todo node e relacionamento que um pipeline persiste no Neo4j deve
+carregar cinco campos (`source_id`, `source_record_id`, `source_url`,
+`ingested_at`, `run_id`) pra que o usuário final consiga rastrear
+qualquer fato até a origem na fonte.
+
+Pipelines novos ou modificados **devem** encaminhar todo dict destinado
+ao `Neo4jBatchLoader` por `self.attach_provenance(...)` em
+`bracc_etl.base.Pipeline`. Veja `docs/provenance.md` pra o contrato
+completo e `etl/src/bracc_etl/pipelines/folha_go.py` pra o retrofit
+de referência.
+
+Enforcement em runtime vive no `Neo4jBatchLoader` — defina
+`BRACC_PROVENANCE_MODE=strict` localmente pra reproduzir a postura de
+produção que rejeita rows sem stamping. O CI roda
+`make check-provenance-contract` em toda PR.
 
 ## Expectativas para Pull Request
 

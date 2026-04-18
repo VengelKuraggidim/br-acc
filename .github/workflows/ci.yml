@@ -107,6 +107,9 @@ jobs:
       - name: Check bootstrap-all contract (registry ⇆ contract yml)
         run: make check-bootstrap-contract
 
+      - name: Check provenance contract (GO pipelines call attach_provenance)
+        run: make check-provenance-contract
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
