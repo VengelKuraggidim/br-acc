@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-17",
   "full_historical_default": true,
-  "expected_implemented_count": 57,
+  "expected_implemented_count": 61,
   "core_sources": [
     "camara",
     "cnpj",
@@ -638,6 +638,42 @@
       "download_commands": [
         "cd /workspace/etl && uv run python ../scripts/download_tcmgo_sancoes.py --output-dir ../data/tcmgo_sancoes"
       ]
+    },
+    {
+      "pipeline_id": "camara_politicos_go",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/camara_politicos_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "emendas_parlamentares_go",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/emendas_parlamentares_go/*"
+      ],
+      "blocking_reason_if_any": "requires TRANSPARENCIA_API_KEY",
+      "core": false
+    },
+    {
+      "pipeline_id": "tse_prestacao_contas_go",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/tse_prestacao_contas_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "brasilapi_cnpj_status",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/brasilapi_cnpj_status/*"
+      ],
+      "blocking_reason_if_any": "rate-limited 500/day, runs batched",
+      "core": false
     }
   ]
 }
