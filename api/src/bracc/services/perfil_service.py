@@ -561,6 +561,9 @@ async def obter_perfil(
         conexoes_norm,
         entidades_conectadas,
         emendas_raw_alertas,
+        perfil=resultado,  # Duck-typed: ConexoesClassificadas tem
+                            # .doadores_empresa + .socios com campo
+                            # ``situacao`` já propagado pelo grafo.
     )
 
     # Alerta sobre teto de gastos (grave se ultrapassou, info/atenção

@@ -15,7 +15,7 @@ recebe valores já computados; a busca em si é 04.D.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from bracc.services.formatacao_service import fmt_brl, nomear_mes
 from bracc.services.traducao_service import (
@@ -25,7 +25,31 @@ from bracc.services.traducao_service import (
 )
 
 if TYPE_CHECKING:
-    from bracc.models.perfil import TetoGastos
+    from bracc.models.perfil import (
+        DoadorEmpresa,
+        SocioConectado,
+        TetoGastos,
+    )
+
+
+class _PerfilComEmpresas(Protocol):
+    """Duck-typed shape que ``analisar_cnpj_baixados`` consome.
+
+    Aceita :class:`PerfilPolitico` (tem ambos os atributos) e também
+    :class:`bracc.services.conexoes_service.ConexoesClassificadas`
+    (mesmo shape) — o serviço de perfil chama antes do model final
+    estar montado, então duck-typing simplifica o call site.
+    """
+
+    doadores_empresa: list[DoadorEmpresa]
+    socios: list[SocioConectado]
+
+# Situações RFB que caracterizam empresa não-operacional. Alerta grave
+# quando aparecem em doadores OU sócios — são os sinais mais fortes de
+# laranja, caixa 2 ou fraude documentados pelos auditores eleitorais.
+_SITUACOES_GRAVES: frozenset[str] = frozenset({
+    "BAIXADA", "SUSPENSA", "INAPTA",
+})
 
 # --- Constantes de análise ---------------------------------------------------
 
@@ -431,6 +455,67 @@ def analisar_teto_gastos(
     return []
 
 
+def analisar_cnpj_baixados(
+    perfil: _PerfilComEmpresas,
+) -> list[dict[str, str]]:
+    """Alerta grave: empresas doadoras ou sócias com situação não-operacional.
+
+    Conta CNPJs em ``perfil.doadores_empresa`` e ``perfil.socios`` cuja
+    ``situacao`` está em ``_SITUACOES_GRAVES`` (BAIXADA / SUSPENSA /
+    INAPTA). Uma única ocorrência já dispara alerta ``grave`` — esses
+    são sinais clássicos de laranja / caixa 2 / fraude documental que o
+    investigador precisa ver no topo do perfil.
+
+    Empresas ``ATIVA``, ``NULA`` ou sem ``situacao`` (ainda não
+    verificadas pelo pipeline ``brasilapi_cnpj_status``) não geram
+    ruído — ausência do alerta não significa empresa limpa, só que o
+    dado ainda não foi verificado.
+
+    Aceita duck-typing: qualquer objeto com atributos
+    ``doadores_empresa`` e ``socios`` (ex.:
+    :class:`bracc.services.conexoes_service.ConexoesClassificadas`) é
+    aceito — útil pra chamar antes do ``PerfilPolitico`` final estar
+    montado.
+    """
+    doadores_empresa_raw = getattr(perfil, "doadores_empresa", []) or []
+    socios_raw = getattr(perfil, "socios", []) or []
+    doadores_baixados: list[DoadorEmpresa] = [
+        d for d in doadores_empresa_raw
+        if getattr(d, "situacao", None) in _SITUACOES_GRAVES
+    ]
+    socios_baixados: list[SocioConectado] = [
+        s for s in socios_raw
+        if getattr(s, "situacao", None) in _SITUACOES_GRAVES
+    ]
+    total = len(doadores_baixados) + len(socios_baixados)
+    if total == 0:
+        return []
+
+    partes: list[str] = []
+    if doadores_baixados:
+        partes.append(
+            f"{len(doadores_baixados)} empresa(s) doadora(s)"
+            if len(doadores_baixados) != 1
+            else "1 empresa doadora"
+        )
+    if socios_baixados:
+        partes.append(
+            f"{len(socios_baixados)} empresa(s) em que e socio(a)"
+            if len(socios_baixados) != 1
+            else "1 empresa em que e socio(a)"
+        )
+    descricao = " e ".join(partes)
+    return [{
+        "tipo": "grave",
+        "icone": "empresa",
+        "texto": (
+            f"{descricao} estao baixadas/suspensas/inaptas na Receita "
+            f"Federal — sinal de possivel laranja, caixa 2 ou fraude "
+            f"documental (total: {total})."
+        ),
+    }]
+
+
 # --- Orquestração -----------------------------------------------------------
 
 
@@ -439,6 +524,7 @@ def gerar_alertas_completos(
     conexoes_raw: list[dict[str, Any]],
     entidades_conectadas: dict[str, dict[str, Any]],
     emendas_raw: list[dict[str, Any]],
+    perfil: _PerfilComEmpresas | None = None,
 ) -> list[dict[str, str]]:
     """Orquestra análises de patrimônio + emendas + conexões.
 
@@ -457,6 +543,12 @@ def gerar_alertas_completos(
 
     alertas.extend(analisar_emendas(emendas_raw))
     alertas.extend(analisar_conexoes(conexoes_raw, entidades_conectadas))
+
+    # Alerta grave: doadores/sócios com CNPJ BAIXADA/SUSPENSA/INAPTA.
+    # Só roda quando o chamador passa o ``perfil`` já classificado — é
+    # opt-in pra não quebrar chamadas antigas que passam só ``entidade``.
+    if perfil is not None:
+        alertas.extend(analisar_cnpj_baixados(perfil))
 
     if not alertas:
         alertas.append({

@@ -5,9 +5,10 @@ Testa cada regra de alerta individualmente + orquestração.
 
 from __future__ import annotations
 
-from bracc.models.perfil import TetoGastos
+from bracc.models.perfil import DoadorEmpresa, SocioConectado, TetoGastos
 from bracc.services.alertas_service import (
     COTA_CEAP_MENSAL,
+    analisar_cnpj_baixados,
     analisar_conexoes,
     analisar_despesas_gabinete,
     analisar_despesas_vs_media,
@@ -207,6 +208,138 @@ class TestGerarAlertasCompletos:
     def test_sem_emendas_nao_gera_alertas_de_emenda(self) -> None:
         alertas = gerar_alertas_completos({"properties": {}}, [], {}, [])
         assert not any("emenda" in a.get("texto", "").lower() for a in alertas)
+
+
+def _doador(
+    cnpj: str, situacao: str | None, valor: float = 10_000.0,
+) -> DoadorEmpresa:
+    """Factory mínima pra :class:`DoadorEmpresa` nos tests de alerta."""
+    return DoadorEmpresa(
+        nome=f"Empresa {cnpj}",
+        cnpj=cnpj,
+        valor_total=valor,
+        valor_total_fmt=f"R$ {valor:.2f}",
+        n_doacoes=1,
+        situacao=situacao,
+        situacao_fmt=situacao.capitalize() if situacao else None,
+        situacao_verified_at="2026-04-15T10:00:00+00:00",
+    )
+
+
+def _socio(cnpj: str, situacao: str | None) -> SocioConectado:
+    return SocioConectado(
+        nome=f"Socio {cnpj}",
+        cnpj=cnpj,
+        situacao=situacao,
+        situacao_fmt=situacao.capitalize() if situacao else None,
+        situacao_verified_at="2026-04-15T10:00:00+00:00",
+    )
+
+
+class _PerfilDuck:
+    """Duck-typed stand-in pro ``PerfilPolitico`` com só os 2 campos usados."""
+
+    def __init__(
+        self,
+        doadores_empresa: list[DoadorEmpresa] | None = None,
+        socios: list[SocioConectado] | None = None,
+    ) -> None:
+        self.doadores_empresa = doadores_empresa or []
+        self.socios = socios or []
+
+
+class TestAnalisarCnpjBaixados:
+    def test_sem_empresas_vazio(self) -> None:
+        perfil = _PerfilDuck()
+        assert analisar_cnpj_baixados(perfil) == []
+
+    def test_todas_ativas_sem_alerta(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA")],
+            socios=[_socio("22222222000102", "ATIVA")],
+        )
+        assert analisar_cnpj_baixados(perfil) == []
+
+    def test_empresas_nao_verificadas_sem_alerta(self) -> None:
+        """Situacao None (pipeline ainda nao rodou) nao dispara ruido."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", None)],
+            socios=[_socio("22222222000102", None)],
+        )
+        assert analisar_cnpj_baixados(perfil) == []
+
+    def test_doador_baixada_dispara_grave(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "BAIXADA")],
+        )
+        alertas = analisar_cnpj_baixados(perfil)
+        assert len(alertas) == 1
+        alerta = alertas[0]
+        assert alerta["tipo"] == "grave"
+        assert "baixada" in alerta["texto"].lower()
+        assert "doadora" in alerta["texto"].lower()
+
+    def test_socio_inapta_dispara_grave(self) -> None:
+        perfil = _PerfilDuck(
+            socios=[_socio("22222222000102", "INAPTA")],
+        )
+        alertas = analisar_cnpj_baixados(perfil)
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "grave"
+        assert "socio" in alertas[0]["texto"].lower()
+
+    def test_doador_suspensa_dispara_grave(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "SUSPENSA")],
+        )
+        alertas = analisar_cnpj_baixados(perfil)
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "grave"
+
+    def test_multiplas_empresas_contam_no_total(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador("11111111000101", "BAIXADA"),
+                _doador("22222222000102", "SUSPENSA"),
+                _doador("33333333000103", "ATIVA"),  # Nao conta.
+            ],
+            socios=[
+                _socio("44444444000104", "INAPTA"),
+                _socio("55555555000105", "ATIVA"),  # Nao conta.
+            ],
+        )
+        alertas = analisar_cnpj_baixados(perfil)
+        assert len(alertas) == 1
+        # 3 graves: 2 doadores + 1 socio.
+        assert "total: 3" in alertas[0]["texto"]
+        assert "doadora" in alertas[0]["texto"].lower()
+        assert "socio" in alertas[0]["texto"].lower()
+
+    def test_nula_nao_dispara(self) -> None:
+        """NULA e um estado limbo RFB mais raro; mantemos fora do grave."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "NULA")],
+        )
+        assert analisar_cnpj_baixados(perfil) == []
+
+
+class TestGerarAlertasCompletosComPerfil:
+    def test_perfil_none_nao_quebra_compat(self) -> None:
+        """Sem perfil: funcao antiga continua funcionando igual."""
+        alertas = gerar_alertas_completos({"properties": {}}, [], {}, [])
+        assert alertas[0]["tipo"] == "info"
+
+    def test_perfil_com_doador_baixada_injeta_alerta_grave(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "BAIXADA")],
+        )
+        alertas = gerar_alertas_completos(
+            {"properties": {}}, [], {}, [], perfil=perfil,
+        )
+        assert any(
+            a["tipo"] == "grave" and "baixada" in a["texto"].lower()
+            for a in alertas
+        )
 
 
 def _teto(classificacao: str, pct: float = 50.0) -> TetoGastos:
