@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -55,6 +56,14 @@ _DATASETS = {
     "fornecedores": "fornecedores",
     "sancoes": "licitantes-sancionados-administrativamente",
 }
+
+# Fallbacks quando o CKAN não carimba ``Content-Type`` explicitamente.
+# O portal dadosabertos.go.gov.br devolve ``application/json`` pro
+# ``package_show`` e ``text/csv`` pros downloads de recurso — mas
+# alguns resources saem como ``application/octet-stream`` ou sem header.
+# Fallback garante extensão correta no disco do archival.
+_CKAN_JSON_CONTENT_TYPE = "application/json"
+_CKAN_CSV_CONTENT_TYPE = "text/csv"
 
 
 def _hash_id(*parts: str, length: int = 20) -> str:
@@ -86,6 +95,16 @@ class StatePortalGoPipeline(Pipeline):
         self.sanctions: list[dict[str, Any]] = []
         self.contract_rels: list[dict[str, Any]] = []
         self.sanction_rels: list[dict[str, Any]] = []
+
+        # Snapshot URIs por dataset (``contratos`` / ``fornecedores`` /
+        # ``sancoes``). Populado só pelo caminho online — quando
+        # ``_fetch_ckan_csv`` baixa um CSV via CKAN, o payload bruto é
+        # persistido via :func:`archive_fetch` e a URI fica disponível
+        # pra ``transform`` carimbar ``source_snapshot_uri`` em cada row.
+        # Caminho offline (CSVs locais em ``data/state_portal_go``) não
+        # popula → campo fica ausente na proveniência (opt-in preservado,
+        # consistente com folha_go / pncp_go / alego / ssp_go).
+        self._snapshot_uris: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Extract
@@ -140,17 +159,52 @@ class StatePortalGoPipeline(Pipeline):
         return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
     def _latest_resource_url(self, client: httpx.Client, package_id: str) -> str | None:
-        """Ask CKAN for a package and return the URL of the most recent CSV resource."""
+        """Ask CKAN for a package and return the URL of the most recent CSV resource.
+
+        O payload do ``package_show`` é persistido via
+        :func:`archive_fetch` antes de ser parseado — metadata do CKAN
+        também conta como fonte rastreável. A URI não é propagada pras
+        rows (quem vira nó é o CSV de dados), mas o blob fica
+        content-addressed no archival pra auditoria.
+        """
         try:
             resp = client.get(
                 f"{_CKAN_BASE}/package_show",
                 params={"id": package_id},
             )
             resp.raise_for_status()
-            body = resp.json()
-        except (httpx.HTTPError, ValueError) as exc:
+        except httpx.HTTPError as exc:
             logger.warning(
                 "[state_portal_go] CKAN package_show failed for %s: %s",
+                package_id, exc,
+            )
+            return None
+
+        # Arquiva a resposta bruta do discovery call. Content-addressed:
+        # chamadas idênticas deduplicam no disco. Fallback de content-type
+        # cobre o caso raro de header ausente.
+        content_type = resp.headers.get("content-type", _CKAN_JSON_CONTENT_TYPE)
+        try:
+            archive_fetch(
+                url=str(resp.request.url),
+                content=resp.content,
+                content_type=content_type,
+                run_id=self.run_id,
+                source_id=self.source_id,
+            )
+        except (OSError, ValueError) as exc:
+            # Archival falho não deve derrubar o pipeline — segue em
+            # frente com o parse do JSON. Logado pra investigação.
+            logger.warning(
+                "[state_portal_go] archival of package_show failed (%s): %s",
+                package_id, exc,
+            )
+
+        try:
+            body = resp.json()
+        except ValueError as exc:
+            logger.warning(
+                "[state_portal_go] CKAN package_show non-JSON for %s: %s",
                 package_id, exc,
             )
             return None
@@ -168,11 +222,21 @@ class StatePortalGoPipeline(Pipeline):
         )
         return str(csv_resources[0]["url"])
 
-    def _fetch_ckan_csv(self, package_id: str) -> pd.DataFrame:
+    def _fetch_ckan_csv(self, package_id: str) -> tuple[pd.DataFrame, str | None]:
+        """Baixa o CSV mais recente do CKAN pro ``package_id``.
+
+        Retorna ``(dataframe, snapshot_uri)``. ``snapshot_uri`` é ``None``
+        quando o download falha ou o CSV não parseia — nesses casos
+        ``attach_provenance`` continua a omitir ``source_snapshot_uri``
+        nas rows (opt-in preservado). Quando o download funciona, o blob
+        bruto é persistido via :func:`archive_fetch` **antes** do parse,
+        pra garantir snapshot mesmo que o pandas não consiga decodificar
+        o payload (debugging futuro via ``restore_snapshot``).
+        """
         with httpx.Client(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
             url = self._latest_resource_url(client, package_id)
             if not url:
-                return pd.DataFrame()
+                return pd.DataFrame(), None
             logger.info("[state_portal_go] fetching %s -> %s", package_id, url)
             try:
                 resp = client.get(url)
@@ -181,9 +245,30 @@ class StatePortalGoPipeline(Pipeline):
                 logger.warning(
                     "[state_portal_go] download failed for %s: %s", url, exc,
                 )
-                return pd.DataFrame()
+                return pd.DataFrame(), None
 
             content = resp.content
+
+            # Archival do CSV bruto — feito antes do parse pra preservar
+            # a forma exata que o servidor devolveu (inclusive encodings
+            # estranhos que o pandas falha em decodificar). URI volta pro
+            # caller pra propagação via ``source_snapshot_uri``.
+            snapshot_uri: str | None = None
+            content_type = resp.headers.get("content-type", _CKAN_CSV_CONTENT_TYPE)
+            try:
+                snapshot_uri = archive_fetch(
+                    url=str(resp.request.url),
+                    content=content,
+                    content_type=content_type,
+                    run_id=self.run_id,
+                    source_id=self.source_id,
+                )
+            except (OSError, ValueError) as exc:
+                logger.warning(
+                    "[state_portal_go] archival of CSV failed (%s): %s",
+                    package_id, exc,
+                )
+
             for encoding in ("utf-8", "latin-1"):
                 for sep in (";", ","):
                     try:
@@ -197,10 +282,10 @@ class StatePortalGoPipeline(Pipeline):
                             on_bad_lines="skip",
                         )
                         if len(df.columns) > 1:
-                            return df
+                            return df, snapshot_uri
                     except (UnicodeDecodeError, pd.errors.ParserError):
                         continue
-            return pd.DataFrame()
+            return pd.DataFrame(), snapshot_uri
 
     def extract(self) -> None:
         # Try local files first (canonical fallback used by bootstrap scripts).
@@ -212,13 +297,23 @@ class StatePortalGoPipeline(Pipeline):
                 "licitantes-sancionados",
             )
 
-        # Fall back to CKAN API when local files are missing.
+        # Fall back to CKAN API when local files are missing. Cada
+        # fetch online devolve ``(df, snapshot_uri)`` — a URI vai pro
+        # mapa por dataset pra ``transform`` carimbar cada row. Caminho
+        # offline (CSV local) nunca chega aqui, então o mapa fica vazio
+        # e o campo ``source_snapshot_uri`` é omitido (opt-in).
         if self._raw_contracts.empty:
-            self._raw_contracts = self._fetch_ckan_csv(_DATASETS["contratos"])
+            self._raw_contracts, uri = self._fetch_ckan_csv(_DATASETS["contratos"])
+            if uri:
+                self._snapshot_uris["contratos"] = uri
         if self._raw_suppliers.empty:
-            self._raw_suppliers = self._fetch_ckan_csv(_DATASETS["fornecedores"])
+            self._raw_suppliers, uri = self._fetch_ckan_csv(_DATASETS["fornecedores"])
+            if uri:
+                self._snapshot_uris["fornecedores"] = uri
         if self._raw_sanctions.empty:
-            self._raw_sanctions = self._fetch_ckan_csv(_DATASETS["sancoes"])
+            self._raw_sanctions, uri = self._fetch_ckan_csv(_DATASETS["sancoes"])
+            if uri:
+                self._snapshot_uris["sancoes"] = uri
 
         if self.limit:
             self._raw_contracts = self._raw_contracts.head(self.limit)
@@ -262,6 +357,9 @@ class StatePortalGoPipeline(Pipeline):
     def _transform_contracts(self) -> None:
         if self._raw_contracts.empty:
             return
+        # Snapshot URI do CSV bruto (caminho online). ``None`` no
+        # offline-path → ``attach_provenance`` omite o campo da row.
+        snapshot_uri = self._snapshot_uris.get("contratos")
         for _, row in self._raw_contracts.iterrows():
             numero = row_pick(
                 row, "numero_contrato", "nr_contrato", "contrato",
@@ -318,6 +416,7 @@ class StatePortalGoPipeline(Pipeline):
                     "source": "state_portal_go",
                 },
                 record_id=contract_record_id,
+                snapshot_uri=snapshot_uri,
             ))
 
             if cnpj_fmt:
@@ -327,11 +426,13 @@ class StatePortalGoPipeline(Pipeline):
                         "target_key": contract_id,
                     },
                     record_id=contract_record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
     def _transform_suppliers(self) -> None:
         if self._raw_suppliers.empty:
             return
+        snapshot_uri = self._snapshot_uris.get("fornecedores")
         for _, row in self._raw_suppliers.iterrows():
             cnpj_raw = row_pick(row, "cnpj", "cpf_cnpj", "documento", "nr_documento")
             cnpj_digits = strip_document(cnpj_raw)
@@ -358,11 +459,13 @@ class StatePortalGoPipeline(Pipeline):
                     "source": "state_portal_go",
                 },
                 record_id=cnpj_fmt,
+                snapshot_uri=snapshot_uri,
             ))
 
     def _transform_sanctions(self) -> None:
         if self._raw_sanctions.empty:
             return
+        snapshot_uri = self._snapshot_uris.get("sancoes")
         for _, row in self._raw_sanctions.iterrows():
             cnpj_raw = row_pick(
                 row, "cnpj", "cpf_cnpj", "documento", "nr_documento", "cnpj_cpf",
@@ -404,6 +507,7 @@ class StatePortalGoPipeline(Pipeline):
                     "source": "state_portal_go",
                 },
                 record_id=sanction_record_id,
+                snapshot_uri=snapshot_uri,
             ))
             if cnpj_fmt:
                 self.sanction_rels.append(self.attach_provenance(
@@ -412,6 +516,7 @@ class StatePortalGoPipeline(Pipeline):
                         "target_key": sanction_id,
                     },
                     record_id=sanction_record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
     # ------------------------------------------------------------------
@@ -429,6 +534,14 @@ class StatePortalGoPipeline(Pipeline):
                 "GoStateContract", self.contracts, key_field="contract_id",
             )
 
+        # Helper: extrai a snapshot URI já carimbada pela row upstream
+        # (transform aplicou ``attach_provenance`` com ``snapshot_uri=``
+        # quando o caminho online populou ``_snapshot_uris``). Repassa
+        # pro Company derivado pra não perder proveniência no rewrap.
+        def _snapshot_of(row: dict[str, Any]) -> str | None:
+            uri = row.get("source_snapshot_uri")
+            return uri if isinstance(uri, str) and uri else None
+
         if self.suppliers:
             loader.load_nodes(
                 "Company",
@@ -441,6 +554,7 @@ class StatePortalGoPipeline(Pipeline):
                             "source": s["source"],
                         },
                         record_id=strip_document(str(s["cnpj"])),
+                        snapshot_uri=_snapshot_of(s),
                     )
                     for s in self.suppliers
                 ],
@@ -461,6 +575,7 @@ class StatePortalGoPipeline(Pipeline):
                     self.attach_provenance(
                         {"cnpj": s["cnpj"], "razao_social": s["name"]},
                         record_id=strip_document(str(s["cnpj"])),
+                        snapshot_uri=_snapshot_of(s),
                     )
                     for s in self.sanctions
                     if s["cnpj"]
@@ -479,6 +594,7 @@ class StatePortalGoPipeline(Pipeline):
                     self.attach_provenance(
                         {"cnpj": c["cnpj_supplier"], "razao_social": c["supplier_name"]},
                         record_id=strip_document(str(c["cnpj_supplier"])),
+                        snapshot_uri=_snapshot_of(c),
                     )
                     for c in self.contracts
                     if c["cnpj_supplier"]
