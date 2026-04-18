@@ -81,6 +81,12 @@ scripts/audit-prompts/
 # Playwright MCP cache
 .playwright-mcp/
 
+# Archival snapshots — content-addressed raw copies of external sources,
+# grabbed at ingestion time so fatos continuam verificáveis even if the
+# portal muda de URL ou tira conteúdo do ar. Reproducible from the
+# pipeline re-run; never commit.
+archival/
+
 # Claude plans
 .claude/plans/
 .claude/*.lock
