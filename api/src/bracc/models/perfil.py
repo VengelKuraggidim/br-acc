@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict
 
 from bracc.models.entity import ProvenanceBlock  # noqa: TC001 (pydantic runtime annotation)
 
-
 _PERFIL_MODEL_CONFIG = ConfigDict(
     extra="forbid",
     str_strip_whitespace=True,
