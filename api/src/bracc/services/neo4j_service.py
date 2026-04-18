@@ -9,6 +9,11 @@ from bracc.config import settings
 logger = logging.getLogger(__name__)
 
 QUERIES_DIR = Path(__file__).parent.parent / "queries"
+# Gated federal-scope queries. Resolved as a fallback after QUERIES_DIR so
+# the gated routers (bracc._federal.routers.*) can keep using
+# execute_query(session, "public_company_lookup", ...) unchanged when
+# ENABLE_FEDERAL_ROUTES=true mounts them. See docs/_federal_gating.md.
+_FEDERAL_QUERIES_DIR = Path(__file__).parent.parent / "_federal" / "queries"
 
 
 class CypherLoader:
@@ -21,8 +26,12 @@ class CypherLoader:
         if name not in cls._cache:
             path = QUERIES_DIR / f"{name}.cypher"
             if not path.exists():
-                msg = f"Query file not found: {path}"
-                raise FileNotFoundError(msg)
+                federal_path = _FEDERAL_QUERIES_DIR / f"{name}.cypher"
+                if federal_path.exists():
+                    path = federal_path
+                else:
+                    msg = f"Query file not found: {path}"
+                    raise FileNotFoundError(msg)
             cls._cache[name] = path.read_text().strip()
         return cls._cache[name]
 
