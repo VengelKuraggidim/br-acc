@@ -1839,13 +1839,15 @@ function renderPerfil(d) {
         <div class="collapsible-body">`;
     d.socios.forEach(s => {
       const cnpjStr = s.cnpj ? ` &middot; CNPJ ${s.cnpj}` : '';
-      html += `<div class="conexao-card">
+      const chip = renderChipFonte(s.provenance, "sub");
+      html += `<div class="conexao-card" style="flex-wrap:wrap;">
         <div class="conexao-icon empresa">&#127970;</div>
         <div class="conexao-info">
           <div class="conexao-nome">${s.nome}</div>
           <div class="conexao-rel">Sócio(a)${cnpjStr}</div>
         </div>
         ${s.capital_social_fmt ? `<div class="conexao-valor">${s.capital_social_fmt}</div>` : ''}
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
       </div>`;
     });
     html += '</div></details></div>';
@@ -1868,12 +1870,14 @@ function renderPerfil(d) {
         <summary>Ver ${d.familia.length} familiar(es)</summary>
         <div class="collapsible-body">`;
     d.familia.forEach(f => {
-      html += `<div class="conexao-card">
+      const chip = renderChipFonte(f.provenance, "sub");
+      html += `<div class="conexao-card" style="flex-wrap:wrap;">
         <div class="conexao-icon pessoa">&#128100;</div>
         <div class="conexao-info">
           <div class="conexao-nome">${f.nome}</div>
           <div class="conexao-rel">${f.relacao}</div>
         </div>
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
       </div>`;
     });
     html += '</div></details></div>';
@@ -1917,13 +1921,15 @@ function renderPerfil(d) {
         <span class="badge badge-accent">${d.contratos.length}</span>
       </div>`;
     d.contratos.forEach(c => {
-      html += `<div class="conexao-card">
+      const chip = renderChipFonte(c.provenance, "sub");
+      html += `<div class="conexao-card" style="flex-wrap:wrap;">
         <div class="conexao-icon contrato">&#128196;</div>
         <div class="conexao-info">
           <div class="conexao-nome">${c.objeto}</div>
           <div class="conexao-rel">${c.orgao || ''} ${c.data ? '- '+c.data : ''}</div>
         </div>
         <div class="conexao-valor">${c.valor_fmt}</div>
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
       </div>`;
     });
     html += '</div>';
