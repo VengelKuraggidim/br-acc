@@ -789,23 +789,19 @@ async def perfil_politico(entity_id: str):
             )
             fonte_emendas = "transparencia"
 
-    # Gerar alertas com analise inteligente
+    # Gerar alertas com analise inteligente. Construimos a partir da lista
+    # `emendas` ja montada acima — ela ja lida com ambas as direcoes da
+    # relacao no grafo (politico como source ou target) e ja inclui o caso
+    # em que os dados vieram da API da Transparencia.
     emendas_raw_alertas = [
-        entidades_conectadas.get(c["target_id"], {}).get("properties", {})
-        for c in conexoes_raw
-        if entidades_conectadas.get(c["target_id"], {}).get("type") == "amendment"
+        {
+            "value_paid": e.valor_pago,
+            "value_committed": e.valor_empenhado,
+            "municipality": e.municipio or "",
+            "type": e.tipo,
+        }
+        for e in emendas
     ]
-    # Se as emendas vieram da API externa, usar elas nos alertas tambem
-    if fonte_emendas == "transparencia" and not emendas_raw_alertas:
-        emendas_raw_alertas = [
-            {
-                "value_paid": e.valor_pago,
-                "value_committed": e.valor_empenhado,
-                "municipality": e.municipio or "",
-                "type": e.tipo,
-            }
-            for e in emendas
-        ]
     alertas = gerar_alertas_completos(
         entidade, conexoes_raw, entidades_conectadas, emendas_raw_alertas,
     )
