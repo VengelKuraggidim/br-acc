@@ -23,6 +23,9 @@ from bracc_etl.pipelines.cvm_funds import CvmFundsPipeline
 from bracc_etl.pipelines.datajud import DatajudPipeline
 from bracc_etl.pipelines.datasus import DatasusPipeline
 from bracc_etl.pipelines.dou import DouPipeline
+from bracc_etl.pipelines.emendas_parlamentares_go import (
+    EmendasParlamentaresGoPipeline,
+)
 from bracc_etl.pipelines.eu_sanctions import EuSanctionsPipeline
 from bracc_etl.pipelines.folha_go import FolhaGoPipeline
 from bracc_etl.pipelines.holdings import HoldingsPipeline
@@ -126,6 +129,7 @@ PIPELINES: dict[str, type] = {
     "ssp_go": SspGoPipeline,
     "camara_politicos_go": CamaraPoliticosGoPipeline,
     "tse_prestacao_contas_go": TsePrestacaoContasGoPipeline,
+    "emendas_parlamentares_go": EmendasParlamentaresGoPipeline,
 }
 
 
