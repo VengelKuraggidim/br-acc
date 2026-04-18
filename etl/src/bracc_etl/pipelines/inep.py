@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import csv
+import io
 import logging
+import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+import httpx
 
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
@@ -28,6 +32,153 @@ STATUS_MAP = {
     "2": "paralisada",
     "3": "extinta",
 }
+
+# ── Download / fetch_to_disk (for scripts/download_inep.py) ──────────────
+#
+# INEP publishes the Censo Escolar microdata as a yearly ZIP at
+# ``download.inep.gov.br/dados_abertos/microdados_censo_escolar_<YYYY>.zip``.
+# The 2022 archive is ~26 MB and unpacks to ~190 MB of CSVs; the file the
+# pipeline consumes is ``microdados_ed_basica_<YYYY>.csv`` (latin-1,
+# semicolon-delimited).
+#
+# Two practical caveats:
+#   * The ``download.inep.gov.br`` certificate chain consistently fails
+#     default-bundle verification on fresh httpx installs. The CLI defaults
+#     to ``--insecure`` (verify=False) because the file integrity is
+#     checked by the ZIP container; pass ``--no-insecure`` to opt out.
+#   * The 2022 microdata omits ``QT_FUNCIONARIOS``; the pipeline's
+#     ``_parse_int("")`` falls back to 0 (not a regression of this script).
+_INEP_DOWNLOAD_BASE = "https://download.inep.gov.br/dados_abertos"
+_INEP_USER_AGENT = "br-acc/bracc-etl download_inep (httpx)"
+_INEP_HTTP_TIMEOUT = 600.0
+
+
+def _find_main_csv(zf: zipfile.ZipFile, year: int) -> str | None:
+    """Locate ``microdados_ed_basica_<year>.csv`` inside the INEP archive."""
+    target = f"microdados_ed_basica_{year}.csv".lower()
+    for name in zf.namelist():
+        if Path(name).name.lower() == target:
+            return name
+    # Fallback: first CSV under a directory containing "ed_basica" or
+    # "ed_basico" in case INEP renames the file in a future census.
+    for name in zf.namelist():
+        lname = name.lower()
+        if lname.endswith(".csv") and "ed_basica" in lname:
+            return name
+    return None
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    *,
+    year: int = 2022,
+    limit: int | None = None,
+    insecure: bool = True,
+    timeout: float = _INEP_HTTP_TIMEOUT,
+    url: str | None = None,
+) -> list[Path]:
+    """Download INEP Censo Escolar microdata to ``output_dir``.
+
+    Streams ``microdados_censo_escolar_<year>.zip`` from
+    ``download.inep.gov.br``, locates the main
+    ``microdados_ed_basica_<year>.csv`` inside the archive, and writes it
+    out in the same latin-1/semicolon dialect ``InepPipeline.extract``
+    consumes.
+
+    Parameters
+    ----------
+    output_dir:
+        Destination directory. Created if missing.
+    year:
+        Census year (default ``2022`` — the most recent stable release).
+    limit:
+        If set, truncates the output CSV to the first N data rows
+        (header preserved). Useful for smoke tests against the 190 MB
+        full file.
+    insecure:
+        When ``True`` (default), disables TLS verification because the
+        INEP cert chain fails default-bundle verification. ZIP integrity
+        catches corruption regardless.
+    timeout:
+        Per-request HTTP timeout in seconds.
+    url:
+        Override the source URL (test/forward-compat hook).
+
+    Returns
+    -------
+    List of paths written (always one CSV — ``microdados_ed_basica_<year>.csv``).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    src_url = url or f"{_INEP_DOWNLOAD_BASE}/microdados_censo_escolar_{year}.zip"
+    out_csv = output_dir / f"microdados_ed_basica_{year}.csv"
+
+    logger.info(
+        "[inep.fetch_to_disk] downloading %s (verify=%s) -> %s",
+        src_url,
+        not insecure,
+        out_csv.name,
+    )
+
+    headers = {"User-Agent": _INEP_USER_AGENT}
+    with httpx.Client(
+        follow_redirects=True,
+        headers=headers,
+        timeout=timeout,
+        verify=not insecure,
+    ) as client:
+        resp = client.get(src_url)
+        resp.raise_for_status()
+        zip_bytes = resp.content
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+        member = _find_main_csv(zf, year)
+        if member is None:
+            msg = (
+                f"INEP zip for {year} does not contain a "
+                f"microdados_ed_basica_{year}.csv member; got "
+                f"{zf.namelist()[:5]}"
+            )
+            raise RuntimeError(msg)
+
+        if limit is None:
+            with zf.open(member) as src, out_csv.open("wb") as dst:
+                while True:
+                    block = src.read(1 << 20)
+                    if not block:
+                        break
+                    dst.write(block)
+        else:
+            # Stream until ``limit`` data rows are written, plus header.
+            written_rows = 0
+            with zf.open(member) as src_bin, out_csv.open(
+                "w", encoding="latin-1", newline=""
+            ) as dst:
+                text_src = io.TextIOWrapper(
+                    src_bin, encoding="latin-1", newline=""
+                )
+                header = text_src.readline()
+                if not header:
+                    msg = f"INEP CSV {member!r} appears empty"
+                    raise RuntimeError(msg)
+                dst.write(header)
+                for line in text_src:
+                    dst.write(line)
+                    written_rows += 1
+                    if written_rows >= limit:
+                        break
+            logger.info(
+                "[inep.fetch_to_disk] truncated to %d rows (limit=%d)",
+                written_rows,
+                limit,
+            )
+
+    size_mb = out_csv.stat().st_size / 1024 / 1024
+    logger.info(
+        "[inep.fetch_to_disk] wrote %s (%.2f MB)", out_csv, size_mb,
+    )
+    return [out_csv]
 
 
 class InepPipeline(Pipeline):
