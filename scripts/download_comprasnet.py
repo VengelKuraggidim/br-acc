@@ -163,28 +163,79 @@ def _http_get_json(url: str, params: dict[str, Any]) -> tuple[int, dict | None]:
     return 0, None
 
 
-def _fetch_year(year: int, max_pages: int | None) -> list[dict[str, Any]]:
-    """Fetch all contracts for a single year from the PNCP API."""
-    date_inicial = f"{year:04d}0101"
-    date_final = f"{year:04d}1231"
-    all_records: list[dict[str, Any]] = []
+def _page_dir(output_dir: Path, year: int) -> Path:
+    """Per-page checkpoint directory for ``year``.
 
-    # Fetch page 1 to learn totalPaginas.
+    Pages are written incrementally to survive PNCP timeouts (the
+    upstream API routinely exhausts retries mid-year; prior versions of
+    this script kept records in memory and lost the whole year on any
+    fatal timeout — see commit log).
+    """
+    return output_dir / f"{year}_pages"
+
+
+def _page_file(page_dir: Path, page: int) -> Path:
+    return page_dir / f"p{page:05d}.json"
+
+
+def _fetch_page(
+    year: int,
+    page: int,
+    date_inicial: str,
+    date_final: str,
+) -> tuple[int, dict | None]:
+    """Fetch a single page. Returns (status, payload) or (status, None)."""
     params = {
         "dataInicial": date_inicial,
         "dataFinal": date_final,
-        "pagina": 1,
+        "pagina": page,
         "tamanhoPagina": PAGE_SIZE,
     }
-    status, payload = _http_get_json(API_URL, params)
-    if status == 204 or payload is None:
-        logger.info("  year=%d: HTTP %d, no data (likely pre-PNCP era).", year, status)
-        return []
+    try:
+        return _http_get_json(API_URL, params)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "  year=%d page=%d: network error after retries (%s); marking missing "
+            "and continuing — re-run to fill in.",
+            year, page, exc,
+        )
+        return 0, None
 
-    first_items = payload.get("data") or []
-    all_records.extend(first_items)
-    total_pages = int(payload.get("totalPaginas", 1) or 1)
-    total_registros = int(payload.get("totalRegistros", 0) or 0)
+
+def _fetch_year(year: int, max_pages: int | None, output_dir: Path) -> int:
+    """Fetch all contracts for a single year from the PNCP API.
+
+    Writes one JSON file per page under ``{output_dir}/{year}_pages/``
+    as the page arrives. Already-present page files are reused (simple
+    resume). Page-level network failures are logged and skipped — the
+    year loop never raises, so a single flaky page no longer discards
+    hundreds of MB of already-downloaded data.
+
+    Returns the number of pages successfully materialized on disk for
+    this year (including reused ones).
+    """
+    date_inicial = f"{year:04d}0101"
+    date_final = f"{year:04d}1231"
+    pages_dir = _page_dir(output_dir, year)
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    page1_path = _page_file(pages_dir, 1)
+    if page1_path.exists() and page1_path.stat().st_size > 2:
+        page1_payload = json.loads(page1_path.read_text(encoding="utf-8"))
+    else:
+        status, payload = _fetch_page(year, 1, date_inicial, date_final)
+        if status == 204 or payload is None:
+            logger.info(
+                "  year=%d: HTTP %d on page 1, no data (likely pre-PNCP era).",
+                year, status,
+            )
+            return 0
+        page1_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        page1_payload = payload
+
+    total_pages = int(page1_payload.get("totalPaginas", 1) or 1)
+    total_registros = int(page1_payload.get("totalRegistros", 0) or 0)
+    first_items = page1_payload.get("data") or []
     logger.info(
         "  year=%d: totalRegistros=%d totalPaginas=%d (pageSize=%d)",
         year, total_registros, total_pages, PAGE_SIZE,
@@ -194,26 +245,34 @@ def _fetch_year(year: int, max_pages: int | None) -> list[dict[str, Any]]:
     if max_pages is not None:
         effective_last_page = min(total_pages, max_pages)
 
+    pages_ok = 1  # page 1 already accounted for
     for page in range(2, effective_last_page + 1):
-        params = {
-            "dataInicial": date_inicial,
-            "dataFinal": date_final,
-            "pagina": page,
-            "tamanhoPagina": PAGE_SIZE,
-        }
-        status, payload = _http_get_json(API_URL, params)
-        if payload is None:
-            logger.warning(
-                "  year=%d page=%d: empty response (status=%d); skipping.",
-                year, page, status,
-            )
+        out_path = _page_file(pages_dir, page)
+        if out_path.exists() and out_path.stat().st_size > 2:
+            pages_ok += 1
             continue
+
+        _status, payload = _fetch_page(year, page, date_inicial, date_final)
+        if payload is None:
+            # Either HTTP 204/empty body (end of data) or network failure. In
+            # the 204 case we still want to stop iterating (no more pages);
+            # in the failure case we just continue. We treat both the same:
+            # skip the page, don't persist an empty file.
+            if _status == 204:
+                logger.info(
+                    "  year=%d page=%d: HTTP 204 — end of data.",
+                    year, page,
+                )
+                break
+            continue
+
+        out_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        pages_ok += 1
         items = payload.get("data") or []
-        all_records.extend(items)
         if page == 2 or page % 25 == 0 or page == effective_last_page:
             logger.info(
-                "  year=%d: fetched page %d/%d (+%d records, total=%d)",
-                year, page, effective_last_page, len(items), len(all_records),
+                "  year=%d: fetched page %d/%d (+%d records, on_disk=%d)",
+                year, page, effective_last_page, len(items), pages_ok,
             )
         if INTER_PAGE_DELAY > 0:
             time.sleep(INTER_PAGE_DELAY)
@@ -223,18 +282,68 @@ def _fetch_year(year: int, max_pages: int | None) -> list[dict[str, Any]]:
             "  year=%d: stopped early at page %d/%d (max-pages=%d)",
             year, effective_last_page, total_pages, max_pages,
         )
+    _ = first_items  # retained for backwards-compat; page1_path is the source of truth.
+    return pages_ok
 
-    return all_records
 
+def _consolidate_year(
+    output_dir: Path, year: int, *, prune_pages: bool = True,
+) -> tuple[Path, int, int]:
+    """Merge all ``{year}_pages/p*.json`` into ``{year}_contratos.json``.
 
-def _write_year_file(output_dir: Path, year: int, records: list[dict[str, Any]]) -> Path:
-    output_dir.mkdir(parents=True, exist_ok=True)
+    Returns ``(out_path, pages_merged, records_written)``. Missing pages
+    (gaps from persistent network failures) are logged as warnings but
+    do not prevent consolidation — re-run to fill them in.
+    """
+    pages_dir = _page_dir(output_dir, year)
     out_file = output_dir / f"{year}_contratos.json"
+
+    if not pages_dir.exists():
+        # Nothing fetched — write an empty JSON array so the pipeline's
+        # skip-existing path triggers and downstream doesn't crash.
+        out_file.write_text("[]", encoding="utf-8")
+        return out_file, 0, 0
+
+    page_files = sorted(pages_dir.glob("p*.json"))
+    if not page_files:
+        out_file.write_text("[]", encoding="utf-8")
+        return out_file, 0, 0
+
+    # Detect gaps (for logging only).
+    seen = {int(p.stem[1:]) for p in page_files}
+    expected_last = max(seen) if seen else 0
+    missing = [n for n in range(1, expected_last + 1) if n not in seen]
+    if missing:
+        logger.warning(
+            "  year=%d: %d gap(s) in page sequence (first gaps: %s). Re-run to fill.",
+            year, len(missing), missing[:10],
+        )
+
+    merged: list[dict[str, Any]] = []
+    for pf in page_files:
+        try:
+            payload = json.loads(pf.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            logger.warning("  year=%d: bad JSON in %s: %s — skipping.", year, pf.name, exc)
+            continue
+        data = payload.get("data") if isinstance(payload, dict) else payload
+        if isinstance(data, list):
+            merged.extend(data)
+
     out_file.write_text(
-        json.dumps(records, ensure_ascii=False),
+        json.dumps(merged, ensure_ascii=False),
         encoding="utf-8",
     )
-    return out_file
+
+    if prune_pages:
+        for pf in page_files:
+            pf.unlink(missing_ok=True)
+        try:
+            pages_dir.rmdir()
+        except OSError:
+            pass
+
+    return out_file, len(page_files), len(merged)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -255,25 +364,26 @@ def main(argv: list[str] | None = None) -> int:
         out_path = args.output_dir / f"{year}_contratos.json"
         if args.skip_existing and out_path.exists() and out_path.stat().st_size > 2:
             logger.info(
-                "Skipping year=%d (file already exists: %s, %d bytes)",
+                "Skipping year=%d (consolidated file already exists: %s, %d bytes)",
                 year, out_path, out_path.stat().st_size,
             )
             continue
-        try:
-            logger.info("=== Fetching year %d ===", year)
-            records = _fetch_year(year, args.max_pages)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Fatal error fetching year=%d: %s", year, exc)
-            exit_code = 2
-            continue
 
-        written = _write_year_file(args.output_dir, year, records)
-        size = written.stat().st_size
+        logger.info("=== Fetching year %d ===", year)
+        try:
+            pages_on_disk = _fetch_year(year, args.max_pages, args.output_dir)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Unexpected error in _fetch_year(%d): %s", year, exc)
+            exit_code = 2
+            # still fall through to consolidate whatever pages did land.
+            pages_on_disk = -1
+
+        written, merged_pages, rec_count = _consolidate_year(args.output_dir, year)
         logger.info(
-            "Wrote %s (%d records, %d bytes)",
-            written, len(records), size,
+            "Wrote %s (%d pages merged -> %d records, %d bytes; pages_on_disk=%d)",
+            written, merged_pages, rec_count, written.stat().st_size, pages_on_disk,
         )
-        total_records += len(records)
+        total_records += rec_count
 
     logger.info(
         "Done: %d records across %d year(s) under %s",
