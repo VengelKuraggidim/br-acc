@@ -1433,6 +1433,23 @@ function renderPerfil(d) {
 
   // Quem financiou a campanha
   if (temDoadores) {
+    // Classificar CNPJs por padrao do nome (partido, comite, fundo, outro)
+    const classificarCNPJ = (nome) => {
+      const n = (nome || '').toUpperCase();
+      if (!n) return 'outro';
+      if (n.includes('DIRECAO NACIONAL') || n.includes('DIRECAO ESTADUAL') || n.includes('DIRECAO MUNICIPAL') || n.includes('DIRETORIO') || n.includes('EXECUTIVA NACIONAL') || n.includes('COMISSAO PROVISORIA')) return 'partido';
+      if (n.startsWith('PARTIDO ') || /^(PT|PL|PSD|PSDB|MDB|PP|PSB|PDT|PCDOB|PSOL|UNIAO|PODE|PRD|REPUBLICANOS|NOVO|PV|AVANTE|PMB|AGIR|CIDADANIA|SOLIDARIEDADE|REDE|PSTU|DEM)$/.test(n)) return 'partido';
+      if (n.includes('ELEICAO ') || n.includes('ELEICOES ') || n.includes('COMITE ') || n.includes('CANDIDATURA')) return 'comite';
+      if (n.includes('FUNDO') && (n.includes('CAMPANHA') || n.includes('ELEITORAL') || n.includes('PARTIDARIO'))) return 'fundo';
+      return 'outro';
+    };
+
+    // Agrupar doadores_empresa por categoria
+    const grupos = { partido: [], comite: [], fundo: [], outro: [] };
+    (d.doadores_empresa || []).forEach(e => {
+      grupos[classificarCNPJ(e.nome)].push(e);
+    });
+
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
@@ -1441,30 +1458,39 @@ function renderPerfil(d) {
         </div>
         <span class="badge badge-accent">${d.total_doacoes_fmt}</span>
       </div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.5;">
-        Empresas e pessoas que doaram dinheiro para a campanha do(a) político(a) em eleições. Informação pública, declarada à Justiça Eleitoral.
+      <div style="padding:10px 12px; margin-bottom:10px; background:rgba(59,130,246,0.08); border-left:3px solid #3b82f6; border-radius:6px; font-size:12px; line-height:1.55; color:var(--text-secondary);">
+        &#9432; <strong>Empresas privadas NÃO podem doar para campanhas</strong> desde 2015 (decisão do STF — ADI 4650).
+        Os CNPJs listados aqui são partidos políticos, comitês de campanha (que têm CNPJ próprio registrado no TSE) e fundos públicos eleitorais — <em>não</em> empresas privadas.
+        Pessoas físicas podem doar até 10% da renda do ano anterior.
       </div>`;
 
     const fmtBRLjs = (v) => v.toLocaleString('pt-BR', {style:'currency', currency:'BRL', maximumFractionDigits:0});
-    if (d.doadores_empresa.length) {
-      const totE = d.doadores_empresa.reduce((s, e) => s + e.valor_total, 0);
-      html += `<details class="collapsible">
-        <summary><span>&#127970; ${d.doadores_empresa.length} empresa(s)</span> <span style="font-weight:700; color:var(--accent); margin-left:auto; margin-right:10px;">${fmtBRLjs(totE)}</span></summary>
+    const renderGrupoCNPJ = (arr, icone, titulo) => {
+      if (!arr.length) return '';
+      const tot = arr.reduce((s, e) => s + e.valor_total, 0);
+      let h = `<details class="collapsible">
+        <summary><span>${icone} ${arr.length} ${titulo}</span> <span style="font-weight:700; color:var(--accent); margin-left:auto; margin-right:10px;">${fmtBRLjs(tot)}</span></summary>
         <div class="collapsible-body">`;
-      d.doadores_empresa.forEach(e => {
+      arr.forEach(e => {
         const cnpjStr = e.cnpj ? ` &middot; CNPJ ${e.cnpj}` : '';
         const nStr = e.n_doacoes > 1 ? ` &middot; ${e.n_doacoes} doações` : '';
-        html += `<div class="conexao-card">
-          <div class="conexao-icon empresa">&#127970;</div>
+        h += `<div class="conexao-card">
+          <div class="conexao-icon empresa">${icone}</div>
           <div class="conexao-info">
             <div class="conexao-nome">${e.nome}</div>
-            <div class="conexao-rel">Doou para campanha${cnpjStr}${nStr}</div>
+            <div class="conexao-rel">Repassou valor à campanha${cnpjStr}${nStr}</div>
           </div>
           <div class="conexao-valor">${e.valor_total_fmt}</div>
         </div>`;
       });
-      html += '</div></details>';
-    }
+      h += '</div></details>';
+      return h;
+    };
+
+    html += renderGrupoCNPJ(grupos.partido, '&#127963;', 'partido(s) político(s)');
+    html += renderGrupoCNPJ(grupos.comite, '&#128499;', 'comitê(s) de campanha');
+    html += renderGrupoCNPJ(grupos.fundo, '&#128200;', 'fundo(s) eleitoral(is)');
+    html += renderGrupoCNPJ(grupos.outro, '&#127970;', 'outro(s) CNPJ(s) (prestadores, MEI, bens/serviços doados)');
 
     if (d.doadores_pessoa.length) {
       const totP = d.doadores_pessoa.reduce((s, p) => s + p.valor_total, 0);
