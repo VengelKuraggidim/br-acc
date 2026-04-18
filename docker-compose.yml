@@ -39,6 +39,7 @@ services:
       CORS_ORIGINS: "*"
       LOG_LEVEL: ${LOG_LEVEL:-info}
       APP_ENV: ${APP_ENV:-dev}
+      PORT: "8000"
       PUBLIC_MODE: "true"
       PUBLIC_ALLOW_PERSON: "true"
       PUBLIC_ALLOW_ENTITY_LOOKUP: "true"

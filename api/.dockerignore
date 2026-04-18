@@ -11,4 +11,7 @@ __pycache__
 .env.*
 *.log
 .DS_Store
+.git
+.gitignore
 tests
+archival
