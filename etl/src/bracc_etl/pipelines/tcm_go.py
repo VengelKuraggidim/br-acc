@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 
 if TYPE_CHECKING:
@@ -54,6 +55,18 @@ EXPENDITURE_COLUMNS = {
 }
 # FINBRA CSV fallback uses a single pre-aggregated "Valor" column.
 FINBRA_COLUMN = "valor"
+
+# Fallback content-type quando o SICONFI omite o header. Na prática a API
+# devolve ``application/json`` consistentemente, mas archival é
+# content-addressed, então o único efeito do fallback é a extensão do arquivo
+# no disco.
+_SICONFI_JSON_CONTENT_TYPE = "application/json"
+# Chave privada injetada em cada raw fiscal dict pra propagar o URI do
+# snapshot archival da chamada RREO que gerou a row. ``transform`` lê essa
+# chave pra popular ``source_snapshot_uri`` em ``attach_provenance`` e
+# ignora a presença da chave no restante do processamento (tolerância de
+# campo extra). Padrão espelha _SNAPSHOT_COLUMN de alego/folha_go.
+_SNAPSHOT_KEY = "__snapshot_uri"
 
 
 # ----------------------------------------------------------------------
@@ -242,6 +255,12 @@ class TcmGoPipeline(Pipeline):
         self.expenditures: list[dict[str, Any]] = []
         self.revenue_rels: list[dict[str, Any]] = []
         self.expenditure_rels: list[dict[str, Any]] = []
+        # Snapshot URI do payload ``/entes`` (uma única chamada). Populado
+        # só no caminho online (``_extract_entes_api``); fica ``None`` no
+        # fluxo offline (CSV local em ``data/tcm_go/entes.csv``) —
+        # comportamento consistente com o contrato opt-in de
+        # ``source_snapshot_uri`` seguido pelos outros pipelines GO.
+        self._entes_snapshot_uri: str | None = None
 
     # ------------------------------------------------------------------
     # Extract
@@ -304,10 +323,42 @@ class TcmGoPipeline(Pipeline):
         return len(self._raw_fiscal) > 0
 
     def _extract_entes_api(self) -> None:
-        """Fetch list of Goias municipalities from SICONFI entes endpoint."""
+        """Fetch list of Goias municipalities from SICONFI entes endpoint.
+
+        Archival: grava o payload bruto do ``/entes`` via
+        :func:`archive_fetch` antes de parsear, e guarda a URI resultante em
+        ``self._entes_snapshot_uri`` pra ``transform`` carimbar cada nó
+        municipality com ``source_snapshot_uri``. Falha de archival é
+        absorvida — pipeline segue com a lista parseada normalmente, só não
+        propaga a URI (opt-in).
+        """
+        url = f"{API_BASE}entes"
         try:
             with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-                self._municipalities = _fetch_entes_goias(client)
+                resp = client.get(url)
+                resp.raise_for_status()
+                content = resp.content
+                content_type = resp.headers.get(
+                    "content-type", _SICONFI_JSON_CONTENT_TYPE,
+                )
+                try:
+                    self._entes_snapshot_uri = archive_fetch(
+                        url=url,
+                        content=content,
+                        content_type=content_type,
+                        run_id=self.run_id,
+                        source_id=self.source_id,
+                    )
+                except (OSError, ValueError) as exc:
+                    logger.warning(
+                        "[tcm_go] archival of /entes failed: %s", exc,
+                    )
+                data = resp.json()
+                items = data.get("items", []) if isinstance(data, dict) else data
+                self._municipalities = [
+                    r for r in items
+                    if str(r.get("cod_ibge", "")).startswith(GOIAS_UF_CODE)
+                ]
                 logger.info(
                     "Fetched %d Goias municipalities from API", len(self._municipalities)
                 )
@@ -320,6 +371,14 @@ class TcmGoPipeline(Pipeline):
         Uses RREO (Resumo da Execucao Orcamentaria) Anexo 01 which contains
         revenue and expenditure summaries per municipality per year.
         The 6th bimester (nr_periodo=6) gives the annual totals.
+
+        Archival: uma chamada RREO por (municipio, ano) produz até ~20 rows
+        (top-level summary accounts × colunas). O payload bruto é persistido
+        via :func:`archive_fetch` uma única vez e a URI é replicada em cada
+        row resultante via a chave privada :data:`_SNAPSHOT_KEY`, pra
+        ``transform`` carimbar ``source_snapshot_uri`` em cada Revenue/
+        Expenditure node e relacionamento correspondente. Content-addressing
+        do archival deduplica chamadas idênticas no disco.
         """
         if not self._municipalities:
             logger.warning("No municipalities to fetch fiscal data for")
@@ -327,6 +386,7 @@ class TcmGoPipeline(Pipeline):
 
         records: list[dict[str, Any]] = []
         total_munis = len(self._municipalities)
+        url = f"{API_BASE}rreo"
 
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
             for year in RREO_YEARS:
@@ -336,7 +396,12 @@ class TcmGoPipeline(Pipeline):
                     if not cod_ibge:
                         continue
                     try:
-                        rows = _fetch_rreo_for_muni_year(client, cod_ibge, year)
+                        rows, snapshot_uri = self._fetch_rreo_raw(
+                            client, cod_ibge, year, url,
+                        )
+                        if snapshot_uri:
+                            for r in rows:
+                                r[_SNAPSHOT_KEY] = snapshot_uri
                         records.extend(rows)
                         fetched_year += 1
                     except httpx.HTTPError as exc:
@@ -359,6 +424,62 @@ class TcmGoPipeline(Pipeline):
         self._raw_fiscal = records
         logger.info("Fetched %d fiscal records from RREO API", len(self._raw_fiscal))
 
+    def _fetch_rreo_raw(
+        self,
+        client: httpx.Client,
+        cod_ibge: str,
+        year: int,
+        url: str,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Fetch RREO Anexo 01 pra (``cod_ibge``, ``year``) preservando bytes.
+
+        Espelho archival-aware de :func:`_fetch_rreo_for_muni_year`: grava o
+        payload bruto via :func:`archive_fetch` e devolve ``(rows, uri)``.
+        ``uri`` é ``None`` quando o servidor responde 404 (nada pra arquivar)
+        ou quando archival em disco falha — nesses casos o caller continua
+        processando as rows, só não propaga ``source_snapshot_uri``.
+        """
+        params = {
+            "an_exercicio": str(year),
+            "nr_periodo": "6",
+            "co_tipo_demonstrativo": "RREO",
+            "no_anexo": RREO_ANEXO,
+            "id_ente": cod_ibge,
+        }
+        resp = client.get(url, params=params)
+        if resp.status_code == 404:
+            return [], None
+        resp.raise_for_status()
+
+        content = resp.content
+        content_type = resp.headers.get(
+            "content-type", _SICONFI_JSON_CONTENT_TYPE,
+        )
+        snapshot_uri: str | None = None
+        try:
+            snapshot_uri = archive_fetch(
+                url=str(resp.request.url),
+                content=content,
+                content_type=content_type,
+                run_id=self.run_id,
+                source_id=self.source_id,
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                "[tcm_go] archival of /rreo %s/%d failed: %s",
+                cod_ibge, year, exc,
+            )
+
+        data = resp.json()
+        items = data.get("items", []) if isinstance(data, dict) else data
+        kept: list[dict[str, Any]] = []
+        for item in items:
+            conta = str(item.get("conta", ""))
+            if any(kw in conta.upper() for kw in RREO_SUMMARY_KEYWORDS):
+                item["an_exercicio"] = str(year)
+                kept.append(item)
+        return kept, snapshot_uri
+
     # ------------------------------------------------------------------
     # Transform
     # ------------------------------------------------------------------
@@ -370,7 +491,10 @@ class TcmGoPipeline(Pipeline):
         revenue_rels: list[dict[str, Any]] = []
         expenditure_rels: list[dict[str, Any]] = []
 
-        # Build municipality nodes from entes data
+        # Build municipality nodes from entes data. ``snapshot_uri`` vem
+        # do payload /entes arquivado no caminho online (fica ``None`` no
+        # fluxo offline/CSV local, preservando o opt-in).
+        entes_snapshot_uri = self._entes_snapshot_uri
         for row in self._municipalities:
             cod_ibge = str(row.get("cod_ibge", "")).strip()
             if not cod_ibge or not cod_ibge.startswith(GOIAS_UF_CODE):
@@ -388,6 +512,7 @@ class TcmGoPipeline(Pipeline):
                     "source": "tcm_go",
                 },
                 record_id=cod_ibge,
+                snapshot_uri=entes_snapshot_uri,
             ))
 
         # Process fiscal records into revenues and expenditures
@@ -428,6 +553,11 @@ class TcmGoPipeline(Pipeline):
             stable_id = hashlib.sha256(id_source.encode()).hexdigest()[:16]
 
             record_id = f"{cod_ibge}|{exercicio}|{conta}|{coluna}"
+            # ``_SNAPSHOT_KEY`` carrega a URI do /rreo que gerou esta row
+            # (caminho online). Ausente no fluxo offline (CSV local) — nesse
+            # caso ``attach_provenance`` não injeta ``source_snapshot_uri``.
+            rreo_uri = row.get(_SNAPSHOT_KEY)
+            snapshot_uri = rreo_uri if isinstance(rreo_uri, str) and rreo_uri else None
             if is_revenue:
                 revenues.append(self.attach_provenance(
                     {
@@ -441,6 +571,7 @@ class TcmGoPipeline(Pipeline):
                         "source": "tcm_go",
                     },
                     record_id=record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
                 revenue_rels.append(self.attach_provenance(
                     {
@@ -448,6 +579,7 @@ class TcmGoPipeline(Pipeline):
                         "target_key": stable_id,
                     },
                     record_id=record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
             else:
                 expenditures.append(self.attach_provenance(
@@ -462,6 +594,7 @@ class TcmGoPipeline(Pipeline):
                         "source": "tcm_go",
                     },
                     record_id=record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
                 expenditure_rels.append(self.attach_provenance(
                     {
@@ -469,6 +602,7 @@ class TcmGoPipeline(Pipeline):
                         "target_key": stable_id,
                     },
                     record_id=record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
         self.municipalities = deduplicate_rows(municipalities, ["municipality_id"])
