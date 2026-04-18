@@ -1,4 +1,4 @@
-.PHONY: help setup-env dev stop api etl lint type-check test test-api test-etl test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract check-provenance-contract generate-pipeline-status generate-source-summary generate-reference-metrics
+.PHONY: help setup-env dev stop api etl lint type-check test test-api test-api-federal test-etl test-integration-api test-integration-etl test-integration check pre-commit neutrality seed clean download-cnpj download-cnpj-all download-tse download-transparencia download-sanctions download-all etl-cnpj etl-cnpj-dev etl-cnpj-stream etl-tse etl-tse-dev etl-transparencia etl-transparencia-dev etl-sanctions etl-all link-persons bootstrap-demo bootstrap-full bootstrap-all bootstrap-all-noninteractive bootstrap-all-report bootstrap-go bootstrap-go-noninteractive bootstrap-go-report check-public-claims check-source-urls check-pipeline-contracts check-pipeline-inputs check-bootstrap-contract check-provenance-contract generate-pipeline-status generate-source-summary generate-reference-metrics
 
 # Default target when running `make` with no arguments.
 .DEFAULT_GOAL := help
@@ -119,6 +119,12 @@ type-check:
 
 test-api:
 	cd api && uv run pytest
+
+# Run the gated federal-scope tests (api/tests/_federal/**). Requires
+# ENABLE_FEDERAL_ROUTES=true so main.py mounts the federal routers under
+# test. See docs/_federal_gating.md.
+test-api-federal:
+	cd api && ENABLE_FEDERAL_ROUTES=true uv run pytest -m federal
 
 test-etl:
 	cd etl && uv run pytest

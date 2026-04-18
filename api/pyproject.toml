@@ -52,7 +52,8 @@ mypy_path = "src"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-m 'not integration' --strict-markers --strict-config"
+addopts = "-m 'not integration and not federal' --strict-markers --strict-config"
 markers = [
     "integration: requires running Neo4j instance",
+    "federal: gated federal-scope code (skipped unless ENABLE_FEDERAL_ROUTES=true; run via 'make test-api-federal')",
 ]
