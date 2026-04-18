@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.querido_diario import (
+from bracc_etl.pipelines.querido_diario import (  # type: ignore[attr-defined]
     QueridoDiarioPipeline,
     _sha256_text,
     _stable_id,

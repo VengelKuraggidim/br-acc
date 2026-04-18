@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.camara_inquiries import CamaraInquiriesPipeline, _stable_id
+from bracc_etl.pipelines.camara_inquiries import (  # type: ignore[attr-defined]
+    CamaraInquiriesPipeline,
+    _stable_id,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

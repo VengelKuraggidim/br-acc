@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.querido_diario_go import (
+from bracc_etl.pipelines.querido_diario_go import (  # type: ignore[attr-defined]
     QueridoDiarioGoPipeline,
     _classify_act,
     _extract_appointments,

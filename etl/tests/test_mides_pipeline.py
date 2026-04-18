@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.mides import (
+from bracc_etl.pipelines.mides import (  # type: ignore[attr-defined]
     MidesPipeline,
     _stable_id,
     _valid_cnpj,
