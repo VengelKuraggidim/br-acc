@@ -23,7 +23,6 @@ from bracc.routers import (
     graph,
     investigation,
     meta,
-    public,
     search,
 )
 from bracc.services.neo4j_service import ensure_schema
@@ -80,7 +79,6 @@ app.add_middleware(SecurityHeadersMiddleware, app_env=settings.app_env)
 app.add_middleware(CPFMaskingMiddleware)
 
 app.include_router(meta.router)
-app.include_router(public.router)
 app.include_router(auth.router)
 app.include_router(entity.router)
 app.include_router(search.router)
@@ -96,8 +94,10 @@ app.include_router(go.router)
 # endpoints from api/src/bracc/_federal/. See docs/_federal_gating.md.
 if os.getenv("ENABLE_FEDERAL_ROUTES", "false").strip().lower() == "true":
     from bracc._federal.routers import patterns as _federal_patterns  # noqa: E402
+    from bracc._federal.routers import public as _federal_public  # noqa: E402
 
     app.include_router(_federal_patterns.router)
+    app.include_router(_federal_public.router)
     _logger.info("ENABLE_FEDERAL_ROUTES=true: mounted _federal/ routers")
 
 
