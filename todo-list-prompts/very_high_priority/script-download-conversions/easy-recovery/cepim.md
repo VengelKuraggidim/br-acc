@@ -1,4 +1,6 @@
-# Recovery prompt — `cepim`
+# Recovery prompt — `cepim` — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `e809857`.
 
 **Status**: previously converted, wiped by concurrent `git reset --hard`. Re-run to restore.
 

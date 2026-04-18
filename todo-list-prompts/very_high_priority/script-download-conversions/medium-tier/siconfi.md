@@ -1,4 +1,6 @@
-# Medium — `siconfi` (Sistema de Informações Contábeis e Fiscais, Tesouro Nacional)
+# Medium — `siconfi` (Sistema de Informações Contábeis e Fiscais, Tesouro Nacional) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `bbd2836`.
 
 **Complexity**: API OData but with distinct resource IDs per dataset (DCA, RREO, RGF). Pipeline currently marks "No CNPJ direct links" in the registry — the gap is fields, not transport.
 

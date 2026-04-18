@@ -1,4 +1,7 @@
-# Medium — `caged` (Novo CAGED, emprego formal)
+# Medium — `caged` (Novo CAGED, emprego formal) — 🚫 BLOQUEADO (2026-04-18)
+
+> Bloqueado por dependência ausente `py7zr` (formato 7z dos dumps CAGED).
+> Reativar quando puder adicionar dep ao `pyproject.toml`.
 
 **Status per registry**: `stale` — "Aggregate-only implementation". Upstream data-quality issue, not pure transport.
 

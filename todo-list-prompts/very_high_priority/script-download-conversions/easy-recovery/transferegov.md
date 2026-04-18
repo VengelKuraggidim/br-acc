@@ -1,4 +1,6 @@
-# Recovery prompt — `transferegov`
+# Recovery prompt — `transferegov` — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `8607bdc`.
 
 **Status**: previously converted, wiped. Re-run to restore.
 

@@ -1,4 +1,6 @@
-# Medium — `icij` (OffShoreLeaks / Pandora Papers / Panama Papers)
+# Medium — `icij` (OffShoreLeaks / Pandora Papers / Panama Papers) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `c16ec6a`.
 
 **URL hints**:
 - Download page: `https://offshoreleaks.icij.org/pages/download`

@@ -1,4 +1,7 @@
-# 13 — Cota dos vereadores de Goiânia (Câmara Municipal)
+# 13 — Cota dos vereadores de Goiânia (Câmara Municipal) — ✅ CONCLUÍDO (2026-04-18)
+
+> `obter_cota_vereador_goiania` em `DespesasService` (commit `ca48767`),
+> roteado pelo `PerfilService` no nível municipal (commit `5d00152`).
 
 **Origem**: fase follow-up do 06 (verba indenizatória estadual GO).
 

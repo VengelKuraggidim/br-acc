@@ -1,4 +1,6 @@
-# Hard — `stf` (Supremo Tribunal Federal — jurisprudência / decisões)
+# Hard — `stf` (Supremo Tribunal Federal — jurisprudência / decisões) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `cbd8cde`.
 
 **Why hard**:
 - No stable bulk dump. Data lives behind search forms at `https://portal.stf.jus.br/jurisprudencia/`.

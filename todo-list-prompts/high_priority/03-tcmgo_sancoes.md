@@ -1,4 +1,9 @@
-# Destravar pipeline `tcmgo_sancoes` (Sanções TCM Goiás)
+# Destravar pipeline `tcmgo_sancoes` (Sanções TCM Goiás) — ⏳ PENDENTE (2026-04-18)
+
+> Pipeline retrofitado com archival (commit `6a1493d`, CSV único N rows
+> compartilham URI). Status registry continua `implemented_partial / not_loaded`.
+> Investigar se há CSV oficial publicado ou se escopo precisa virar HTML
+> scraping.
 
 ## Contexto
 O pipeline `etl/src/bracc_etl/pipelines/tcmgo_sancoes.py` é scaffold: ingere a lista de "impedidos de licitar, contratar ou exercer cargo público" e contas municipais rejeitadas publicadas por TCM-GO (https://www.tcmgo.tc.br/). Hoje `implemented_partial / not_loaded` — **sem API, apenas HTML**.

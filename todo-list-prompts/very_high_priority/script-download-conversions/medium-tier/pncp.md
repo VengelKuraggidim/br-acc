@@ -1,4 +1,6 @@
-# Medium — `pncp` (Portal Nacional de Contratações Públicas, nacional)
+# Medium — `pncp` (Portal Nacional de Contratações Públicas, nacional) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `08ec935`.
 
 **Complexity**: pagination + timeouts. Related pipeline `pncp_go` (already script_download) is a scoped subset; study it first.
 

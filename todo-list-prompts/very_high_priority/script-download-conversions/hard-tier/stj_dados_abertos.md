@@ -1,4 +1,6 @@
-# Hard — `stj_dados_abertos` (Superior Tribunal de Justiça)
+# Hard — `stj_dados_abertos` (Superior Tribunal de Justiça) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `16a9a39`.
 
 **Registry status**: `partial → not_loaded` — pipeline built but no production load.
 

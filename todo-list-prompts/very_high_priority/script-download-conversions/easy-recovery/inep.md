@@ -1,4 +1,6 @@
-# Recovery prompt — `inep`
+# Recovery prompt — `inep` — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `6c1c2a7`.
 
 **Status**: previously converted end-to-end, wiped by concurrent `git reset --hard`. Re-run to restore.
 

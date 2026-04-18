@@ -1,4 +1,7 @@
-# Hard — `querido_diario` (versão nacional, NÃO a GO)
+# Hard — `querido_diario` (versão nacional, NÃO a GO) — 🚫 BLOQUEADO (2026-04-18)
+
+> Pipeline federal `querido_diario` foi DEPRECATED (commit `7208381`) — substituído
+> por `querido_diario_go` (escopo Goiás-only). Sem trabalho a fazer.
 
 **Sibling**: `querido_diario_go` (already script_download — only Goiânia + Aparecida de Goiânia have data per the prior-session memo).
 

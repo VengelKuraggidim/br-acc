@@ -1,4 +1,6 @@
-# Recovery prompt — `cpgf`
+# Recovery prompt — `cpgf` — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `01edaf5`.
 
 **Status**: previously converted end-to-end, wiped. Re-run to restore.
 

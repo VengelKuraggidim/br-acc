@@ -1,4 +1,6 @@
-# Recovery prompt — `ceaf`
+# Recovery prompt — `ceaf` — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `2923b62`.
 
 **Status**: previously converted, wiped. Re-run to restore.
 

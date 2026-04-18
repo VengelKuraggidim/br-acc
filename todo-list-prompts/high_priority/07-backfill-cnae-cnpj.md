@@ -1,4 +1,8 @@
-# Backfillar CNAE + Situação Cadastral nos 52k+ CNPJs do grafo
+# Backfillar CNAE + Situação Cadastral nos 52k+ CNPJs do grafo — ⏳ PENDENTE (2026-04-18)
+
+> Trabalho de multi-semanas (RFB bulk dump). Situação cadastral parcial já
+> coberta on-demand por `brasilapi_cnpj_status` (prompt 08 ✅), mas backfill
+> em massa via dump RFB não foi implementado.
 
 ## Contexto
 Hoje os nós `:Company` no Neo4j só têm `razao_social` e `cnpj` — sem CNAE, sem situação cadastral, sem porte, sem endereço, sem capital social. Isso prejudica:

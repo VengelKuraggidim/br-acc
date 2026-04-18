@@ -1,4 +1,6 @@
-# Medium — `holdings` (RFB Quadro Societário — potential scale trap)
+# Medium — `holdings` (RFB Quadro Societário — potential scale trap) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `a4bc9ee`.
 
 **Complexity**: **high — multi-GB bulk dumps, binary-encoded column headers in some versions.**
 

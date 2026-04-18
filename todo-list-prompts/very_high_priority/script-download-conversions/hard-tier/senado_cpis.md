@@ -1,4 +1,6 @@
-# Hard — `senado_cpis`
+# Hard — `senado_cpis` — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `d212aeb`.
 
 **Registry status**: `partial — Needs richer sessions and requirements`.
 

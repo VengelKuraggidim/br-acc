@@ -1,4 +1,6 @@
-# Hard — `camara_inquiries` (CPIs + sub-relatórios Câmara dos Deputados)
+# Hard — `camara_inquiries` (CPIs + sub-relatórios Câmara dos Deputados) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `77585bc`.
 
 **Registry status**: `partial — Sessions still low`.
 

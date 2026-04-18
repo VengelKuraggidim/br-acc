@@ -1,4 +1,9 @@
-# Destravar pipeline `alego` (Assembleia Legislativa de Goiás)
+# Destravar pipeline `alego` (Assembleia Legislativa de Goiás) — ⏳ PENDENTE (2026-04-18)
+
+> Pipeline retrofitado com archival JSON-only (commit `cb89e05`). Status
+> registry continua `implemented_partial`. Investigar se escopo (HTML+PDF
+> scraping) ainda faz sentido — verba indenizatória já é coberta pelo
+> `DespesasService.obter_verba_indenizatoria_alego` (prompt 06 ✅).
 
 ## Contexto
 O pipeline `etl/src/bracc_etl/pipelines/alego.py` é scaffold: lê CSVs de `data/alego/` e gera nós Neo4j. Hoje `implemented_partial / not_loaded` porque **ALEGO não expõe API documentada nem CSV bulk** em https://transparencia.al.go.leg.br/.

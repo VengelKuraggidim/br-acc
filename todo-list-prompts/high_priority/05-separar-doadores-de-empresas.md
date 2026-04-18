@@ -1,4 +1,7 @@
-# Separar "Doadores de campanha" de "Empresas ligadas" no perfil do político
+# Separar "Doadores de campanha" de "Empresas ligadas" no perfil do político — ✅ CONCLUÍDO (2026-04-18)
+
+> Implementado via `ConexoesService` (fase 04.B). Categorias separadas: doadores PF,
+> doadores PJ, sócios, familiares, órgãos públicos.
 
 ## Contexto
 Hoje o perfil do político (`pwa/index.html` seção conexões + `backend/app.py` `perfil_politico`) joga TUDO na mesma lista chamada `empresas`: pessoas físicas doadoras, empresas doadoras, sócios, familiares, órgãos estaduais onde o político está lotado, etc. Resultado: usuário leigo vê "27 empresas conectadas" mas metade é CPF de pessoa física (doador individual), e a relação é genérica ("Doou para campanha" misturado com "Sócio(a) de" etc.).

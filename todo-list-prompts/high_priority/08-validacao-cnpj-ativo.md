@@ -1,4 +1,8 @@
-# Validar se o CNPJ doador/sócio está ATIVO na Receita Federal
+# Validar se o CNPJ doador/sócio está ATIVO na Receita Federal — ✅ CONCLUÍDO (2026-04-18)
+
+> Pipeline `brasilapi_cnpj_status` (commit `4d5808f`) ingere situação cadastral
+> via BrasilAPI com archival. Propagado em ConexoesService + alerta grave para
+> CNPJs BAIXADA/SUSPENSA/INAPTA (commits `8ddece3`, `8628f86`).
 
 ## Contexto
 Hoje o perfil de um político mostra CNPJs que doaram pra campanha ou nos quais ele aparece como sócio — sem verificar **se essas empresas ainda existem**. Uma empresa BAIXADA, SUSPENSA ou INAPTA doando pra campanha é um sinal vermelho relevante (pode indicar laranja, caixa 2, fraude). Idem pra sócio: político sócio de empresa BAIXADA é menos suspeito que de empresa ativa com contratos públicos, mas ainda é dado útil.

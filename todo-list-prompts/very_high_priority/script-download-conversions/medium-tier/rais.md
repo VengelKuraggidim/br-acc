@@ -1,4 +1,7 @@
-# Medium — `rais` (Relação Anual de Informações Sociais)
+# Medium — `rais` (Relação Anual de Informações Sociais) — 🚫 BLOQUEADO (2026-04-18)
+
+> Bloqueado por credenciais GCP (dumps RAIS exigem auth no upstream MTE/PDET).
+> Reativar quando creds forem provisionadas no Asgard Studio.
 
 **Warning**: **multi-GB annual dumps** (RAIS Estabelecimentos ~2-4 GB each; RAIS Vínculos ~50+ GB). Transport is simple but scale is huge.
 

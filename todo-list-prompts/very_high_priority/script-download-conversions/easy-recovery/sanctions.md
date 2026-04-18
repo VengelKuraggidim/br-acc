@@ -1,4 +1,6 @@
-# Recovery prompt — `sanctions` (CEIS + CNEP)
+# Recovery prompt — `sanctions` (CEIS + CNEP) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `fcdb93e`.
 
 **Status**: previously converted, wiped. Re-run to restore.
 

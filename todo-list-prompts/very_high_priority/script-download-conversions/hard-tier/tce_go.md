@@ -1,4 +1,7 @@
-# Hard — `tce_go` (Tribunal de Contas do Estado de Goiás)
+# Hard — `tce_go` (Tribunal de Contas do Estado de Goiás) — 🚫 BLOQUEADO (2026-04-18)
+
+> Pipeline file-only, operator-fed — TCE-GO não publica API JSON nem CSV bulk,
+> apenas dashboards HTML. Sem caminho de automação até portal mudar.
 
 **Registry status**: `file_manifest — Pending CSV export schema from TCE-GO dashboards`.
 

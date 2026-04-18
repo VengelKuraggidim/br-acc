@@ -1,4 +1,7 @@
-# Mostrar "quanto o político gasta com a política" para deputados estaduais e vereadores de GO
+# Mostrar "quanto o político gasta com a política" para deputados estaduais e vereadores de GO — ✅ CONCLUÍDO (2026-04-18)
+
+> ALEGO routing implementado via `PerfilService.roteia_despesas` (commits `f0bd87d`,
+> `23559b3`, `5d00152`). Cota de vereadores GYN coberta no follow-up (prompt 13).
 
 ## Contexto
 Hoje o bloco "Despesas de gabinete" no perfil do político só aparece para **deputados federais**, porque o backend busca CEAP (cota parlamentar) via API da Câmara Federal (`backend/apis_externas.py` `buscar_despesas_deputado`). Resultado: políticos como Cairo Salim (deputado estadual GO/PSD) ou vereadores de Goiânia abrem o perfil e **a seção "gastos com política" fica vazia**, mesmo eles tendo verba indenizatória estadual (ALEGO) ou cota de vereador (Câmara de Goiânia).

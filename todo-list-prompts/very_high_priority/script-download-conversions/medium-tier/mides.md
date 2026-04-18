@@ -1,4 +1,6 @@
-# Medium — `mides` (Ministério do Desenvolvimento Social / programas sociais)
+# Medium — `mides` (Ministério do Desenvolvimento Social / programas sociais) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `7bd7516`.
 
 **Complexity**: CKAN dataset registry is stable but schema varies across programs (Bolsa Família, BPC, SUAS, etc.). Pipeline probably consumes monthly CSV dumps.
 

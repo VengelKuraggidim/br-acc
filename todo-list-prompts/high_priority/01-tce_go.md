@@ -1,4 +1,10 @@
-# Destravar pipeline `tce_go` (TCE Goiás)
+# Destravar pipeline `tce_go` (TCE Goiás) — ⏳ PENDENTE (2026-04-18)
+
+> Pipeline ganhou archival retrofit (commit `44cc081`, `archive_local=False`)
+> mas continua `implemented_partial / not_loaded` no registry — fonte é
+> file-only, operator-fed, sem CSV bulk. Investigar se escopo do prompt
+> ainda faz sentido (talvez convergir com `hard-tier/tce_go.md` que já está
+> bloqueado por mesma razão).
 
 ## Contexto
 O pipeline `etl/src/bracc_etl/pipelines/tce_go.py` é um scaffold: lê CSVs de `data/tce_go/` e os transforma em nós Neo4j. Hoje está `implemented_partial / not_loaded` no registry porque **TCE-GO não publica API JSON nem export CSV em massa** — apenas dashboards HTML em https://portal.tce.go.gov.br/.

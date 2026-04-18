@@ -1,4 +1,8 @@
-# Comparar gastos de campanha vs teto legal do cargo (TSE)
+# Comparar gastos de campanha vs teto legal do cargo (TSE) — ✅ CONCLUÍDO (2026-04-18)
+
+> `teto_service` com Resolução TSE 23.607/2019 hardcoded (commit `3d0c535`),
+> integrado ao `PerfilService` com alerta grave em caso de excesso (commit
+> `7dff7c7`). Degrada silenciosamente para anos ≠ 2022 (commit `68a5624`).
 
 ## Contexto
 O TSE define um **teto de gastos de campanha** por cargo e por eleição (federal) e por município (prefeito/vereador). Ex.: em 2022, deputado federal tinha teto de ~R$ 2,1 milhões; governador de GO tinha teto de ~R$ 21 milhões; vereador de Goiânia em 2024 teve teto próprio por município.

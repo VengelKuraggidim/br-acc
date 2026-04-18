@@ -1,4 +1,8 @@
-# Destravar pipeline `ssp_go` (Estatísticas SSP Goiás)
+# Destravar pipeline `ssp_go` (Estatísticas SSP Goiás) — ⏳ PENDENTE (2026-04-18)
+
+> Pipeline retrofitado com archival (commit `92dbf95`, 1 PDF por ano).
+> Status registry continua `implemented_partial / not_loaded`. Investigar
+> se escopo (PDF mensal → CSV anual já implementado) é o que falta carregar.
 
 ## Contexto
 O pipeline `etl/src/bracc_etl/pipelines/ssp_go.py` é scaffold: ingere estatísticas agregadas de segurança pública (ocorrências por município × tipo de crime × período) publicadas pela SSP-GO em https://goias.gov.br/seguranca/. Hoje `implemented_partial / not_loaded` — **fonte é tipicamente PDF mensal, sem API nem CSV**.

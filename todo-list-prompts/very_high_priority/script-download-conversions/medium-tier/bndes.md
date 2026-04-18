@@ -1,4 +1,6 @@
-# Medium — `bndes` (BNDES operações de crédito)
+# Medium — `bndes` (BNDES operações de crédito) — ✅ CONCLUÍDO (2026-04-18)
+
+> Script criado em commit `44f7ea5`.
 
 **URL hints**:
 - Transparência BNDES: `https://www.bndes.gov.br/wps/portal/site/home/transparencia`
