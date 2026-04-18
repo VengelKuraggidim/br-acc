@@ -161,7 +161,11 @@ def cli() -> None:
 @click.option("--source", required=True, help="Pipeline name (see 'sources' command)")
 @click.option("--neo4j-uri", default="bolt://localhost:7687", help="Neo4j URI")
 @click.option("--neo4j-user", default="neo4j", help="Neo4j user")
-@click.option("--neo4j-password", required=True, help="Neo4j password")
+@click.option(
+    "--neo4j-password",
+    default=None,
+    help="Neo4j password (default: busca via GCP Secret Manager fiscal-cidadao-neo4j-password)",
+)
 @click.option("--neo4j-database", default="neo4j", help="Neo4j database")
 @click.option("--data-dir", default="./data", help="Directory for downloaded data")
 @click.option("--limit", type=int, default=None, help="Limit rows processed")
@@ -189,7 +193,7 @@ def run(
     source: str,
     neo4j_uri: str,
     neo4j_user: str,
-    neo4j_password: str,
+    neo4j_password: str | None,
     neo4j_database: str,
     data_dir: str,
     limit: int | None,
@@ -206,6 +210,18 @@ def run(
     if source not in PIPELINES:
         available = ", ".join(PIPELINES.keys())
         raise click.ClickException(f"Unknown source: {source}. Available: {available}")
+
+    if not neo4j_password:
+        from bracc_etl.secrets import SecretNotFoundError, load_secret
+
+        try:
+            neo4j_password = load_secret("neo4j-password")
+        except SecretNotFoundError as exc:
+            raise click.ClickException(
+                f"--neo4j-password ausente: passe via CLI ou configure "
+                f"GCP_PROJECT_ID + secret 'fiscal-cidadao-neo4j-password'. "
+                f"Detalhe: {exc}"
+            ) from None
 
     driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     try:

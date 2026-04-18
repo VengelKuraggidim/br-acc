@@ -99,8 +99,8 @@ def fetch_to_disk(
         # and pyarrow. Keeping the import inside fetch_to_disk lets the rest
         # of the pipeline (extract/transform/load) run on systems that only
         # have the Receita-side base CSVs already on disk.
-        import google.auth  # type: ignore[import-not-found,unused-ignore]
-        from google.cloud import bigquery  # type: ignore[import-not-found,unused-ignore]
+        import google.auth
+        from google.cloud import bigquery
     except ImportError as exc:  # pragma: no cover - exercised in the CLI
         raise RuntimeError(
             "[mides] fetch_to_disk requires the [bigquery] extra: "

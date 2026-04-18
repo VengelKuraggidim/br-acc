@@ -61,6 +61,12 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 
+# google-cloud-* libs não shippam type stubs nem py.typed.
+# Silencia em um lugar central em vez de espalhar "# type: ignore" em cada import.
+[[tool.mypy.overrides]]
+module = ["google.*", "google.cloud.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not integration' --strict-markers --strict-config"
