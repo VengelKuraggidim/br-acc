@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bracc.config import settings
 from bracc.models.perfil import DespesaGabinete
@@ -50,6 +50,81 @@ def _default_anos() -> list[int]:
     """Default do Flask: ano corrente + ano anterior."""
     ano_atual = datetime.now(tz=UTC).year
     return [ano_atual, ano_atual - 1]
+
+
+async def _aggregate_despesas(
+    driver: AsyncDriver,
+    cypher_name: str,
+    params: dict[str, Any],
+    *,
+    contexto_log: str,
+) -> list[DespesaGabinete]:
+    """Executa Cypher + agrega rows por ``tipo_raw`` → ``DespesaGabinete``.
+
+    Lógica única compartilhada pelas 3 funções públicas (CEAP federal,
+    verba ALEGO, cota vereador GYN). Evita drift entre cópias da mesma
+    agregação — qualquer ajuste (ex.: mudar cap ``<= 0``, trocar default
+    pra ``Outros``) acontece em 1 lugar só.
+
+    Parameters
+    ----------
+    driver:
+        Async driver Neo4j — a session é aberta e fechada aqui dentro.
+    cypher_name:
+        Nome do arquivo ``.cypher`` (sem extensão) a ser resolvido por
+        :func:`execute_query`.
+    params:
+        Parâmetros Cypher já formatados (ex.: ``{"id_camara": "...",
+        "anos": [...]}``). O caller garante o contrato de cada query.
+    contexto_log:
+        Texto curto usado nos ``logger.warning`` — basta pra o operador
+        identificar qual variante retornou vazia sem espalhar formatação
+        na logic de agregação.
+
+    Returns
+    -------
+    list[DespesaGabinete]
+        Lista ordenada por ``total`` decrescente. Vazia (log warning)
+        quando não há records ou todos os valores são inválidos/não-
+        positivos — nunca levanta nesse caso (é o contrato do Flask
+        original, que o PerfilService já trata como "seção omitida").
+    """
+    async with driver.session(database=settings.neo4j_database) as session:
+        records = await execute_query(session, cypher_name, params)
+
+    if not records:
+        logger.warning("[despesas_service] sem records — %s", contexto_log)
+        return []
+
+    # Agrega por tipo_despesa traduzido. Preserva o raw quando a tradução
+    # é identidade (dict sem match) para não quebrar comparações downstream.
+    por_tipo: dict[str, float] = {}
+    for record in records:
+        tipo_raw = record.get("tipo_raw") or ""
+        valor_raw = record.get("valor")
+        if valor_raw is None:
+            continue
+        try:
+            valor = float(valor_raw)
+        except (TypeError, ValueError):
+            continue
+        if valor <= 0:
+            continue
+        tipo_traduzido = traduzir_despesa(str(tipo_raw)) if tipo_raw else "Outros"
+        por_tipo[tipo_traduzido] = por_tipo.get(tipo_traduzido, 0.0) + valor
+
+    if not por_tipo:
+        logger.warning(
+            "[despesas_service] records sem valores validos — %s", contexto_log,
+        )
+        return []
+
+    return [
+        DespesaGabinete(tipo=tipo, total=total, total_fmt=fmt_brl(total))
+        for tipo, total in sorted(
+            por_tipo.items(), key=lambda kv: -kv[1],
+        )
+    ]
 
 
 async def obter_ceap_deputado(
@@ -75,51 +150,12 @@ async def obter_ceap_deputado(
         caso (log ``warning``).
     """
     anos_filtro = anos if anos is not None else _default_anos()
-
-    async with driver.session(database=settings.neo4j_database) as session:
-        records = await execute_query(
-            session,
-            "perfil_ceap_deputado",
-            {"id_camara": str(id_camara), "anos": anos_filtro},
-        )
-
-    if not records:
-        logger.warning(
-            "[despesas_service] sem CEAP para deputado id_camara=%s anos=%s",
-            id_camara, anos_filtro,
-        )
-        return []
-
-    # Agrega por tipo_despesa traduzido. Preserva o raw quando a tradução
-    # é identidade (dict sem match) para não quebrar comparações downstream.
-    por_tipo: dict[str, float] = {}
-    for record in records:
-        tipo_raw = record.get("tipo_raw") or ""
-        valor_raw = record.get("valor")
-        if valor_raw is None:
-            continue
-        try:
-            valor = float(valor_raw)
-        except (TypeError, ValueError):
-            continue
-        if valor <= 0:
-            continue
-        tipo_traduzido = traduzir_despesa(str(tipo_raw)) if tipo_raw else "Outros"
-        por_tipo[tipo_traduzido] = por_tipo.get(tipo_traduzido, 0.0) + valor
-
-    if not por_tipo:
-        logger.warning(
-            "[despesas_service] CEAP de id_camara=%s sem valores válidos",
-            id_camara,
-        )
-        return []
-
-    return [
-        DespesaGabinete(tipo=tipo, total=total, total_fmt=fmt_brl(total))
-        for tipo, total in sorted(
-            por_tipo.items(), key=lambda kv: -kv[1],
-        )
-    ]
+    return await _aggregate_despesas(
+        driver,
+        "perfil_ceap_deputado",
+        {"id_camara": str(id_camara), "anos": anos_filtro},
+        contexto_log=f"CEAP deputado id_camara={id_camara} anos={anos_filtro}",
+    )
 
 
 async def obter_verba_indenizatoria_alego(
@@ -153,50 +189,14 @@ async def obter_verba_indenizatoria_alego(
         nunca levanta exceção nesse caso (log ``warning``).
     """
     anos_filtro = anos if anos is not None else _default_anos()
-
-    async with driver.session(database=settings.neo4j_database) as session:
-        records = await execute_query(
-            session,
-            "perfil_verba_alego",
-            {"legislator_id": str(legislator_id), "anos": anos_filtro},
-        )
-
-    if not records:
-        logger.warning(
-            "[despesas_service] sem verba ALEGO para legislator_id=%s anos=%s",
-            legislator_id, anos_filtro,
-        )
-        return []
-
-    # Mesma lógica de agregação do CEAP federal (preserva total_fmt BRL).
-    por_tipo: dict[str, float] = {}
-    for record in records:
-        tipo_raw = record.get("tipo_raw") or ""
-        valor_raw = record.get("valor")
-        if valor_raw is None:
-            continue
-        try:
-            valor = float(valor_raw)
-        except (TypeError, ValueError):
-            continue
-        if valor <= 0:
-            continue
-        tipo_traduzido = traduzir_despesa(str(tipo_raw)) if tipo_raw else "Outros"
-        por_tipo[tipo_traduzido] = por_tipo.get(tipo_traduzido, 0.0) + valor
-
-    if not por_tipo:
-        logger.warning(
-            "[despesas_service] verba ALEGO de legislator_id=%s sem valores validos",
-            legislator_id,
-        )
-        return []
-
-    return [
-        DespesaGabinete(tipo=tipo, total=total, total_fmt=fmt_brl(total))
-        for tipo, total in sorted(
-            por_tipo.items(), key=lambda kv: -kv[1],
-        )
-    ]
+    return await _aggregate_despesas(
+        driver,
+        "perfil_verba_alego",
+        {"legislator_id": str(legislator_id), "anos": anos_filtro},
+        contexto_log=(
+            f"verba ALEGO legislator_id={legislator_id} anos={anos_filtro}"
+        ),
+    )
 
 
 async def obter_cota_vereador_goiania(
@@ -231,50 +231,14 @@ async def obter_cota_vereador_goiania(
         existe; nunca levanta excecao nesse caso (log ``warning``).
     """
     anos_filtro = anos if anos is not None else _default_anos()
-
-    async with driver.session(database=settings.neo4j_database) as session:
-        records = await execute_query(
-            session,
-            "perfil_cota_vereador_goiania",
-            {"vereador_id": str(vereador_id), "anos": anos_filtro},
-        )
-
-    if not records:
-        logger.warning(
-            "[despesas_service] sem cota vereador GYN para vereador_id=%s anos=%s",
-            vereador_id, anos_filtro,
-        )
-        return []
-
-    # Mesma logica de agregacao do CEAP/ALEGO (preserva total_fmt BRL).
-    por_tipo: dict[str, float] = {}
-    for record in records:
-        tipo_raw = record.get("tipo_raw") or ""
-        valor_raw = record.get("valor")
-        if valor_raw is None:
-            continue
-        try:
-            valor = float(valor_raw)
-        except (TypeError, ValueError):
-            continue
-        if valor <= 0:
-            continue
-        tipo_traduzido = traduzir_despesa(str(tipo_raw)) if tipo_raw else "Outros"
-        por_tipo[tipo_traduzido] = por_tipo.get(tipo_traduzido, 0.0) + valor
-
-    if not por_tipo:
-        logger.warning(
-            "[despesas_service] cota vereador GYN de vereador_id=%s sem valores validos",
-            vereador_id,
-        )
-        return []
-
-    return [
-        DespesaGabinete(tipo=tipo, total=total, total_fmt=fmt_brl(total))
-        for tipo, total in sorted(
-            por_tipo.items(), key=lambda kv: -kv[1],
-        )
-    ]
+    return await _aggregate_despesas(
+        driver,
+        "perfil_cota_vereador_goiania",
+        {"vereador_id": str(vereador_id), "anos": anos_filtro},
+        contexto_log=(
+            f"cota vereador GYN vereador_id={vereador_id} anos={anos_filtro}"
+        ),
+    )
 
 
 async def calcular_media_ceap_estado(
