@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-17",
   "full_historical_default": true,
-  "expected_implemented_count": 61,
+  "expected_implemented_count": 62,
   "core_sources": [
     "camara",
     "cnpj",
@@ -724,6 +724,15 @@
         "data/brasilapi_cnpj_status/*"
       ],
       "blocking_reason_if_any": "rate-limited 500/day, runs batched",
+      "core": false
+    },
+    {
+      "pipeline_id": "alego_deputados_foto",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/alego_deputados_foto/*"
+      ],
+      "blocking_reason_if_any": "HTML scraping do portal.al.go.leg.br/deputados — selector img.foto pode quebrar se Rails template mudar; cadência mensal porque fotos quase nunca mudam.",
       "core": false
     }
   ]

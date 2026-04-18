@@ -202,8 +202,8 @@ async def test_meta_stats(client: AsyncClient) -> None:
     assert data["source_document_count"] == 0
     assert data["ingestion_run_count"] == 0
     assert data["temporal_violation_count"] == 0
-    assert data["data_sources"] == 121
-    assert data["implemented_sources"] == 62
+    assert data["data_sources"] == 122
+    assert data["implemented_sources"] == 63
     assert data["loaded_sources"] >= 1
     assert data["healthy_sources"] >= 1
     assert data["stale_sources"] >= 0

@@ -9,6 +9,7 @@ from neo4j import GraphDatabase
 
 from bracc_etl.linking_hooks import run_post_load_hooks
 from bracc_etl.pipelines.alego import AlegoPipeline
+from bracc_etl.pipelines.alego_deputados_foto import AlegoDeputadosFotoPipeline
 from bracc_etl.pipelines.bcb import BcbPipeline
 from bracc_etl.pipelines.bndes import BndesPipeline
 from bracc_etl.pipelines.brasilapi_cnpj_status import (
@@ -132,6 +133,7 @@ PIPELINES: dict[str, type] = {
     "state_portal_go": StatePortalGoPipeline,
     "tce_go": TceGoPipeline,
     "alego": AlegoPipeline,
+    "alego_deputados_foto": AlegoDeputadosFotoPipeline,
     "tcmgo_sancoes": TcmgoSancoesPipeline,
     "ssp_go": SspGoPipeline,
     "camara_politicos_go": CamaraPoliticosGoPipeline,
