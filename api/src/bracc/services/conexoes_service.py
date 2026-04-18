@@ -56,6 +56,7 @@ from bracc.models.perfil import (
     FamiliarConectado,
     SocioConectado,
 )
+from bracc.services.common_helpers import as_float, as_str, norm_type
 from bracc.services.formatacao_service import fmt_brl, mascarar_cpf
 from bracc.services.traducao_service import (
     traduzir_funcao_emenda,
@@ -105,34 +106,6 @@ class _DoacaoPessoaAcc:
     n: int = 0
 
 
-def _norm_type(target_type: Any) -> str:
-    """Normaliza ``target_type`` pra lowercase (label Neo4j é PascalCase)."""
-    if not isinstance(target_type, str):
-        return ""
-    return target_type.lower()
-
-
-def _as_str(props: dict[str, Any], key: str) -> str | None:
-    """Lê ``props[key]`` se for string não-vazia, senão ``None``.
-
-    Evita repetir ``isinstance(..., str)`` toda vez e mantém type-safe.
-    """
-    value = props.get(key)
-    if isinstance(value, str) and value:
-        return value
-    return None
-
-
-def _as_float(value: Any) -> float:
-    """Coerção best-effort pra float (``0.0`` em caso de None/erro)."""
-    if value is None:
-        return 0.0
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
 def _valor_doacao(rel_props: dict[str, Any] | None) -> float:
     """Extrai o valor da doação da aresta. Prefere ``valor``, cai pra ``amount``."""
     if not rel_props:
@@ -140,12 +113,12 @@ def _valor_doacao(rel_props: dict[str, Any] | None) -> float:
     raw = rel_props.get("valor")
     if raw is None:
         raw = rel_props.get("amount")
-    return _as_float(raw)
+    return as_float(raw)
 
 
 def _nome_empresa(props: dict[str, Any]) -> str:
     """Nome preferido da empresa: razão social > name > ''."""
-    return _as_str(props, "razao_social") or _as_str(props, "name") or ""
+    return as_str(props, "razao_social") or as_str(props, "name") or ""
 
 
 # Tradução leiga pras 5 situações cadastrais RFB. Exibida direto no card
@@ -170,13 +143,13 @@ def _situacao_from_props(
     ``None`` em todos os 3 campos quando a empresa ainda não foi
     verificada pelo pipeline ``brasilapi_cnpj_status``.
     """
-    raw = _as_str(props, "situacao_cadastral")
+    raw = as_str(props, "situacao_cadastral")
     if raw is None:
         return None, None, None
     upper = raw.upper()
     if upper not in _SITUACAO_LEIGA:
         return None, None, None
-    verified_at = _as_str(props, "situacao_verified_at")
+    verified_at = as_str(props, "situacao_verified_at")
     return upper, _SITUACAO_LEIGA[upper], verified_at
 
 
@@ -237,7 +210,7 @@ def classificar(
             continue
 
         target = entidades_conectadas.get(target_id, {})
-        target_type = _norm_type(target.get("type"))
+        target_type = norm_type(target.get("type"))
         target_props_raw = target.get("properties") or {}
         target_props: dict[str, Any] = (
             target_props_raw if isinstance(target_props_raw, dict) else {}
@@ -251,18 +224,18 @@ def classificar(
 
         # --- 1. Emendas ---------------------------------------------------
         if target_type == "amendment":
-            val_committed = _as_float(target_props.get("value_committed"))
-            val_paid = _as_float(target_props.get("value_paid"))
-            amendment_id = _as_str(target_props, "amendment_id") or target_id
+            val_committed = as_float(target_props.get("value_committed"))
+            val_paid = as_float(target_props.get("value_paid"))
+            amendment_id = as_str(target_props, "amendment_id") or target_id
             emendas.append(
                 Emenda(
                     id=amendment_id,
-                    tipo=traduzir_tipo_emenda(_as_str(target_props, "type") or ""),
+                    tipo=traduzir_tipo_emenda(as_str(target_props, "type") or ""),
                     funcao=traduzir_funcao_emenda(
-                        _as_str(target_props, "function") or "",
+                        as_str(target_props, "function") or "",
                     ),
-                    municipio=_as_str(target_props, "municipality"),
-                    uf=_as_str(target_props, "uf"),
+                    municipio=as_str(target_props, "municipality"),
+                    uf=as_str(target_props, "uf"),
                     valor_empenhado=val_committed,
                     valor_empenhado_fmt=fmt_brl(val_committed),
                     valor_pago=val_paid,
@@ -275,7 +248,7 @@ def classificar(
         if rel_type == "DOOU" and not politico_is_source:
             valor = _valor_doacao(rel_props)
             if target_type == "company":
-                cnpj = _as_str(target_props, "cnpj")
+                cnpj = as_str(target_props, "cnpj")
                 # Gotcha do audit: CNPJ ausente → usa element_id como chave
                 # pra evitar colapsar empresas diferentes em 1 só.
                 chave = cnpj or f"empresa_{target_id}"
@@ -300,7 +273,7 @@ def classificar(
                 emp_acc.n += 1
                 continue
             if target_type == "person":
-                cpf_pleno = _as_str(target_props, "cpf")
+                cpf_pleno = as_str(target_props, "cpf")
                 # LGPD: máscara APLICADA AQUI — o dict intermediário e o
                 # DoadorPessoa só carregam o formato mascarado.
                 cpf_mascarado = mascarar_cpf(cpf_pleno)
@@ -311,7 +284,7 @@ def classificar(
                 pes_acc = doacoes_pessoa.setdefault(
                     chave,
                     _DoacaoPessoaAcc(
-                        nome=_as_str(target_props, "name") or "",
+                        nome=as_str(target_props, "name") or "",
                         cpf_mascarado=cpf_mascarado,
                     ),
                 )
@@ -330,7 +303,7 @@ def classificar(
             socios.append(
                 SocioConectado(
                     nome=_nome_empresa(target_props),
-                    cnpj=_as_str(target_props, "cnpj"),
+                    cnpj=as_str(target_props, "cnpj"),
                     situacao=situacao,
                     situacao_fmt=situacao_fmt,
                     situacao_verified_at=verified_at,
@@ -345,9 +318,9 @@ def classificar(
                 continue
             familia.append(
                 FamiliarConectado(
-                    nome=_as_str(target_props, "name") or "",
+                    nome=as_str(target_props, "name") or "",
                     # LGPD: mascara AQUI antes de construir o model.
-                    cpf_mascarado=mascarar_cpf(_as_str(target_props, "cpf")),
+                    cpf_mascarado=mascarar_cpf(as_str(target_props, "cpf")),
                     relacao="Cônjuge" if rel_type == "CONJUGE_DE" else "Parente",
                 ),
             )
@@ -355,29 +328,29 @@ def classificar(
 
         # --- 5. Contratos (federal e GO) -----------------------------------
         if target_type == "contract":
-            valor = _as_float(target_props.get("value"))
+            valor = as_float(target_props.get("value"))
             contratos.append(
                 ContratoConectado(
-                    objeto=_as_str(target_props, "object") or "Nao informado",
+                    objeto=as_str(target_props, "object") or "Nao informado",
                     valor=valor,
                     valor_fmt=fmt_brl(valor),
-                    orgao=_as_str(target_props, "contracting_org"),
-                    data=_as_str(target_props, "date"),
+                    orgao=as_str(target_props, "contracting_org"),
+                    data=as_str(target_props, "date"),
                 ),
             )
             continue
         if target_type == "go_procurement":
-            valor = _as_float(target_props.get("amount_estimated"))
+            valor = as_float(target_props.get("amount_estimated"))
             contratos.append(
                 ContratoConectado(
                     objeto=(
-                        _as_str(target_props, "object")
+                        as_str(target_props, "object")
                         or "Licitacao estadual/municipal"
                     ),
                     valor=valor,
                     valor_fmt=fmt_brl(valor),
-                    orgao=_as_str(target_props, "agency_name"),
-                    data=_as_str(target_props, "published_at"),
+                    orgao=as_str(target_props, "agency_name"),
+                    data=as_str(target_props, "published_at"),
                 ),
             )
             continue
@@ -390,7 +363,7 @@ def classificar(
             empresas.append(
                 EmpresaConectada(
                     nome=_nome_empresa(target_props),
-                    cnpj=_as_str(target_props, "cnpj"),
+                    cnpj=as_str(target_props, "cnpj"),
                     relacao=traduzir_relacao(rel_type),
                     situacao=situacao,
                     situacao_fmt=situacao_fmt,
@@ -403,7 +376,7 @@ def classificar(
         if target_type == "state_agency":
             empresas.append(
                 EmpresaConectada(
-                    nome=_as_str(target_props, "name") or "",
+                    nome=as_str(target_props, "name") or "",
                     cnpj=None,
                     relacao="Lotado em (orgao estadual)",
                 ),
