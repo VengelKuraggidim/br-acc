@@ -12,6 +12,7 @@ from bracc_etl.pipelines.caged import CagedPipeline
 from bracc_etl.pipelines.camara import CamaraPipeline
 from bracc_etl.pipelines.camara_goiania import CamaraGoianiaPipeline
 from bracc_etl.pipelines.camara_inquiries import CamaraInquiriesPipeline
+from bracc_etl.pipelines.camara_politicos_go import CamaraPoliticosGoPipeline
 from bracc_etl.pipelines.ceaf import CeafPipeline
 from bracc_etl.pipelines.cepim import CepimPipeline
 from bracc_etl.pipelines.cnpj import CNPJPipeline
@@ -122,6 +123,7 @@ PIPELINES: dict[str, type] = {
     "alego": AlegoPipeline,
     "tcmgo_sancoes": TcmgoSancoesPipeline,
     "ssp_go": SspGoPipeline,
+    "camara_politicos_go": CamaraPoliticosGoPipeline,
 }
 
 

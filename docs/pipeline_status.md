@@ -1,8 +1,6 @@
-# Fiscal Cidadão — Pipeline Status
+# Pipeline Status
 
-> Fork of [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3) re-scoped to Goiás. The table below is auto-generated and still lists all registered sources; Goiás-specific pipelines (`camara_goiania`, `folha_go`, `mides`, etc.) are the priority for this fork.
-
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-17T20:14:55Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T06:16:51Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -12,7 +10,7 @@ Status buckets:
 
 | Source ID | Pipeline ID | Status Bucket | Load State | Source Format | Required Input | Known Blockers |
 |---|---|---|---|---|---|---|
-| alego | alego | implemented_partial | not_loaded | web_portal | Portal export/scrape output under data/alego/ | State deputies and cota parlamentar pending public API discovery |
+| alego | alego | implemented_partial | not_loaded | api_json | API payload from https://transparencia.al.go.leg.br/ | Angular SPA public JSON API under /api/transparencia/ (verbas_indenizatorias + processos); downloader at scripts/download_alego.py |
 | ana_water_grants | ana_water_grants | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/ana | Water use rights |
 | anac_aviation_concessions | anac_aviation_concessions | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anac | Aviation contracts |
 | anatel_telecom_licenses | anatel_telecom_licenses | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anatel | Telecom operators |
@@ -29,6 +27,8 @@ Status buckets:
 | bolsa_familia_bpc | bolsa_familia_bpc | not_built | not_loaded | file_batch | data/bolsa_familia_bpc/* | High volume masked identities |
 | caged | caged | implemented_partial | partial | file_batch | data/caged/* | Aggregate-only implementation |
 | camara | camara | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.camara.leg.br/ | - |
+| camara_deputados | camara_politicos_go | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2/ | GO-scoped federal deputies roster and CEAP expenses; substitui live-call Flask /politico |
+| camara_deputados_ceap | camara_politicos_go | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2/ | CEAP (Cota de Atividade Parlamentar) per GO federal deputy; ingested by camara_politicos_go pipeline |
 | camara_goiania | camara_goiania | implemented_loaded | loaded | api_json | API payload from https://www.goiania.go.leg.br/ | - |
 | camara_inquiries | camara_inquiries | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/ | Sessions still low |
 | camara_votes_bills | camara_votes_bills | not_built | not_loaded | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2 | Legislative behavior |
