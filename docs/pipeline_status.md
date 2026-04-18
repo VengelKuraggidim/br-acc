@@ -127,6 +127,7 @@ Status buckets:
 | transparencia | transparencia | implemented_loaded | loaded | file_batch | data/transparencia/* | - |
 | tse | tse | implemented_loaded | loaded | file_batch | data/tse/* | - |
 | tse_bens | tse_bens | implemented_loaded | loaded | file_batch | data/tse_bens/* | - |
+| tse_candidatos_foto | tse_candidatos_foto | implemented_partial | partial | api_json | API payload from https://divulgacandcontas.tse.jus.br/divulga/rest/arquivo/img/ | Foto oficial de candidatos GO via divulgacandcontas (cd_eleicao+sq_candidato+uf); skip silencioso de placeholder TSE; bienal alinhado com eleicoes |
 | tse_filiados | tse_filiados | implemented_loaded | loaded | file_batch | data/tse_filiados/* | - |
 | tse_prestacao_contas | tse_prestacao_contas_go | implemented_partial | partial | file_batch | data/tse_prestacao_contas_go/* | Receitas + despesas + bens de candidatos GO (CSV anual pos-eleicao); popula validacao_tse do Flask |
 | un_sanctions | un_sanctions | implemented_loaded | loaded | file_batch | data/un_sanctions/* | - |

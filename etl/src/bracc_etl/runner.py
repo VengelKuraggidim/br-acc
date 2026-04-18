@@ -71,6 +71,7 @@ from bracc_etl.pipelines.transferegov import TransferegovPipeline
 from bracc_etl.pipelines.transparencia import TransparenciaPipeline
 from bracc_etl.pipelines.tse import TSEPipeline
 from bracc_etl.pipelines.tse_bens import TseBensPipeline
+from bracc_etl.pipelines.tse_candidatos_foto import TseCandidatosFotoPipeline
 from bracc_etl.pipelines.tse_filiados import TseFiliadosPipeline
 from bracc_etl.pipelines.tse_prestacao_contas_go import TsePrestacaoContasGoPipeline
 from bracc_etl.pipelines.un_sanctions import UnSanctionsPipeline
@@ -145,6 +146,7 @@ PIPELINES: dict[str, type] = {
     "emendas_parlamentares_go": EmendasParlamentaresGoPipeline,
     "brasilapi_cnpj_status": BrasilapiCnpjStatusPipeline,
     "wikidata_politicos_foto": WikidataPoliticosFotoPipeline,
+    "tse_candidatos_foto": TseCandidatosFotoPipeline,
 }
 
 
