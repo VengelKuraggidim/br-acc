@@ -124,20 +124,41 @@ O campo `source_snapshot_uri` foi adicionado ao
 `/deputados/{id}` e despesa CEAP `/deputados/{id}/despesas`). Serve de
 referência para retrofits dos 10 legados e para pipelines novos.
 
-## Retrofit nos 10 pipelines GO legados
+## Retrofit nos 10 pipelines GO legados — **CONCLUÍDO (2026-04-18)**
 
-Fase separada. Ordem sugerida por valor:
+Todos os 10 pipelines GO legados agora gravam snapshots via
+`archive_fetch` e carimbam `source_snapshot_uri` nas rows/rels
+derivadas. Confirmação:
 
-1. `folha_go` — CSVs estáticos, archival barato e alto valor.
-2. `pncp_go` — JSON por resource_id, já tem URL deep-link.
-3. `alego` — HTML + PDF de atos parlamentares.
-4. `ssp_go`, `tce_go`, `tcm_go`, `tcmgo_sancoes`, `state_portal_go`,
-   `querido_diario_go`, `camara_goiania`.
+```bash
+grep -l "archive_fetch" etl/src/bracc_etl/pipelines/*.py
+```
 
-Plano por pipeline: capturar `response.content` no ponto de extração,
-chamar `archive_fetch`, propagar a URI via `attach_provenance(snapshot_uri=…)`.
-Ver [`../todo-list-prompts/high_priority/11-archival-retrofit-go.md`](../todo-list-prompts/high_priority/11-archival-retrofit-go.md)
-para o plano detalhado.
+lista os **11 pipelines** hoje (10 GO retrofitados + `camara_politicos_go`
+greenfield). Commits (em ordem):
+
+| Pipeline | Commit | Observação |
+|---|---|---|
+| `folha_go` | `6fab6c5` | Primeiro retrofit, prova do padrão |
+| `alego` | `cb89e05` | JSON only (plano listava HTML+PDF) |
+| `pncp_go` | `24be567` | Paginado, snapshot por página |
+| `ssp_go` | `92dbf95` | 1 PDF por ano (plano listava mensal) |
+| `tcmgo_sancoes` | `6a1493d` | CSV único, N rows compartilham URI |
+| `state_portal_go` | `ee3bd8f` | CKAN: 3 datasets, 3 URIs distintas |
+| `querido_diario_go` | `0a00146` | 1 URI por edição×município |
+| `camara_goiania` | `44cc081` | 3 endpoints Plone JSON |
+| `tce_go` | (bundled em `44cc081`) | File-only, `archive_local=False` opt-in |
+| `tcm_go` | `ce38d66` | API SICONFI/Tesouro, híbrido entes+rreo |
+
+Padrões aplicados:
+
+- **Pandas pipelines**: URI propagada via coluna privada `__snapshot_uri`.
+- **Dict-list pipelines**: chave `__snapshot_uri` injetada nos raws.
+- **Single-fetch N-rows**: mapa de pipeline state (`self._snapshot_uris`).
+- **Fixtures offline sem MockTransport**: flag opt-out
+  (`archive=False` / `archive_local=False` / `archive_online=False`).
+- **Falha de archival**: absorvida com `try/except`, URI vira `None`
+  (opt-in preservado, pipeline não quebra).
 
 ## Quando NÃO usar archival
 
