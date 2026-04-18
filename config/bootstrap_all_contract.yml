@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-17",
   "full_historical_default": true,
-  "expected_implemented_count": 60,
+  "expected_implemented_count": 61,
   "core_sources": [
     "camara",
     "cnpj",
@@ -686,6 +686,15 @@
       "acquisition_mode": "api_call",
       "required_inputs": [
         "data/camara_politicos_go/*"
+      ],
+      "blocking_reason_if_any": "-",
+      "core": false
+    },
+    {
+      "pipeline_id": "senado_senadores_foto",
+      "acquisition_mode": "api_call",
+      "required_inputs": [
+        "data/senado_senadores_foto/*"
       ],
       "blocking_reason_if_any": "-",
       "core": false

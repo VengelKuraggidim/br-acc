@@ -52,6 +52,9 @@ from bracc_etl.pipelines.renuncias import RenunciasPipeline
 from bracc_etl.pipelines.sanctions import SanctionsPipeline
 from bracc_etl.pipelines.senado import SenadoPipeline
 from bracc_etl.pipelines.senado_cpis import SenadoCpisPipeline
+from bracc_etl.pipelines.senado_senadores_foto import (
+    SenadoSenadoresFotoPipeline,
+)
 from bracc_etl.pipelines.siconfi import SiconfiPipeline
 from bracc_etl.pipelines.siop import SiopPipeline
 from bracc_etl.pipelines.ssp_go import SspGoPipeline
@@ -132,6 +135,7 @@ PIPELINES: dict[str, type] = {
     "tcmgo_sancoes": TcmgoSancoesPipeline,
     "ssp_go": SspGoPipeline,
     "camara_politicos_go": CamaraPoliticosGoPipeline,
+    "senado_senadores_foto": SenadoSenadoresFotoPipeline,
     "tse_prestacao_contas_go": TsePrestacaoContasGoPipeline,
     "emendas_parlamentares_go": EmendasParlamentaresGoPipeline,
     "brasilapi_cnpj_status": BrasilapiCnpjStatusPipeline,

@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T11:14:30Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T21:07:34Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -73,6 +73,7 @@ Status buckets:
 | sanctions | sanctions | implemented_loaded | loaded | file_batch | data/sanctions/* | - |
 | senado | senado | implemented_loaded | loaded | api_json | API payload from https://www12.senado.leg.br/dados-abertos | - |
 | senado_cpis | senado_cpis | implemented_partial | partial | api_json | API payload from https://www12.senado.leg.br/dados-abertos | Needs richer sessions and requirements |
+| senado_senadores_foto | senado_senadores_foto | implemented_partial | partial | api_json | API payload from https://legis.senado.leg.br/dadosabertos/senador/lista/atual | GO-scoped photos of senators in exercise; binary JPG archived content-addressed plus :Senator node with id_senado/senator_id/foto_url/foto_snapshot_uri |
 | senado_votes_bills | senado_votes_bills | not_built | not_loaded | api_json | API payload from https://legis.senado.leg.br/dadosabertos | Legislative behavior |
 | sicar_rural_registry | sicar_rural_registry | not_built | not_loaded | file_batch | data/sicar_rural_registry/* | Property boundaries and owners |
 | siconfi | siconfi | implemented_partial | partial | api_json | API payload from https://apidatalake.tesouro.gov.br/docs/siconfi/ | No CNPJ direct links |

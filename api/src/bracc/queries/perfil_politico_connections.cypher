@@ -2,10 +2,12 @@
 // ConexoesService (Fase 04.B) classificar.
 //
 // Parâmetros:
-//   $entity_id STRING — aceita três formatos (compatibilidade com o PWA):
+//   $entity_id STRING — aceita cinco formatos (compatibilidade com o PWA):
 //     1. elementId(p)             — default dos links internos da API
 //     2. p.id_camara              — ID da API da Câmara (:FederalLegislator)
 //     3. p.legislator_id          — ID estável "camara_{id_camara}"
+//     4. p.id_senado              — ID da API do Senado (:Senator)
+//     5. p.senator_id             — ID estável "senado_{id_senado}"
 //
 // Shape de retorno:
 //   politico {dict}    — properties + element_id + labels do político
@@ -30,6 +32,8 @@ MATCH (p)
 WHERE elementId(p) = $entity_id
    OR p.id_camara = $entity_id
    OR p.legislator_id = $entity_id
+   OR p.id_senado = $entity_id
+   OR p.senator_id = $entity_id
 WITH p LIMIT 1
 OPTIONAL MATCH (p)-[r]-(t)
 WHERE NOT (t:User OR t:Investigation OR t:Annotation OR t:Tag)
