@@ -43,6 +43,12 @@ services:
       PUBLIC_MODE: "true"
       PUBLIC_ALLOW_PERSON: "true"
       PUBLIC_ALLOW_ENTITY_LOOKUP: "true"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-key-replace-in-prod-replace-in-prod}
+      # Dev local lê secrets do env (NEO4J_PASSWORD/JWT_SECRET_KEY).
+      # Prod (Cloud Run) NÃO seta esta var — default = gcp via Secret
+      # Manager. Camadas de defesa em api/src/bracc/secrets.py impedem
+      # ativação acidental em prod (whitelist APP_ENV + reject K_SERVICE).
+      BRACC_SECRETS_SOURCE: env
     depends_on:
       neo4j:
         condition: service_healthy
