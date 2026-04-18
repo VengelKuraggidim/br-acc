@@ -101,6 +101,39 @@ class TestTransform:
 
         assert len(pipeline.employee_agency_rels) == 3
 
+    def test_provenance_stamped_on_employees(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for emp in pipeline.employees:
+            assert emp["source_id"] == "folha_go"
+            assert emp["source_record_id"]
+            assert emp["source_url"].startswith("http")
+            assert emp["ingested_at"].startswith("20")
+            assert emp["run_id"].startswith("folha_go_")
+
+    def test_provenance_stamped_on_agencies(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for agency in pipeline.agencies:
+            assert agency["source_id"] == "folha_go"
+            assert agency["source_record_id"] == agency["name"]
+            assert agency["source_url"].startswith("http")
+
+    def test_provenance_stamped_on_relationships(self) -> None:
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        for rel in pipeline.employee_agency_rels:
+            assert rel["source_id"] == "folha_go"
+            assert rel["source_record_id"]
+            assert rel["source_url"].startswith("http")
+            assert rel["run_id"].startswith("folha_go_")
+
     def test_salary_values(self) -> None:
         pipeline = _make_pipeline()
         pipeline.extract()

@@ -486,38 +486,48 @@ class FolhaGoPipeline(Pipeline):
             # Mask CPF for LGPD
             cpf_masked = mask_cpf(cpf_raw) if cpf_digits else ""
 
-            employees.append({
-                "employee_id": employee_id,
-                "name": name,
-                "cpf": cpf_masked,
-                "role": role,
-                "agency": agency_name,
-                "salary_gross": salary_gross,
-                "salary_net": salary_net,
-                "is_commissioned": is_commissioned,
-                "uf": "GO",
-                "municipality": municipality,
-                "source": "folha_go",
-            })
+            employee_record_id = f"{name}|{role}|{agency_name}"
+            employees.append(self.attach_provenance(
+                {
+                    "employee_id": employee_id,
+                    "name": name,
+                    "cpf": cpf_masked,
+                    "role": role,
+                    "agency": agency_name,
+                    "salary_gross": salary_gross,
+                    "salary_net": salary_net,
+                    "is_commissioned": is_commissioned,
+                    "uf": "GO",
+                    "municipality": municipality,
+                    "source": "folha_go",
+                },
+                record_id=employee_record_id,
+            ))
 
             # Build agency node
             if agency_name and agency_name not in seen_agencies:
                 agency_id = _stable_id(agency_name, "GO")
-                agencies.append({
-                    "agency_id": agency_id,
-                    "name": agency_name,
-                    "uf": "GO",
-                    "source": "folha_go",
-                })
+                agencies.append(self.attach_provenance(
+                    {
+                        "agency_id": agency_id,
+                        "name": agency_name,
+                        "uf": "GO",
+                        "source": "folha_go",
+                    },
+                    record_id=agency_name,
+                ))
                 seen_agencies.add(agency_name)
 
             # Build employee -> agency relationship
             if agency_name:
                 agency_id = _stable_id(agency_name, "GO")
-                employee_agency_rels.append({
-                    "source_key": employee_id,
-                    "target_key": agency_id,
-                })
+                employee_agency_rels.append(self.attach_provenance(
+                    {
+                        "source_key": employee_id,
+                        "target_key": agency_id,
+                    },
+                    record_id=employee_record_id,
+                ))
 
         self.employees = deduplicate_rows(employees, ["employee_id"])
         self.agencies = deduplicate_rows(agencies, ["agency_id"])
