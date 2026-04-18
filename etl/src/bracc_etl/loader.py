@@ -7,6 +7,9 @@ from typing import Any
 from neo4j import Driver
 from neo4j.exceptions import TransientError
 
+from bracc_etl.provenance import enforce_provenance
+from bracc_etl.schemas.provenance import PROVENANCE_FIELDS
+
 logger = logging.getLogger(__name__)
 
 _SAFE_KEY = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -86,6 +89,7 @@ class Neo4jBatchLoader:
         key_field: str,
     ) -> int:
         rows = [r for r in rows if r.get(key_field)]
+        enforce_provenance(rows, context=f"nodes:{label}")
         all_keys: set[str] = set()
         for r in rows:
             all_keys.update(r.keys())
@@ -113,9 +117,15 @@ class Neo4jBatchLoader:
         properties: list[str] | None = None,
     ) -> int:
         rows = [r for r in rows if r.get("source_key") and r.get("target_key")]
+        enforce_provenance(rows, context=f"relationships:{rel_type}")
+        all_properties = list(properties or [])
+        if rows:
+            for field in PROVENANCE_FIELDS:
+                if field in rows[0] and field not in all_properties:
+                    all_properties.append(field)
         props = ""
-        if properties:
-            prop_str = ", ".join(f"r.{p} = row.{p}" for p in properties)
+        if all_properties:
+            prop_str = ", ".join(f"r.{p} = row.{p}" for p in all_properties)
             props = f"SET {prop_str}"
         query = (
             f"UNWIND $rows AS row "

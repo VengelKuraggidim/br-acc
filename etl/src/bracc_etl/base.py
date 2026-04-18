@@ -2,8 +2,11 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
+from typing import Any
 
 from neo4j import Driver
+
+from bracc_etl.provenance import primary_url_for
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,48 @@ class Pipeline(ABC):
         self.rows_loaded: int = 0
         source_key = getattr(self, "source_id", getattr(self, "name", "unknown_source"))
         self.run_id = f"{source_key}_{datetime.now(tz=UTC).strftime('%Y%m%d%H%M%S')}"
+        self._provenance_ingested_at = datetime.now(tz=UTC).isoformat()
+        self._primary_url_cache: str | None = None
+
+    def attach_provenance(
+        self,
+        row: dict[str, Any],
+        *,
+        record_id: object,
+        record_url: str | None = None,
+    ) -> dict[str, Any]:
+        """Stamp a node or relationship row with the five provenance fields.
+
+        Pipelines MUST route every dict destined for ``Neo4jBatchLoader``
+        through this helper so ``source_id`` / ``source_record_id`` /
+        ``source_url`` / ``ingested_at`` / ``run_id`` are never forgotten.
+        See ``docs/provenance.md`` for the contract.
+
+        ``record_url`` is preferred when the source exposes a deep-link;
+        otherwise the ``primary_url`` from ``docs/source_registry_br_v1.csv``
+        is used. ``record_id`` is coerced to string (empty string when falsy).
+        """
+        source_url = (record_url or self._get_primary_url() or "").strip()
+        if not source_url.startswith("http"):
+            raise ValueError(
+                f"[{self.source_id}] attach_provenance: no valid source_url "
+                f"(record_url={record_url!r}, primary_url={self._primary_url_cache!r}); "
+                "ensure docs/source_registry_br_v1.csv has a primary_url for this source",
+            )
+        normalized_record_id = "" if record_id in (None, "") else str(record_id)
+        return {
+            **row,
+            "source_id": self.source_id,
+            "source_record_id": normalized_record_id,
+            "source_url": source_url,
+            "ingested_at": self._provenance_ingested_at,
+            "run_id": self.run_id,
+        }
+
+    def _get_primary_url(self) -> str:
+        if self._primary_url_cache is None:
+            self._primary_url_cache = primary_url_for(self.source_id)
+        return self._primary_url_cache
 
     @abstractmethod
     def extract(self) -> None:
