@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T06:16:51Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T07:55:09Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -125,6 +125,7 @@ Status buckets:
 | tse | tse | implemented_loaded | loaded | file_batch | data/tse/* | - |
 | tse_bens | tse_bens | implemented_loaded | loaded | file_batch | data/tse_bens/* | - |
 | tse_filiados | tse_filiados | implemented_loaded | loaded | file_batch | data/tse_filiados/* | - |
+| tse_prestacao_contas | tse_prestacao_contas_go | implemented_partial | partial | file_batch | data/tse_prestacao_contas_go/* | Receitas + despesas + bens de candidatos GO (CSV anual pos-eleicao); popula validacao_tse do Flask |
 | un_sanctions | un_sanctions | implemented_loaded | loaded | file_batch | data/un_sanctions/* | - |
 | viagens | viagens | implemented_loaded | loaded | file_batch | data/viagens/* | - |
 | world_bank | world_bank | implemented_loaded | loaded | file_batch | data/world_bank/* | - |
