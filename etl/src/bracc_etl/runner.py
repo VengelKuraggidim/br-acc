@@ -1,5 +1,7 @@
+import inspect
 import logging
 import os
+from typing import Any
 
 import click
 from neo4j import GraphDatabase
@@ -8,6 +10,9 @@ from bracc_etl.linking_hooks import run_post_load_hooks
 from bracc_etl.pipelines.alego import AlegoPipeline
 from bracc_etl.pipelines.bcb import BcbPipeline
 from bracc_etl.pipelines.bndes import BndesPipeline
+from bracc_etl.pipelines.brasilapi_cnpj_status import (
+    BrasilapiCnpjStatusPipeline,
+)
 from bracc_etl.pipelines.caged import CagedPipeline
 from bracc_etl.pipelines.camara import CamaraPipeline
 from bracc_etl.pipelines.camara_goiania import CamaraGoianiaPipeline
@@ -130,7 +135,22 @@ PIPELINES: dict[str, type] = {
     "camara_politicos_go": CamaraPoliticosGoPipeline,
     "tse_prestacao_contas_go": TsePrestacaoContasGoPipeline,
     "emendas_parlamentares_go": EmendasParlamentaresGoPipeline,
+    "brasilapi_cnpj_status": BrasilapiCnpjStatusPipeline,
 }
+
+
+def _pipeline_init_params(pipeline_cls: type) -> set[str]:
+    """Set de nomes de parametros explicitos do ``__init__`` do pipeline.
+
+    Usado pra decidir se um flag CLI opcional (ex.: ``--batch-size``)
+    e passavel pro ctor sem quebrar pipelines que nao o aceitam.
+    Retorna set vazio se a introspeccao falhar — comportamento conservador.
+    """
+    try:
+        sig = inspect.signature(pipeline_cls)
+    except (TypeError, ValueError):
+        return set()
+    return {name for name in sig.parameters if name != "self"}
 
 
 @click.group()
@@ -158,6 +178,15 @@ def cli() -> None:
 @click.option("--streaming/--no-streaming", default=False, help="Streaming mode")
 @click.option("--start-phase", type=int, default=1, help="Skip to phase N")
 @click.option("--history/--no-history", default=False, help="Enable history mode when supported")
+@click.option(
+    "--batch-size",
+    type=int,
+    default=None,
+    help=(
+        "Per-run batch size (only honored by pipelines that accept it, "
+        "e.g. brasilapi_cnpj_status)."
+    ),
+)
 def run(
     source: str,
     neo4j_uri: str,
@@ -171,6 +200,7 @@ def run(
     streaming: bool,
     start_phase: int,
     history: bool,
+    batch_size: int | None,
 ) -> None:
     """Run an ETL pipeline."""
     os.environ["NEO4J_DATABASE"] = neo4j_database
@@ -182,12 +212,20 @@ def run(
     driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     try:
         pipeline_cls = PIPELINES[source]
+        extra_kwargs: dict[str, Any] = {}
+        # batch_size e opt-in por pipeline: so passa quando o __init__
+        # aceita (evita TypeError nos pipelines que nao mexem com isso).
+        if batch_size is not None and "batch_size" in _pipeline_init_params(
+            pipeline_cls,
+        ):
+            extra_kwargs["batch_size"] = batch_size
         pipeline = pipeline_cls(
             driver=driver,
             data_dir=data_dir,
             limit=limit,
             chunk_size=chunk_size,
             history=history,
+            **extra_kwargs,
         )
 
         if streaming and hasattr(pipeline, "run_streaming"):
