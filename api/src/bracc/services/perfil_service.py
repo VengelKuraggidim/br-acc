@@ -69,6 +69,7 @@ from bracc.services.conexoes_service import classificar
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
+    obter_cota_vereador_goiania,
     obter_verba_indenizatoria_alego,
 )
 from bracc.services.emendas_service import obter_emendas_deputado
@@ -84,16 +85,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Labels que qualificam o nó como "político" pra fins deste endpoint.
-# ``Person`` e ``FederalLegislator`` cobrem o escopo GO atual (deputados
-# federais, estaduais, vereadores, servidores públicos GO). ``Senator`` e
-# ``StateLegislator`` ficam aqui por precaução caso o pipeline venha a
-# gerar esses labels (compatível com busca TSE ampla).
+# ``Person`` / ``FederalLegislator`` / ``StateLegislator`` / ``GoVereador``
+# cobrem o escopo GO atual (deputados federais, estaduais, vereadores de
+# Goiânia, servidores públicos GO). ``Senator`` e ``CityCouncilor`` ficam
+# aqui por precaução caso o pipeline venha a gerar esses labels (compatível
+# com busca TSE ampla).
 _POLITICIAN_LABELS = {
     "Person",
     "FederalLegislator",
     "StateLegislator",
     "Senator",
     "CityCouncilor",
+    "GoVereador",
 }
 
 # Campos de proveniência que o unpacker espera no dict do nó focal.
@@ -353,20 +356,22 @@ def _build_aviso_despesas(
     *,
     is_deputado_federal: bool,
     is_estadual_go: bool,
+    is_vereador_goiania: bool,
 ) -> str:
     """Aviso explicativo da fonte de despesas de gabinete.
 
-    Três casos cobertos — o PWA renderiza o texto como legenda da seção:
+    Quatro casos cobertos — o PWA renderiza o texto como legenda da secao:
 
     * Deputado federal com CEAP ingerido → fonte curta "cota CEAP".
     * Deputado estadual GO com verba ALEGO ingerida → fonte "verba ALEGO".
-    * Qualquer outro caso (vereador, sem dados, etc.) → aviso de falta de
-      dados.
+    * Vereador(a) da Camara Municipal de Goiania (CMG) → cota municipal
+      do portal ``goiania.go.leg.br``.
+    * Qualquer outro caso (outros municipios, sem dados, etc.) → aviso de
+      falta de dados.
 
-    Quando ``despesas_gabinete`` está vazio mas o político É deputado
-    federal/estadual-GO (ou seja, teria dados ingeridos mas ainda não
-    tem nada registrado), exibimos ainda a fonte esperada pra não deixar
-    o PWA sem contexto.
+    Quando ``despesas_gabinete`` esta vazio mas o politico tem label
+    conhecida (federal/estadual GO/vereador GYN), exibimos ainda a fonte
+    esperada pra nao deixar o PWA sem contexto.
     """
     if is_deputado_federal:
         return (
@@ -379,14 +384,21 @@ def _build_aviso_despesas(
             "Verba indenizatoria da Assembleia Legislativa de Goias "
             "(ALEGO) — ressarcimento de despesas de atividade parlamentar."
         )
+    if is_vereador_goiania:
+        return (
+            "Cota parlamentar da Camara Municipal de Goiania (CMG) — "
+            "despesas de gabinete publicadas no portal de transparencia "
+            "municipal (goiania.go.leg.br)."
+        )
     if despesas_gabinete:
-        # Fallback improvável: tem despesas mas nenhum label conhecido.
+        # Fallback improvavel: tem despesas mas nenhum label conhecido.
         return ""
     return (
         "Ainda nao temos os dados de gastos dessa casa legislativa. "
-        "A cota parlamentar (CEAP) so existe na Camara Federal e a verba "
-        "indenizatoria da ALEGO cobre deputados estaduais de Goias — "
-        "vereadores e outros cargos ficam para fases futuras."
+        "A cota parlamentar (CEAP) so existe na Camara Federal, a verba "
+        "indenizatoria da ALEGO cobre deputados estaduais de Goias e a "
+        "cota da Camara Municipal de Goiania (CMG) cobre vereadores da "
+        "capital — outros municipios ficam para fases futuras."
     )
 
 
@@ -475,10 +487,12 @@ async def obter_perfil(
     )
 
     # --- 3. Paralelo: despesas_gabinete + emendas ----------------------------
-    # Roteamento por tipo de político:
-    #   * FederalLegislator com id_camara  → CEAP Câmara + emendas RP-06/09
-    #   * StateLegislator GO               → verba indenizatória ALEGO
-    #                                        (sem emendas federais, óbvio)
+    # Roteamento por tipo de politico (3 niveis de "quanto gasta com politica"):
+    #   * FederalLegislator com id_camara  → CEAP Camara + emendas RP-06/09
+    #   * StateLegislator GO               → verba indenizatoria ALEGO
+    #                                        (sem emendas federais, obvio)
+    #   * GoVereador (municipio Goiania)   → cota da Camara Municipal de Goiania
+    #                                        (sem emendas; vereador nao tem)
     #   * qualquer outro                    → despesas vazias
     id_camara_raw = props.get("id_camara")
     id_camara: int | None = None
@@ -500,6 +514,19 @@ async def obter_perfil(
         and "StateLegislator" in labels_raw
         and uf_props == "GO",
     )
+    # Vereador GYN: label ``:GoVereador`` + municipality == "Goiania".
+    # Guard duplo pra garantir escopo municipal-capital-only (o pipeline
+    # so ingere Goiania hoje, mas o guard evita regressao se expandirmos
+    # pra outros municipios no futuro sem querer).
+    municipality_raw = props.get("municipality")
+    municipality = (
+        str(municipality_raw).strip() if isinstance(municipality_raw, str) else ""
+    )
+    is_vereador_goiania = bool(
+        labels_raw
+        and "GoVereador" in labels_raw
+        and municipality.lower() == "goiania",
+    )
 
     despesas_gabinete: list[DespesaGabinete] = []
     emendas_grafo: list[Emenda] = []
@@ -513,13 +540,24 @@ async def obter_perfil(
         except Exception as exc:  # noqa: BLE001
             raise DriverError(str(exc)) from exc
     elif is_estadual_go:
-        # ``legislator_id`` é o hash estável que o pipeline ``alego`` grava
-        # no nó ``:StateLegislator`` e usa como chave do rel GASTOU_COTA_GO.
+        # ``legislator_id`` e o hash estavel que o pipeline ``alego`` grava
+        # no no ``:StateLegislator`` e usa como chave do rel GASTOU_COTA_GO.
         legislator_id_raw = props.get("legislator_id")
         if legislator_id_raw:
             try:
                 despesas_gabinete = await obter_verba_indenizatoria_alego(
                     driver, str(legislator_id_raw), anos_ceap,
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise DriverError(str(exc)) from exc
+    elif is_vereador_goiania:
+        # ``vereador_id`` e o hash estavel que o pipeline ``camara_goiania``
+        # grava no no ``:GoVereador`` e usa como chave do rel DESPESA_GABINETE.
+        vereador_id_raw = props.get("vereador_id")
+        if vereador_id_raw:
+            try:
+                despesas_gabinete = await obter_cota_vereador_goiania(
+                    driver, str(vereador_id_raw), anos_ceap,
                 )
             except Exception as exc:  # noqa: BLE001
                 raise DriverError(str(exc)) from exc
@@ -665,6 +703,7 @@ async def obter_perfil(
         despesas_gabinete,
         is_deputado_federal=is_deputado_federal,
         is_estadual_go=is_estadual_go,
+        is_vereador_goiania=is_vereador_goiania,
     )
 
     # --- 8. Monta o PerfilPolitico final -------------------------------------
