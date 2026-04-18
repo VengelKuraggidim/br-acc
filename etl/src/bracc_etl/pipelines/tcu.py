@@ -205,7 +205,7 @@ def _write_pipe_csv(path: Path, columns: list[str], rows: list[dict[str, str]]) 
 
 def fetch_to_disk(
     output_dir: Path,
-    uf: str | None = "GO",
+    uf: str | None = None,
     years: list[int] | None = None,
     limit: int | None = None,
 ) -> list[Path]:
@@ -218,7 +218,7 @@ def fetch_to_disk(
       UF/MUNICIPIO columns are left empty (source does not expose them on
       the public report). No source-side UF filter possible here.
     * ``licitantes-inidoneos.csv`` — scraped from APEX page 2. Rows are
-      filtered by ``uf`` when set (default "GO").
+      filtered by ``uf`` only when the caller passes it explicitly.
     * ``resp-contas-julgadas-irregulares.csv`` — header-only stub; the
       upstream dataset is not exposed publicly.
     * ``resp-contas-julgadas-irreg-implicacao-eleitoral.csv`` — header-only
@@ -229,9 +229,12 @@ def fetch_to_disk(
     output_dir:
         Destination. Created if missing.
     uf:
-        UF code (two-letter) to keep when filtering the inidôneos file.
-        Pass ``None`` (or ``"ALL"``) to keep every UF — the pipeline will
-        then ingest the full-national slice.
+        Optional UF code (two-letter). When set, keeps only inidôneos rows
+        whose UF matches. The APEX public report exposes at most ~100 rows
+        and the ``UF`` column there appears to reflect TCU's processing
+        unit (observed to be ``DF`` for every row sampled), so filtering
+        is opt-in and typically left off so ``TcuPipeline`` sees the full
+        public slice and correlates by CNPJ downstream.
     years:
         Accepted for API symmetry with other ``fetch_to_disk`` callers;
         the TCU reports do not expose a year filter, so this is informational

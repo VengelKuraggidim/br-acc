@@ -77,12 +77,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--uf",
-        default="GO",
+        default=None,
         help=(
-            "UF code to keep when filtering the inidôneos rows (default: GO). "
-            "Pass 'ALL' or an empty string to keep every UF. Note: the "
-            "inabilitados report does not expose a UF column, so this flag "
-            "does not affect that dataset."
+            "Optional UF code to keep when filtering the inidôneos rows. "
+            "Left unset by default — the APEX public report shows at most "
+            "~100 rows and its 'UF' column appears to reflect TCU's own "
+            "processing unit (consistently 'DF'), so filtering typically "
+            "drops every row. Pass an explicit UF only if you have "
+            "verified the upstream data supports it."
         ),
     )
     parser.add_argument(

@@ -482,34 +482,63 @@ def fetch_to_disk(
             uf_tokens,
         )
 
+    # Portal da Transparência redirects every
+    # ``/download-de-dados/emendas-parlamentares/<year>`` URL to the same
+    # ``EmendasParlamentares.zip`` — one consolidated CSV covering every
+    # year. Download it once (cached under the most recent requested year)
+    # and split by ``Ano da Emenda`` locally.
+    cache_year = max(requested_years)
+    logger.info(
+        "[siop] downloading consolidated emendas ZIP (cache key year=%s)",
+        cache_year,
+    )
+    zip_path = _download_yearly_zip(
+        cache_year, raw_dir, skip_existing=skip_existing, timeout=timeout,
+    )
+    if zip_path is None:
+        return []
+
+    extract_dir = raw_dir / f"{_TRANSPARENCIA_DATASET}_{cache_year}_extracted"
+    csv_path = _extract_main_csv(zip_path, extract_dir)
+    if csv_path is None:
+        return []
+
+    try:
+        df_all = pd.read_csv(
+            csv_path,
+            sep=";",
+            encoding="latin-1",
+            dtype=str,
+            keep_default_na=False,
+        )
+    except Exception as e:  # noqa: BLE001 — surface any parse failure
+        logger.warning("[siop] failed to read %s: %s", csv_path.name, e)
+        return []
+
+    if df_all.empty:
+        logger.warning("[siop] consolidated CSV is empty")
+        return []
+
+    year_col = next(
+        (c for c in df_all.columns if c.strip() == "Ano da Emenda"),
+        None,
+    )
+    if year_col is None:
+        logger.warning(
+            "[siop] no 'Ano da Emenda' column found; cannot split by year. "
+            "Columns: %s", list(df_all.columns)[:10],
+        )
+        return []
+
     written: list[Path] = []
     for year in requested_years:
         logger.info("[siop] ---- year %s ----", year)
-        zip_path = _download_yearly_zip(
-            year, raw_dir, skip_existing=skip_existing, timeout=timeout,
+        df = df_all[df_all[year_col].astype(str).str.strip() == str(year)]
+        logger.info(
+            "[siop] year %s: %d rows from consolidated CSV", year, len(df),
         )
-        if zip_path is None:
-            continue
-
-        extract_dir = raw_dir / f"{_TRANSPARENCIA_DATASET}_{year}_extracted"
-        csv_path = _extract_main_csv(zip_path, extract_dir)
-        if csv_path is None:
-            continue
-
-        try:
-            df = pd.read_csv(
-                csv_path,
-                sep=";",
-                encoding="latin-1",
-                dtype=str,
-                keep_default_na=False,
-            )
-        except Exception as e:  # noqa: BLE001 — surface any parse failure
-            logger.warning("[siop] failed to read %s: %s", csv_path.name, e)
-            continue
-
         if df.empty:
-            logger.warning("[siop] empty CSV for year %s", year)
+            logger.warning("[siop] year %s: no rows in upstream — skipping", year)
             continue
 
         if uf_tokens:
