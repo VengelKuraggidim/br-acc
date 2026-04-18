@@ -141,6 +141,11 @@ class SocioConectado(BaseModel):
 
     `situacao` idem :class:`DoadorEmpresa` — sócio de empresa BAIXADA
     também alimenta o alerta grave de ``alertas_service``.
+
+    ``provenance`` carrega origem rastreável dos props do nó :Company no
+    grafo (RFB/QSA). ``None`` quando o nó é legado e ainda não foi
+    re-ingerido sob o contrato de proveniência. Como CNPJ é dado público,
+    ``source_record_id`` é preservado (sem risco LGPD).
     """
 
     model_config = _PERFIL_MODEL_CONFIG
@@ -150,16 +155,26 @@ class SocioConectado(BaseModel):
     situacao: str | None = None
     situacao_fmt: str | None = None
     situacao_verified_at: str | None = None
+    provenance: ProvenanceBlock | None = None
 
 
 class FamiliarConectado(BaseModel):
-    """Familiar ligado ao político (cônjuge/parente) com CPF mascarado."""
+    """Familiar ligado ao político (cônjuge/parente) com CPF mascarado.
+
+    ``provenance`` carrega origem rastreável dos props do nó :Person no
+    grafo. LGPD: ``source_record_id`` NUNCA é populado aqui — o record_id
+    do nó Person pode carregar o CPF pleno, e surfar isso no chip de
+    fonte violaria a máscara que o service aplica no ``cpf_mascarado``.
+    ``None`` quando o nó é legado e ainda não foi re-ingerido sob o
+    contrato de proveniência.
+    """
 
     model_config = _PERFIL_MODEL_CONFIG
 
     nome: str
     cpf_mascarado: str | None = None
     relacao: str
+    provenance: ProvenanceBlock | None = None
 
 
 class ValidacaoTSE(BaseModel):
@@ -180,7 +195,14 @@ class ValidacaoTSE(BaseModel):
 
 
 class ContratoConectado(BaseModel):
-    """Contrato ou licitação (federal ou GO) ligado ao político."""
+    """Contrato ou licitação (federal ou GO) ligado ao político.
+
+    ``provenance`` carrega origem rastreável dos props do nó :Contract ou
+    :Go_procurement no grafo (Portal da Transparência / PNCP / GO).
+    ``None`` quando o nó é legado e ainda não foi re-ingerido sob o
+    contrato de proveniência. Identificador do contrato/licitação é
+    público — ``source_record_id`` é preservado.
+    """
 
     model_config = _PERFIL_MODEL_CONFIG
 
@@ -189,6 +211,7 @@ class ContratoConectado(BaseModel):
     valor_fmt: str
     orgao: str | None = None
     data: str | None = None
+    provenance: ProvenanceBlock | None = None
 
 
 class DespesaGabinete(BaseModel):
