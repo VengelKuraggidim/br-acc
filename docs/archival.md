@@ -160,6 +160,21 @@ Padrões aplicados:
 - **Falha de archival**: absorvida com `try/except`, URI vira `None`
   (opt-in preservado, pipeline não quebra).
 
+## CI enforcement
+
+`scripts/check_archival_usage.py` (parte de `make pre-commit`) garante
+que pipelines GO novos usam `archive_fetch`. Exceções explícitas:
+
+- `tce_go` — operator-fed (sem HTTP).
+
+Quando adicionar pipeline GO novo:
+1. Importa `from bracc_etl.archival import archive_fetch`.
+2. Chama em cada HTTP fetch.
+3. Propaga `source_snapshot_uri` via `attach_provenance(snapshot_uri=uri)`.
+
+Se o pipeline é file-only (sem HTTP), adicione o `source_id` em `EXEMPT`
+no script acima.
+
 ## Quando NÃO usar archival
 
 - Pipelines que baixam arquivos de GB (CNPJ completo): `archive_fetch`
