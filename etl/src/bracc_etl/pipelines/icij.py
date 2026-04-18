@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
 import logging
+import zipfile
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -28,6 +31,141 @@ MIN_CONFIDENCE = 0.7
 def name_similarity(a: str, b: str) -> float:
     """Compute similarity ratio between two names (0.0-1.0)."""
     return SequenceMatcher(None, a.upper(), b.upper()).ratio()
+
+
+# --------------------------------------------------------------------------
+# Module-level download (script_download mode).
+# --------------------------------------------------------------------------
+#
+# ICIJ publishes the OffshoreLeaks consolidated database (Panama, Paradise,
+# Pandora, Bahamas, Offshore Leaks) as a single ZIP bundle of Neo4j
+# bulk-import CSVs. The download URL is referenced from
+# https://offshoreleaks.icij.org/pages/database — the bundle alias
+# ``full-oldb.LATEST.zip`` always points at the most recent dump.
+#
+# As of 2025-03 the zip is ~73 MB compressed and ~625 MB extracted; we
+# only need 4 of the 6 CSVs (entities / officers / intermediaries /
+# relationships), so ``fetch_to_disk`` selectively extracts those files
+# and skips ``nodes-addresses.csv`` (~72 MB) and ``nodes-others.csv``
+# entirely. ``--limit`` truncates rows per file for smoke tests.
+#
+# ``ICIJPipeline.extract`` filters to Brazilian connections (jurisdiction,
+# country_codes, countries or address contain BRA/BRAZIL/BRASIL); we keep
+# all rows on disk so the pipeline can apply that filter itself, matching
+# the historical file_manifest layout.
+
+_ICIJ_BUNDLE_URL = (
+    "https://offshoreleaks-data.icij.org/offshoreleaks/csv/full-oldb.LATEST.zip"
+)
+_ICIJ_REQUIRED_CSVS = (
+    "nodes-entities.csv",
+    "nodes-officers.csv",
+    "nodes-intermediaries.csv",
+    "relationships.csv",
+)
+_ICIJ_HTTP_TIMEOUT = 300.0
+_ICIJ_DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (br-acc/bracc-etl download_icij; +https://github.com/brunoclz/br-acc)"
+)
+
+
+def _truncate_csv(raw: bytes, limit: int | None) -> bytes:
+    """Return at most ``limit + 1`` lines (header + N data rows) of ``raw``.
+
+    ICIJ CSVs use standard ``\\n`` line endings without quoted newlines in
+    practice, so a byte-level split is safe and ~10x faster than parsing
+    via pandas. When ``limit`` is None, ``raw`` is returned unchanged.
+    """
+    if limit is None:
+        return raw
+    # +1 because the first line is the header.
+    parts = raw.split(b"\n", limit + 1)
+    if len(parts) <= limit + 1:
+        return raw  # shorter than limit; return as-is.
+    truncated = b"\n".join(parts[: limit + 1])
+    if not truncated.endswith(b"\n"):
+        truncated += b"\n"
+    return truncated
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    *,
+    date: str | None = None,
+    limit: int | None = None,
+    url: str = _ICIJ_BUNDLE_URL,
+    user_agent: str = _ICIJ_DEFAULT_USER_AGENT,
+    timeout: float = _ICIJ_HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download the ICIJ OffshoreLeaks bundle and extract pipeline CSVs.
+
+    Writes the four CSVs ``ICIJPipeline.extract`` consumes into
+    ``output_dir`` (entities, officers, intermediaries, relationships).
+    The bundle's two unused CSVs (addresses, others) are not extracted
+    to keep disk usage to a few hundred MB.
+
+    Args:
+        output_dir: Destination directory (created if missing).
+        date: Accepted for API symmetry; the ICIJ bundle is published as
+            a single rolling ``LATEST`` snapshot, so this is logged only.
+        limit: If set, truncate each CSV to the first N data rows
+            (header preserved). Useful for smoke tests where downloading
+            ~73 MB is acceptable but writing >600 MB is not.
+        url: Override the upstream URL (kept for tests).
+        user_agent: HTTP User-Agent to send (some CDN edges rate-limit
+            empty / library-default UAs).
+        timeout: Per-request HTTP timeout in seconds.
+
+    Returns:
+        List of absolute ``Path`` objects for files written.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if date is not None:
+        logger.info(
+            "[icij.fetch_to_disk] --date=%s ignored (ICIJ publishes a "
+            "single rolling LATEST bundle without a date snapshot)", date,
+        )
+
+    logger.info(
+        "[icij.fetch_to_disk] Downloading bundle %s (limit=%s) -> %s",
+        url, limit if limit is not None else "ALL", output_dir,
+    )
+
+    with httpx.Client(
+        timeout=timeout, verify=False, follow_redirects=True,
+        headers={"User-Agent": user_agent},
+    ) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        bundle = resp.content
+    logger.info(
+        "[icij.fetch_to_disk] Bundle downloaded: %.2f MB",
+        len(bundle) / 1024 / 1024,
+    )
+
+    written: list[Path] = []
+    with zipfile.ZipFile(io.BytesIO(bundle)) as zf:
+        members = set(zf.namelist())
+        for csv_name in _ICIJ_REQUIRED_CSVS:
+            if csv_name not in members:
+                logger.warning(
+                    "[icij.fetch_to_disk] %s not in bundle (got: %s)",
+                    csv_name, sorted(members),
+                )
+                continue
+            data = zf.read(csv_name)
+            data = _truncate_csv(data, limit)
+            out_path = output_dir / csv_name
+            out_path.write_bytes(data)
+            logger.info(
+                "[icij.fetch_to_disk] Wrote %s (%.2f MB)",
+                out_path, out_path.stat().st_size / 1024 / 1024,
+            )
+            written.append(out_path.resolve())
+
+    return written
 
 
 class ICIJPipeline(Pipeline):
