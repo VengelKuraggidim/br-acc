@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T07:55:09Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T09:59:29Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -25,6 +25,7 @@ Status buckets:
 | bcb_liquidacao | bcb_liquidacao | not_built | not_loaded | file_batch | data/bcb_liquidacao/* | Regulatory actions |
 | bndes | bndes | implemented_loaded | loaded | file_batch | data/bndes/* | - |
 | bolsa_familia_bpc | bolsa_familia_bpc | not_built | not_loaded | file_batch | data/bolsa_familia_bpc/* | High volume masked identities |
+| brasilapi_cnpj | brasilapi_cnpj_status | implemented_partial | partial | api_json | API payload from https://brasilapi.com.br/api/cnpj/v1/ | Batch 400/dia de CNPJs priorizados (doadores+socios) para situacao RFB via BrasilAPI; cache 7d via situacao_verified_at; archival content-addressed |
 | caged | caged | implemented_partial | partial | file_batch | data/caged/* | Aggregate-only implementation |
 | camara | camara | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.camara.leg.br/ | - |
 | camara_deputados | camara_politicos_go | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2/ | GO-scoped federal deputies roster and CEAP expenses; substitui live-call Flask /politico |
@@ -64,6 +65,7 @@ Status buckets:
 | pgfn | pgfn | implemented_loaded | loaded | file_batch | data/pgfn/* | - |
 | pncp | pncp | implemented_partial | partial | api_json | API payload from https://pncp.gov.br/app/editais | Freshness SLA pending |
 | pncp_go | pncp_go | implemented_loaded | loaded | api_json | API payload from https://pncp.gov.br/api/consulta/v1/ | - |
+| portal_transparencia_emendas | emendas_parlamentares_go | implemented_partial | partial | api_json | API payload from https://api.portaldatransparencia.gov.br/api-de-dados/emendas | GO-scoped parliamentary amendments per federal deputy; substitui live-call Flask buscar_emendas_transparencia (requires TRANSPARENCIA_API_KEY) |
 | querido_diario | querido_diario | implemented_partial | partial | api_json | API payload from https://queridodiario.ok.org.br/api | Text availability gap |
 | querido_diario_go | querido_diario_go | implemented_loaded | loaded | api_json | API payload from https://queridodiario.ok.org.br/api/ | - |
 | rais | rais | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
