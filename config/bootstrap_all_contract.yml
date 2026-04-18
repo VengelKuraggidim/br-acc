@@ -71,12 +71,15 @@
     },
     {
       "pipeline_id": "camara_inquiries",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/camara_inquiries/*"
       ],
-      "blocking_reason_if_any": "Sessions still low",
-      "core": false
+      "blocking_reason_if_any": "Sessions still low — requirements.csv fica vazio sem BQ access; cobertura completa via etl/scripts/download_camara_inquiries.py --mode bq_first quando GCP disponivel.",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_camara_inquiries.py --output-dir ../data/camara_inquiries"
+      ]
     },
     {
       "pipeline_id": "ceaf",
@@ -437,12 +440,15 @@
     },
     {
       "pipeline_id": "senado_cpis",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/senado_cpis/*"
       ],
-      "blocking_reason_if_any": "Needs richer sessions and requirements",
-      "core": false
+      "blocking_reason_if_any": "Needs richer sessions and requirements — Open Data nao expoe reunioes/membros; cobertura historica (1946-2015) via etl/scripts/download_senado_cpi_archive.py (PDF parsing opt-in).",
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_senado_cpis.py --output-dir ../data/senado_cpis"
+      ]
     },
     {
       "pipeline_id": "siconfi",
@@ -470,24 +476,33 @@
     },
     {
       "pipeline_id": "stf",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/stf/*"
       ],
-      "blocking_reason_if_any": "-",
+      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror); wrapper exits 0 and skips in public mode.",
       "core": false,
       "credential_env": [
         "GOOGLE_APPLICATION_CREDENTIALS"
+      ],
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_stf.py --output-dir ../data/stf"
       ]
     },
     {
       "pipeline_id": "stj_dados_abertos",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/stj_dados_abertos/*"
       ],
-      "blocking_reason_if_any": "-",
-      "core": false
+      "blocking_reason_if_any": "Requires GCP BigQuery billing-project (Base dos Dados mirror); wrapper exits 0 and skips in public mode.",
+      "core": false,
+      "credential_env": [
+        "GOOGLE_APPLICATION_CREDENTIALS"
+      ],
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_stj_dados_abertos.py --output-dir ../data/stj_dados_abertos"
+      ]
     },
     {
       "pipeline_id": "tcm_go",
