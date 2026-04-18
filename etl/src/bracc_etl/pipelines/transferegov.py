@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import csv
+import logging
+import zipfile
+from datetime import date as _date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -18,6 +23,184 @@ from bracc_etl.transforms import (
     parse_date,
     strip_document,
 )
+
+logger = logging.getLogger(__name__)
+
+# ── Download / fetch_to_disk (for scripts/download_transferegov.py) ──────
+#
+# Despite the module name, the upstream feed for ``TransferegovPipeline``
+# is NOT ``/download-de-dados/transferencias/`` — that endpoint has a
+# different schema. The actual feed is the same consolidated
+# ``/download-de-dados/emendas-parlamentares/<YYYYMMDD>`` ZIP that
+# ``siop`` and ``tesouro_emendas`` download from, but transferegov is
+# the only consumer of the auxiliary ``_Convenios.csv`` and
+# ``_PorFavorecido.csv`` slices that the other two pipelines skip.
+#
+# The Portal accepts any date token in the URL syntactically and always
+# 302-redirects to the latest consolidated ZIP on
+# ``dadosabertos-download.cgu.gov.br``. We therefore default ``date`` to
+# today's UTC date and treat it as a cache-busting key only.
+#
+# All three CSVs (``EmendasParlamentares.csv`` ~43 MB,
+# ``EmendasParlamentares_Convenios.csv`` ~24 MB,
+# ``EmendasParlamentares_PorFavorecido.csv`` ~167 MB) are extracted
+# verbatim from the ZIP (latin-1, semicolon-delimited) — no column
+# remap, since ``TransferegovPipeline.extract`` already reads the
+# Portuguese accented headers directly.
+_TRANSFEREGOV_DOWNLOAD_BASE = (
+    "https://portaldatransparencia.gov.br/download-de-dados/emendas-parlamentares"
+)
+_TRANSFEREGOV_USER_AGENT = "br-acc/bracc-etl download_transferegov (httpx)"
+_TRANSFEREGOV_HTTP_TIMEOUT = 600.0
+
+# CSV members the pipeline reads. Order matters: the main file is read
+# first so its presence can short-circuit a malformed ZIP early.
+_TRANSFEREGOV_MEMBERS: tuple[str, ...] = (
+    "EmendasParlamentares.csv",
+    "EmendasParlamentares_Convenios.csv",
+    "EmendasParlamentares_PorFavorecido.csv",
+)
+# Member -> output filename. Identity mapping today, but kept explicit so
+# a future Portal rename (e.g. ``EMENDAS_PARLAMENTARES.CSV``) can be
+# absorbed without churning ``TransferegovPipeline.extract``.
+_TRANSFEREGOV_OUT_NAMES: dict[str, str] = {m: m for m in _TRANSFEREGOV_MEMBERS}
+
+
+def _truncate_csv_to_limit(src_path: Path, limit: int) -> int:
+    """Truncate a latin-1 CSV in-place to header + ``limit`` data rows.
+
+    Returns the number of *data* rows kept. Used to make the 167 MB
+    ``_PorFavorecido.csv`` smoke-test friendly without changing the
+    pipeline's read semantics.
+    """
+    tmp_path = src_path.with_suffix(src_path.suffix + ".trunc")
+    written_rows = 0
+    with src_path.open("r", encoding="latin-1", newline="") as src, \
+            tmp_path.open("w", encoding="latin-1", newline="") as dst:
+        reader = csv.reader(src, delimiter=";")
+        writer = csv.writer(dst, delimiter=";")
+        try:
+            header = next(reader)
+        except StopIteration:
+            tmp_path.unlink(missing_ok=True)
+            return 0
+        writer.writerow(header)
+        for row in reader:
+            writer.writerow(row)
+            written_rows += 1
+            if written_rows >= limit:
+                break
+    tmp_path.replace(src_path)
+    return written_rows
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    *,
+    date: str | None = None,
+    limit: int | None = None,
+    timeout: float = _TRANSFEREGOV_HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download Portal-emendas ZIP and extract all 3 CSVs to ``output_dir``.
+
+    Writes ``EmendasParlamentares.csv``, ``EmendasParlamentares_Convenios.csv``,
+    and ``EmendasParlamentares_PorFavorecido.csv`` (latin-1, semicolon-delim)
+    into ``output_dir`` — the exact filenames+dialect
+    ``TransferegovPipeline.extract`` consumes.
+
+    Parameters
+    ----------
+    output_dir:
+        Destination directory. Created if missing.
+    date:
+        Optional ``YYYYMMDD`` cache key. The Portal endpoint accepts any
+        date token syntactically and always serves the latest consolidated
+        ZIP, so this only affects the raw-zip cache filename. Defaults to
+        today (UTC).
+    limit:
+        When set, truncates each CSV to the first N data rows after
+        extraction. Useful for smoke tests against the 234 MB unpacked
+        archive (in particular ``_PorFavorecido.csv`` at 167 MB).
+    timeout:
+        Per-request HTTP timeout in seconds.
+
+    Returns
+    -------
+    Sorted list of output CSV paths (always 3 entries on a successful
+    download).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    date_token = date or _date.today().strftime("%Y%m%d")
+    url = f"{_TRANSFEREGOV_DOWNLOAD_BASE}/{date_token}"
+    zip_path = raw_dir / f"emendas_parlamentares_{date_token}.zip"
+
+    headers = {"User-Agent": _TRANSFEREGOV_USER_AGENT}
+    if not (zip_path.exists() and zip_path.stat().st_size > 0):
+        logger.info(
+            "[transferegov.fetch_to_disk] downloading %s -> %s",
+            url, zip_path.name,
+        )
+        with httpx.Client(
+            follow_redirects=True,
+            headers=headers,
+            timeout=timeout,
+            verify=False,
+        ) as client, client.stream("GET", url) as resp:
+            resp.raise_for_status()
+            with zip_path.open("wb") as fh:
+                for chunk in resp.iter_bytes(chunk_size=1 << 16):
+                    if chunk:
+                        fh.write(chunk)
+    else:
+        logger.info(
+            "[transferegov.fetch_to_disk] reusing cached zip %s",
+            zip_path.name,
+        )
+
+    written: list[Path] = []
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            members = set(zf.namelist())
+            for member in _TRANSFEREGOV_MEMBERS:
+                if member not in members:
+                    logger.warning(
+                        "[transferegov.fetch_to_disk] %s missing from %s",
+                        member, zip_path.name,
+                    )
+                    continue
+                out_name = _TRANSFEREGOV_OUT_NAMES[member]
+                out_path = output_dir / out_name
+                with zf.open(member) as src, out_path.open("wb") as dst:
+                    while True:
+                        block = src.read(1 << 20)
+                        if not block:
+                            break
+                        dst.write(block)
+                if limit is not None:
+                    kept = _truncate_csv_to_limit(out_path, limit)
+                    logger.info(
+                        "[transferegov.fetch_to_disk] truncated %s to %d rows",
+                        out_name, kept,
+                    )
+                size_mb = out_path.stat().st_size / 1024 / 1024
+                logger.info(
+                    "[transferegov.fetch_to_disk] wrote %s (%.2f MB)",
+                    out_path, size_mb,
+                )
+                written.append(out_path)
+    except zipfile.BadZipFile:
+        logger.warning(
+            "[transferegov.fetch_to_disk] bad zip %s -- deleting",
+            zip_path.name,
+        )
+        zip_path.unlink(missing_ok=True)
+        return []
+
+    return sorted(written)
 
 
 class TransferegovPipeline(Pipeline):
