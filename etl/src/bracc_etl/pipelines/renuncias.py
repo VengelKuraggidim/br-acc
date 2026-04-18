@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import zipfile
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -21,6 +24,121 @@ from bracc_etl.transforms import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Note: Portal da Transparencia slug is ``renuncias`` (NOT
+# ``renuncias-fiscais`` -- that variant returns HTTP 500). Mode is
+# ``ANO``, upstream coverage 2015-current.
+_RENUNCIAS_BASE_URL = "https://portaldatransparencia.gov.br/download-de-dados/renuncias"
+_RENUNCIAS_USER_AGENT = "br-acc/bracc-etl download_renuncias (httpx)"
+_RENUNCIAS_HTTP_TIMEOUT = 300.0
+
+
+def _default_renuncias_years() -> list[int]:
+    """Return the last 3 completed calendar years (inclusive of current)."""
+    current = date.today().year
+    return list(range(current - 2, current + 1))
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    years: list[int] | None = None,
+    *,
+    skip_existing: bool = True,
+    timeout: float = _RENUNCIAS_HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download Portal da Transparencia ``renuncias`` yearly ZIPs to disk.
+
+    Each ``/download-de-dados/renuncias/<YYYY>`` request 302s to a
+    yearly ``<YYYY>_RenunciasFiscais.zip`` on the CGU dadosabertos
+    bucket. ``RenunciasPipeline.extract`` globs ``*Ren*.csv`` minus
+    ``*PorBen*.csv``, so this wrapper extracts only the files that
+    survive that filter.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    requested_years = sorted({int(y) for y in (years or _default_renuncias_years())})
+    written: list[Path] = []
+
+    headers = {"User-Agent": _RENUNCIAS_USER_AGENT}
+    with httpx.Client(
+        follow_redirects=True,
+        headers=headers,
+        timeout=timeout,
+        verify=False,
+    ) as client:
+        for year in requested_years:
+            existing = [
+                p for p in output_dir.glob(f"{year}_*.csv")
+                if ("Ren" in p.name or "ren" in p.name) and "PorBen" not in p.name
+            ]
+            if skip_existing and existing:
+                logger.info(
+                    "[renuncias] skipping year %s (found %d CSV(s))",
+                    year, len(existing),
+                )
+                written.extend(existing)
+                continue
+
+            url = f"{_RENUNCIAS_BASE_URL}/{year}"
+            zip_path = raw_dir / f"renuncias_{year}.zip"
+
+            if not (skip_existing and zip_path.exists() and zip_path.stat().st_size > 0):
+                logger.info("[renuncias] downloading %s -> %s", url, zip_path.name)
+                try:
+                    with client.stream("GET", url) as resp:
+                        resp.raise_for_status()
+                        total = resp.headers.get("content-length")
+                        logger.info(
+                            "[renuncias] %s size: %s bytes",
+                            zip_path.name, total or "unknown",
+                        )
+                        with zip_path.open("wb") as fh:
+                            for chunk in resp.iter_bytes(chunk_size=1 << 16):
+                                if chunk:
+                                    fh.write(chunk)
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "[renuncias] download failed for %s: %s", year, exc,
+                    )
+                    continue
+            else:
+                logger.info("[renuncias] reusing cached zip %s", zip_path.name)
+
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    for info in zf.infolist():
+                        name = Path(info.filename).name
+                        if not name.lower().endswith(".csv"):
+                            continue
+                        if "Ren" not in name and "ren" not in name:
+                            continue
+                        if "PorBen" in name:
+                            continue
+                        dst_path = output_dir / name
+                        with zf.open(info) as src, dst_path.open("wb") as dst:
+                            while True:
+                                block = src.read(1 << 20)
+                                if not block:
+                                    break
+                                dst.write(block)
+                        logger.info(
+                            "[renuncias] extracted %s (%.2f MB)",
+                            dst_path.name,
+                            dst_path.stat().st_size / 1024 / 1024,
+                        )
+                        written.append(dst_path)
+            except zipfile.BadZipFile:
+                logger.warning(
+                    "[renuncias] bad zip %s -- deleting for re-download",
+                    zip_path.name,
+                )
+                zip_path.unlink(missing_ok=True)
+                continue
+
+    return sorted(set(written))
 
 
 class RenunciasPipeline(Pipeline):

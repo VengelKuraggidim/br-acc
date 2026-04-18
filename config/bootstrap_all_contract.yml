@@ -248,12 +248,15 @@
     },
     {
       "pipeline_id": "leniency",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/leniency/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_leniency.py --output-dir ../data/leniency"
+      ]
     },
     {
       "pipeline_id": "mides",
@@ -371,12 +374,15 @@
     },
     {
       "pipeline_id": "renuncias",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/renuncias/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_renuncias.py --output-dir ../data/renuncias"
+      ]
     },
     {
       "pipeline_id": "sanctions",
@@ -557,12 +563,15 @@
     },
     {
       "pipeline_id": "viagens",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/viagens/*"
       ],
       "blocking_reason_if_any": "-",
-      "core": false
+      "core": false,
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_viagens.py --output-dir ../data/viagens"
+      ]
     },
     {
       "pipeline_id": "world_bank",

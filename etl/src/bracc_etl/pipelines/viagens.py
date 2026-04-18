@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import zipfile
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pandas as pd
 
 from bracc_etl.base import Pipeline
@@ -21,6 +24,10 @@ from bracc_etl.transforms import (
 )
 
 logger = logging.getLogger(__name__)
+
+_VIAGENS_BASE_URL = "https://portaldatransparencia.gov.br/download-de-dados/viagens"
+_VIAGENS_USER_AGENT = "br-acc/bracc-etl download_viagens (httpx)"
+_VIAGENS_HTTP_TIMEOUT = 600.0
 
 # Portal da Transparencia Viagens CSVs use semicolon separators and
 # mixed-case Portuguese column headers. Map to canonical names.
@@ -90,6 +97,116 @@ def _make_travel_id(cpf: str, destination: str, start_date: str, amount: float) 
     """Generate deterministic travel_id from key fields."""
     raw = f"{cpf}|{destination}|{start_date}|{amount:.2f}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _default_viagens_years() -> list[int]:
+    """Return the last 3 completed calendar years (inclusive of current)."""
+    current = date.today().year
+    return list(range(current - 2, current + 1))
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    years: list[int] | None = None,
+    *,
+    skip_existing: bool = True,
+    timeout: float = _VIAGENS_HTTP_TIMEOUT,
+) -> list[Path]:
+    """Download Portal da Transparencia ``viagens`` yearly ZIPs to disk.
+
+    The upstream bulk endpoint ``/download-de-dados/viagens/<YYYY>``
+    302s to a yearly ZIP on ``dadosabertos-download.cgu.gov.br``
+    containing four CSVs (Viagem, Passagem, Pagamento, Trecho);
+    ``ViagensPipeline.extract`` only consumes the ``*_Viagem.csv``
+    grain, so this wrapper extracts only that file.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    requested_years = sorted({int(y) for y in (years or _default_viagens_years())})
+    written: list[Path] = []
+
+    headers = {"User-Agent": _VIAGENS_USER_AGENT}
+    with httpx.Client(
+        follow_redirects=True,
+        headers=headers,
+        timeout=timeout,
+        verify=False,
+    ) as client:
+        for year in requested_years:
+            csv_path = output_dir / f"{year}_Viagem.csv"
+            if skip_existing and csv_path.exists() and csv_path.stat().st_size > 0:
+                logger.info("[viagens] skipping existing %s", csv_path.name)
+                written.append(csv_path)
+                continue
+
+            url = f"{_VIAGENS_BASE_URL}/{year}"
+            zip_path = raw_dir / f"viagens_{year}.zip"
+
+            if not (skip_existing and zip_path.exists() and zip_path.stat().st_size > 0):
+                logger.info("[viagens] downloading %s -> %s", url, zip_path.name)
+                try:
+                    with client.stream("GET", url) as resp:
+                        resp.raise_for_status()
+                        total = resp.headers.get("content-length")
+                        logger.info(
+                            "[viagens] %s size: %s bytes",
+                            zip_path.name, total or "unknown",
+                        )
+                        with zip_path.open("wb") as fh:
+                            for chunk in resp.iter_bytes(chunk_size=1 << 16):
+                                if chunk:
+                                    fh.write(chunk)
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "[viagens] download failed for %s: %s", year, exc,
+                    )
+                    continue
+            else:
+                logger.info("[viagens] reusing cached zip %s", zip_path.name)
+
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    viagem_member = next(
+                        (
+                            n for n in zf.namelist()
+                            if n.lower().endswith(".csv")
+                            and "viagem" in n.lower()
+                            and "passagem" not in n.lower()
+                            and "pagamento" not in n.lower()
+                            and "trecho" not in n.lower()
+                        ),
+                        None,
+                    )
+                    if viagem_member is None:
+                        logger.warning(
+                            "[viagens] no *_Viagem.csv found in %s",
+                            zip_path.name,
+                        )
+                        continue
+                    with zf.open(viagem_member) as src, csv_path.open("wb") as dst:
+                        while True:
+                            block = src.read(1 << 20)
+                            if not block:
+                                break
+                            dst.write(block)
+            except zipfile.BadZipFile:
+                logger.warning(
+                    "[viagens] bad zip %s -- deleting for re-download",
+                    zip_path.name,
+                )
+                zip_path.unlink(missing_ok=True)
+                continue
+
+            logger.info(
+                "[viagens] extracted %s (%.2f MB)",
+                csv_path.name, csv_path.stat().st_size / 1024 / 1024,
+            )
+            written.append(csv_path)
+
+    return sorted(written)
 
 
 class ViagensPipeline(Pipeline):
