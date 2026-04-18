@@ -122,6 +122,83 @@ async def obter_ceap_deputado(
     ]
 
 
+async def obter_verba_indenizatoria_alego(
+    driver: AsyncDriver,
+    legislator_id: str,
+    anos: list[int] | None = None,
+) -> list[DespesaGabinete]:
+    """Lê verba indenizatória ALEGO de um deputado estadual GO do grafo.
+
+    A ALEGO (Assembleia Legislativa de Goiás) publica a "verba indenizatória"
+    dos deputados estaduais em ``transparencia.al.go.leg.br``. O pipeline
+    ``alego`` ingere os lançamentos e cria a rel
+    ``(:StateLegislator)-[:GASTOU_COTA_GO]->(:LegislativeExpense)``.
+
+    Esta função é o análogo de :func:`obter_ceap_deputado` para o escopo
+    estadual — **mesmo shape de saída** (``DespesaGabinete`` agregado por
+    tipo) pra que o ``PerfilService`` trate federal e estadual de forma
+    transparente pro PWA.
+
+    Args:
+        driver: Neo4j async driver.
+        legislator_id: ``legislator_id`` do nó ``:StateLegislator`` (hash
+            estável gerado pelo pipeline ``alego`` a partir do nome).
+        anos: Lista de anos a considerar. Se ``None``, usa
+            ``[ano_atual, ano_atual - 1]`` (mesmo default do CEAP federal).
+            Se ``[]``, traz todos os anos ingeridos.
+
+    Returns:
+        Lista de ``DespesaGabinete`` ordenada por ``total`` decrescente.
+        Lista vazia se o deputado não tem verba ingerida ou o nó não existe;
+        nunca levanta exceção nesse caso (log ``warning``).
+    """
+    anos_filtro = anos if anos is not None else _default_anos()
+
+    async with driver.session(database=settings.neo4j_database) as session:
+        records = await execute_query(
+            session,
+            "perfil_verba_alego",
+            {"legislator_id": str(legislator_id), "anos": anos_filtro},
+        )
+
+    if not records:
+        logger.warning(
+            "[despesas_service] sem verba ALEGO para legislator_id=%s anos=%s",
+            legislator_id, anos_filtro,
+        )
+        return []
+
+    # Mesma lógica de agregação do CEAP federal (preserva total_fmt BRL).
+    por_tipo: dict[str, float] = {}
+    for record in records:
+        tipo_raw = record.get("tipo_raw") or ""
+        valor_raw = record.get("valor")
+        if valor_raw is None:
+            continue
+        try:
+            valor = float(valor_raw)
+        except (TypeError, ValueError):
+            continue
+        if valor <= 0:
+            continue
+        tipo_traduzido = traduzir_despesa(str(tipo_raw)) if tipo_raw else "Outros"
+        por_tipo[tipo_traduzido] = por_tipo.get(tipo_traduzido, 0.0) + valor
+
+    if not por_tipo:
+        logger.warning(
+            "[despesas_service] verba ALEGO de legislator_id=%s sem valores validos",
+            legislator_id,
+        )
+        return []
+
+    return [
+        DespesaGabinete(tipo=tipo, total=total, total_fmt=fmt_brl(total))
+        for tipo, total in sorted(
+            por_tipo.items(), key=lambda kv: -kv[1],
+        )
+    ]
+
+
 async def calcular_media_ceap_estado(
     driver: AsyncDriver,
     uf: str,

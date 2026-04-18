@@ -20,6 +20,7 @@ import pytest
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
+    obter_verba_indenizatoria_alego,
 )
 
 
@@ -216,6 +217,82 @@ class TestCalcularMediaCeapEstado:
         params = session.run.await_args.args[1]
         assert params["amostra"] == 10
         assert len(params["anos"]) == 2
+
+
+class TestObterVerbaIndenizatoriaAlego:
+    """Verba indenizatória ALEGO — shape idêntico ao CEAP federal."""
+
+    @pytest.mark.anyio
+    async def test_agrupa_por_tipo_e_ordena_desc(self) -> None:
+        """Mesma lógica de agregação do CEAP, aplicada aos lançamentos ALEGO."""
+        records = [
+            _mock_record(
+                {"tipo_raw": "COMBUSTIVEIS E LUBRIFICANTES", "valor": 200.0, "ano": "2025"},
+            ),
+            _mock_record(
+                {"tipo_raw": "COMBUSTIVEIS E LUBRIFICANTES", "valor": 100.0, "ano": "2025"},
+            ),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": 1_500.0, "ano": "2025"}),
+        ]
+        driver = _build_driver(records)
+
+        resultado = await obter_verba_indenizatoria_alego(
+            driver, legislator_id="abc123",
+        )
+
+        assert len(resultado) == 2
+        assert resultado[0].tipo == "Telefone"
+        assert resultado[0].total == 1_500.0
+        assert resultado[1].tipo == "Combustivel"
+        assert resultado[1].total == pytest.approx(300.0)
+
+    @pytest.mark.anyio
+    async def test_sem_verba_retorna_lista_vazia(self) -> None:
+        driver = _build_driver([])
+        resultado = await obter_verba_indenizatoria_alego(
+            driver, legislator_id="semdata",
+        )
+        assert resultado == []
+
+    @pytest.mark.anyio
+    async def test_ignora_valores_invalidos(self) -> None:
+        records = [
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": None}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": -5.0}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": "xx"}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": 80.0}),
+        ]
+        driver = _build_driver(records)
+        resultado = await obter_verba_indenizatoria_alego(
+            driver, legislator_id="abc123",
+        )
+        assert len(resultado) == 1
+        assert resultado[0].total == 80.0
+
+    @pytest.mark.anyio
+    async def test_params_passados_para_query(self) -> None:
+        driver = _build_driver([])
+        await obter_verba_indenizatoria_alego(
+            driver, legislator_id="HASH9", anos=[2024, 2025],
+        )
+
+        session_cm = driver.session.return_value
+        session = session_cm.__aenter__.return_value
+        params = session.run.await_args.args[1]
+        assert params["legislator_id"] == "HASH9"
+        assert params["anos"] == [2024, 2025]
+
+    @pytest.mark.anyio
+    async def test_anos_default_sao_os_ultimos_dois(self) -> None:
+        driver = _build_driver([])
+        await obter_verba_indenizatoria_alego(driver, legislator_id="X")
+
+        session_cm = driver.session.return_value
+        session = session_cm.__aenter__.return_value
+        params = session.run.await_args.args[1]
+        anos = params["anos"]
+        assert len(anos) == 2
+        assert anos[0] - anos[1] == 1
 
 
 class TestZeroLiveCall:
