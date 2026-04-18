@@ -39,7 +39,12 @@ class PoliticoResumo(BaseModel):
 
 
 class Emenda(BaseModel):
-    """Emenda parlamentar (individual, bancada, comissão, relator, pix)."""
+    """Emenda parlamentar (individual, bancada, comissão, relator, pix).
+
+    ``provenance`` carrega origem rastreável dos props do nó :Amendment no
+    grafo (Siop / Transparência / Câmara). ``None`` quando o nó é legado e
+    ainda não foi re-ingerido sob o contrato de proveniência.
+    """
 
     model_config = _PERFIL_MODEL_CONFIG
 
@@ -52,6 +57,7 @@ class Emenda(BaseModel):
     valor_empenhado_fmt: str
     valor_pago: float
     valor_pago_fmt: str
+    provenance: ProvenanceBlock | None = None
 
 
 class EmpresaConectada(BaseModel):
@@ -82,6 +88,12 @@ class DoadorEmpresa(BaseModel):
     `situacao` vem do mesmo lugar que em :class:`EmpresaConectada`
     (pipeline ``brasilapi_cnpj_status``). Quando a empresa está
     BAIXADA/SUSPENSA/INAPTA, o ``alertas_service`` levanta alerta grave.
+
+    ``provenance`` é agregado: quando múltiplas doações viram 1 doador, o
+    service escolhe a proveniência da doação mais recente por
+    ``ingested_at``. ``None`` quando nenhuma das doações agregadas trouxe
+    os 4 campos obrigatórios (``source_id``/``source_url``/``ingested_at``/
+    ``run_id``).
     """
 
     model_config = _PERFIL_MODEL_CONFIG
@@ -94,6 +106,7 @@ class DoadorEmpresa(BaseModel):
     situacao: str | None = None
     situacao_fmt: str | None = None
     situacao_verified_at: str | None = None
+    provenance: ProvenanceBlock | None = None
 
 
 class DoadorPessoa(BaseModel):
@@ -101,6 +114,13 @@ class DoadorPessoa(BaseModel):
 
     `cpf_mascarado` deve ser sempre mascarado por `FormatacaoService` antes
     de entrar aqui — CPF pleno é violação LGPD.
+
+    ``provenance`` segue a mesma regra de agregação de
+    :class:`DoadorEmpresa` (doação mais recente por ``ingested_at``). LGPD:
+    ``source_record_id`` NUNCA é populado aqui — no TSE o record_id
+    normalmente é o CPF do doador, e surfar isso no chip de fonte violaria
+    a máscara de CPF que o service aplica no próprio ``cpf_mascarado``. O
+    restante dos campos (URLs públicas, timestamps, run_id) é preservado.
     """
 
     model_config = _PERFIL_MODEL_CONFIG
@@ -110,6 +130,7 @@ class DoadorPessoa(BaseModel):
     valor_total: float
     valor_total_fmt: str
     n_doacoes: int
+    provenance: ProvenanceBlock | None = None
 
 
 class SocioConectado(BaseModel):
