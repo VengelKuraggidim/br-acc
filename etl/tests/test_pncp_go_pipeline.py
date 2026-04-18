@@ -4,10 +4,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
+import httpx
+import pytest
+
+from bracc_etl.archival import restore_snapshot
 from bracc_etl.pipelines.pncp_go import PncpGoPipeline, _make_procurement_id
 from tests._mock_helpers import mock_session
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -177,13 +185,20 @@ class TestTransform:
         _load_fixture(pipeline)
         pipeline.transform()
 
+        # ``__snapshot_uri`` é a chave privada de propagação do archival
+        # (retrofit #2 do plano em high_priority/11-archival-retrofit-go.md).
+        # Fica ``None`` no offline-path (fixture) e é filtrada em ``load``
+        # antes de chegar ao Neo4jBatchLoader — opt-in preservado.
         expected_fields = {
             "procurement_id", "cnpj_agency", "agency_name", "year",
             "sequential", "object", "modality", "amount_estimated",
             "published_at", "uf", "municipality", "source", "fornecedores",
+            "__snapshot_uri",
         }
         for p in pipeline.procurements:
             assert set(p.keys()) == expected_fields
+            # Offline-path não popula URI.
+            assert p["__snapshot_uri"] is None
 
     def test_skips_invalid_cnpj(self) -> None:
         pipeline = _make_pipeline()
@@ -407,3 +422,191 @@ class TestLoad:
         # At minimum: 1 GoProcurement + 1 Company(agency) + 1 CONTRATOU_GO
         # + 1 Company(supplier) + 1 FORNECEU_GO = 5
         assert session_mock.run.call_count >= 5
+
+
+# ---------------------------------------------------------------------------
+# Archival — snapshot do payload PNCP no momento do fetch (retrofit #2 do
+# plano em todo-list-prompts/high_priority/11-archival-retrofit-go.md).
+#
+# Estratégia: ``data_dir`` vazio -> extract cai no fallback HTTP; mockamos
+# ``httpx.Client`` no módulo ``pncp_go`` com um ``MockTransport`` que devolve
+# uma única página por (modalidade, window) e zero nas demais, daí conferimos:
+#   * snapshot file gravado em ``BRACC_ARCHIVAL_ROOT/pncp_go/YYYY-MM/*.json``;
+#   * todas as rows transformadas carregam ``__snapshot_uri`` internamente e
+#     ``load()`` repassa ``source_snapshot_uri`` pra cada row do batch;
+#   * ``restore_snapshot`` devolve os bytes originais (round-trip).
+# O path offline (fixture JSON local) NÃO deve popular o campo — rodado em
+# paralelo pra garantir que o retrofit continua opt-in.
+# ---------------------------------------------------------------------------
+
+
+# Uma modalidade só (pregao eletronico, código 6) + uma window — o mock
+# devolve ``paginasRestantes=0`` na primeira página pra fechar o loop
+# imediatamente. Demais modalidades retornam ``data: []`` → break.
+_PNCP_PAGE_RECORDS: list[dict[str, Any]] = [
+    {
+        "orgaoEntidade": {
+            "cnpj": "01409580000138",
+            "razaoSocial": "GOVERNO DO ESTADO DE GOIAS",
+            "esferaId": "E",
+        },
+        "anoCompra": 2024,
+        "sequencialCompra": 42,
+        "objetoCompra": "AQUISICAO DE EQUIPAMENTOS",
+        "valorTotalEstimado": 850000.00,
+        "dataPublicacaoPncp": "2024-03-10T00:00:00",
+        "modalidadeId": 6,
+        "modalidadeNome": "Pregao - Eletronico",
+        "unidadeOrgao": {"ufSigla": "GO", "municipioNome": "Goiania"},
+        "fornecedores": [
+            {"cnpj": "12345678000195", "razaoSocial": "FORNECEDORA GO LTDA"},
+        ],
+    },
+]
+
+
+def _pncp_handler() -> httpx.MockTransport:
+    """MockTransport que emula o PNCP (1 registro para modalidade=6)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        headers = {"content-type": "application/json; charset=utf-8"}
+        mod = request.url.params.get("codigoModalidadeContratacao")
+        # Só modalidade 6 devolve registros — demais iteram e saem vazias.
+        if str(mod) == "6" and request.url.params.get("pagina") == "1":
+            body = {"data": _PNCP_PAGE_RECORDS, "paginasRestantes": 0}
+        else:
+            body = {"data": [], "paginasRestantes": 0}
+        return httpx.Response(
+            200,
+            content=json.dumps(body).encode("utf-8"),
+            headers=headers,
+        )
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.fixture()
+def archival_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[Path]:
+    root = tmp_path / "archival"
+    monkeypatch.setenv("BRACC_ARCHIVAL_ROOT", str(root))
+    yield root
+
+
+@pytest.fixture()
+def online_pipeline(
+    tmp_path: Path,
+    archival_root: Path,  # noqa: ARG001 — apenas ativa o env var
+    monkeypatch: pytest.MonkeyPatch,
+) -> PncpGoPipeline:
+    """Pipeline com data_dir vazio (força fallback HTTP) + transport mockado."""
+    empty_data = tmp_path / "data_empty"
+    (empty_data / "pncp_go").mkdir(parents=True)
+
+    transport = _pncp_handler()
+    original_client = httpx.Client
+
+    def _client_factory(*args: Any, **kwargs: Any) -> httpx.Client:
+        kwargs["transport"] = transport
+        return original_client(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "bracc_etl.pipelines.pncp_go.httpx.Client",
+        _client_factory,
+    )
+    pipeline = PncpGoPipeline(driver=MagicMock(), data_dir=str(empty_data))
+    # run_id canônico → bucket 2024-03 no archival (alinhado com data do mock).
+    pipeline.run_id = "pncp_go_20240315120000"
+    return pipeline
+
+
+class TestArchivalRetrofit:
+    """Retrofit: pncp_go agora grava snapshots dos payloads JSON do PNCP."""
+
+    def test_carimba_source_snapshot_uri_em_rows(
+        self,
+        online_pipeline: PncpGoPipeline,
+        archival_root: Path,
+    ) -> None:
+        online_pipeline.extract()
+        online_pipeline.transform()
+
+        # Proveniência interna: cada procurement carrega o URI na chave
+        # privada ``__snapshot_uri``.
+        assert online_pipeline.procurements
+        sample_uri: str | None = None
+        for p in online_pipeline.procurements:
+            uri = p.get("__snapshot_uri")
+            assert isinstance(uri, str) and uri
+            parts = uri.split("/")
+            assert parts[0] == "pncp_go"
+            assert parts[1] == "2024-03"
+            assert parts[2].endswith(".json")
+            sample_uri = uri
+
+        # load() propaga a URI via ``source_snapshot_uri`` nas rows que
+        # chegam ao Neo4jBatchLoader (tanto no nó GoProcurement quanto
+        # nos relacionamentos CONTRATOU_GO/FORNECEU_GO).
+        online_pipeline.load()
+        session_mock = mock_session(online_pipeline)
+
+        procurement_calls = [
+            call for call in session_mock.run.call_args_list
+            if "MERGE (n:GoProcurement" in str(call)
+        ]
+        assert procurement_calls
+        rows = procurement_calls[0][0][1]["rows"]
+        assert rows
+        for r in rows:
+            assert isinstance(r.get("source_snapshot_uri"), str)
+            assert r["source_snapshot_uri"].startswith("pncp_go/2024-03/")
+            # ``__snapshot_uri`` é chave interna — não deve vazar pro loader.
+            assert "__snapshot_uri" not in r
+
+        forneceu_calls = [
+            call for call in session_mock.run.call_args_list
+            if "FORNECEU_GO" in str(call)
+        ]
+        assert forneceu_calls
+        forn_rows = forneceu_calls[0][0][1]["rows"]
+        for r in forn_rows:
+            assert r.get("source_snapshot_uri", "").startswith("pncp_go/2024-03/")
+
+        # Storage: arquivo fisicamente presente sob o root configurado.
+        assert sample_uri is not None
+        absolute = archival_root / sample_uri
+        assert absolute.exists(), f"snapshot ausente em {absolute}"
+
+        # Round-trip: restore_snapshot devolve os bytes originais do mock.
+        restored = restore_snapshot(sample_uri)
+        assert b'"data"' in restored
+        assert b"GOVERNO DO ESTADO DE GOIAS" in restored
+
+    def test_offline_path_nao_popula_snapshot_uri(self) -> None:
+        """Fixture local (sem HTTP) mantém o campo ausente — opt-in preservado."""
+        pipeline = _make_pipeline()
+        _load_fixture(pipeline)
+        pipeline.transform()
+        pipeline.load()
+
+        assert pipeline.procurements
+        # ``__snapshot_uri`` existe internamente mas fica ``None`` no
+        # offline-path (raw records vêm do fixture, sem passagem por
+        # ``archive_fetch``).
+        for p in pipeline.procurements:
+            assert p.get("__snapshot_uri") is None
+
+        # E as rows que chegam ao Neo4jBatchLoader nunca ganham o campo
+        # público ``source_snapshot_uri`` — ``attach_provenance`` omite
+        # a chave quando ``snapshot_uri`` é ``None``.
+        session_mock = mock_session(pipeline)
+        procurement_calls = [
+            call for call in session_mock.run.call_args_list
+            if "MERGE (n:GoProcurement" in str(call)
+        ]
+        assert procurement_calls
+        rows = procurement_calls[0][0][1]["rows"]
+        for r in rows:
+            assert "source_snapshot_uri" not in r
+            assert "__snapshot_uri" not in r

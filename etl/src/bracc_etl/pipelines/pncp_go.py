@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -63,6 +64,16 @@ _MODALIDADE_MAP: dict[int, str] = {
 
 _RATE_LIMIT_SLEEP = 0.3
 _HTTP_TIMEOUT = 45
+# PNCP devolve ``application/json`` para todos os endpoints da API de
+# consulta; usado como fallback quando o servidor não carimba
+# ``Content-Type`` explicitamente (raro, mas já visto em 204).
+_PNCP_JSON_CONTENT_TYPE = "application/json"
+# Chave privada injetada em cada raw record pelo caminho online pra
+# propagar a URI do snapshot archival até ``transform``/``load``.
+# Duplo underscore evita colisão com qualquer campo devolvido pelo PNCP.
+# O campo é strip-ado antes de chegar ao ``Neo4jBatchLoader`` — archival
+# continua opt-in e não aparece no schema do nó ``GoProcurement``.
+_SNAPSHOT_KEY = "__snapshot_uri"
 # API requires tamanhoPagina >= 10
 _DEFAULT_PAGE_SIZE = 50
 # API requires codigoModalidadeContratacao; iterate all modalidades.
@@ -137,6 +148,9 @@ def _iter_api_combo(
     modalidade_code: int,
     win_start: str,
     win_end: str,
+    *,
+    run_id: str | None = None,
+    source_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Fetch all pages for a single (modalidade, window) combo from PNCP.
 
@@ -144,10 +158,18 @@ def _iter_api_combo(
     exhausted retries on a timeout — callers may use this to skip remaining
     windows for the same modalidade. Other network/JSON errors are logged
     and treated as early termination without flagging a timeout.
+
+    When both ``run_id`` and ``source_id`` are provided, each raw page
+    payload is persisted via :func:`bracc_etl.archival.archive_fetch` and
+    the returned URI is injected em cada record via a chave privada
+    ``__snapshot_uri`` — lida por ``PncpGoPipeline.transform`` pra carimbar
+    ``source_snapshot_uri`` na proveniência. Ambos omitidos (ex.: CLI do
+    ``fetch_to_disk``) desligam archival — comportamento original preservado.
     """
     url = f"{_API_BASE}contratacoes/publicacao"
     records: list[dict[str, Any]] = []
     page = 1
+    archival_enabled = bool(run_id and source_id)
     while True:
         params: dict[str, str | int] = {
             "dataInicial": win_start,
@@ -178,6 +200,21 @@ def _iter_api_combo(
         if not resp.content:
             break
 
+        page_uri: str | None = None
+        if archival_enabled:
+            # Content-addressed: mesma página → mesma URI → sem re-escrita
+            # em disco. Seguro chamar a cada iteração do loop de paginação.
+            content_type = resp.headers.get(
+                "content-type", _PNCP_JSON_CONTENT_TYPE,
+            )
+            page_uri = archive_fetch(
+                url=str(resp.request.url),
+                content=resp.content,
+                content_type=content_type,
+                run_id=run_id,  # type: ignore[arg-type]
+                source_id=source_id,  # type: ignore[arg-type]
+            )
+
         try:
             payload = resp.json()
         except json.JSONDecodeError as exc:
@@ -202,6 +239,15 @@ def _iter_api_combo(
 
         if not page_records:
             break
+
+        if page_uri is not None:
+            # Injeta por-record — ``transform`` lê e propaga pra cada nó
+            # derivado. Raw records são dicts mutáveis recém-parseados do
+            # payload da própria página, então a mutação não afeta dados
+            # compartilhados a montante.
+            for rec in page_records:
+                if isinstance(rec, dict):
+                    rec[_SNAPSHOT_KEY] = page_uri
 
         records.extend(page_records)
 
@@ -361,6 +407,13 @@ class PncpGoPipeline(Pipeline):
         The endpoint requires `codigoModalidadeContratacao` and rejects
         windows > 365 days. We iterate all modalidades and chunk the
         requested range into yearly windows.
+
+        Ativa archival: cada página da API é persistida via
+        ``archive_fetch`` e a URI retornada é injetada nos raw records
+        (chave privada ``__snapshot_uri``) pra ``transform``/``load``
+        carimbarem ``source_snapshot_uri``. Offline-path (JSONs locais
+        em ``data_dir/pncp_go``) não passa por aqui e, portanto, não
+        ganha URI — consistente com o caráter opt-in do campo.
         """
         all_records: list[dict[str, Any]] = []
         windows = _split_date_windows(date_start, date_end)
@@ -373,7 +426,12 @@ class PncpGoPipeline(Pipeline):
                     if skip_modalidade:
                         break
                     records, timed_out = _iter_api_combo(
-                        client, modalidade_code, win_start, win_end,
+                        client,
+                        modalidade_code,
+                        win_start,
+                        win_end,
+                        run_id=self.run_id,
+                        source_id=self.source_id,
                     )
                     if records:
                         all_records.extend(records)
@@ -443,7 +501,14 @@ class PncpGoPipeline(Pipeline):
     # ------------------------------------------------------------------
 
     def transform(self) -> None:
-        """Normalize fields, format CNPJs, create stable IDs, deduplicate."""
+        """Normalize fields, format CNPJs, create stable IDs, deduplicate.
+
+        Propaga o ``__snapshot_uri`` injetado em ``_iter_api_combo`` pra
+        cada procurement transformado (chave privada homônima) — ``load``
+        lê e passa pra ``attach_provenance(snapshot_uri=...)`` antes de
+        chegar ao loader. Raw records do offline-path não carregam a chave,
+        então o campo fica ausente na proveniência (opt-in preservado).
+        """
         if not self._raw_records:
             return
 
@@ -504,6 +569,13 @@ class PncpGoPipeline(Pipeline):
                         "razao_social": normalize_name(str(forn.get("razaoSocial", ""))),
                     })
 
+            # URI archival injetada por ``_iter_api_combo`` no caminho
+            # online; ausente/None no offline-path (arquivos locais em
+            # ``data_dir/pncp_go``). ``load`` lê esta chave privada pra
+            # repassar via ``snapshot_uri=`` e filtra antes do loader.
+            raw_snapshot = rec.get(_SNAPSHOT_KEY)
+            snapshot_uri = raw_snapshot if isinstance(raw_snapshot, str) and raw_snapshot else None
+
             procurements.append({
                 "procurement_id": procurement_id,
                 "cnpj_agency": agency_cnpj,
@@ -518,6 +590,7 @@ class PncpGoPipeline(Pipeline):
                 "municipality": municipality,
                 "source": "pncp_go",
                 "fornecedores": fornecedores,
+                _SNAPSHOT_KEY: snapshot_uri,
             })
 
         self.procurements = deduplicate_rows(procurements, ["procurement_id"])
@@ -552,6 +625,13 @@ class PncpGoPipeline(Pipeline):
             cnpj_digits = strip_document(str(p.get("cnpj_agency", "")))
             return f"{cnpj_digits}|{p.get('year', '')}|{p.get('sequential', '')}"
 
+        def _snapshot_for(p: dict[str, Any]) -> str | None:
+            # Chave privada populada pelo caminho online; offline-path
+            # fica None e ``attach_provenance`` omite ``source_snapshot_uri``
+            # do row — opt-in preservado.
+            raw = p.get(_SNAPSHOT_KEY)
+            return raw if isinstance(raw, str) and raw else None
+
         # GoProcurement nodes
         procurement_nodes = [
             self.attach_provenance(
@@ -570,6 +650,7 @@ class PncpGoPipeline(Pipeline):
                     "source": p["source"],
                 },
                 record_id=_record_id_for(p),
+                snapshot_uri=_snapshot_for(p),
             )
             for p in self.procurements
         ]
@@ -583,6 +664,7 @@ class PncpGoPipeline(Pipeline):
                 self.attach_provenance(
                     {"cnpj": p["cnpj_agency"], "razao_social": p["agency_name"]},
                     record_id=strip_document(str(p["cnpj_agency"])),
+                    snapshot_uri=_snapshot_for(p),
                 )
                 for p in self.procurements
             ],
@@ -596,6 +678,7 @@ class PncpGoPipeline(Pipeline):
             self.attach_provenance(
                 {"source_key": p["cnpj_agency"], "target_key": p["procurement_id"]},
                 record_id=_record_id_for(p),
+                snapshot_uri=_snapshot_for(p),
             )
             for p in self.procurements
         ]
@@ -614,6 +697,7 @@ class PncpGoPipeline(Pipeline):
         supplier_rels: list[dict[str, Any]] = []
         for p in self.procurements:
             record_id = _record_id_for(p)
+            snapshot_uri = _snapshot_for(p)
             for forn in p.get("fornecedores", []):
                 supplier_company_rows.append(self.attach_provenance(
                     {
@@ -621,6 +705,7 @@ class PncpGoPipeline(Pipeline):
                         "razao_social": forn["razao_social"],
                     },
                     record_id=strip_document(str(forn["cnpj"])),
+                    snapshot_uri=snapshot_uri,
                 ))
                 supplier_rels.append(self.attach_provenance(
                     {
@@ -628,6 +713,7 @@ class PncpGoPipeline(Pipeline):
                         "target_key": p["procurement_id"],
                     },
                     record_id=record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
         if supplier_company_rows:
