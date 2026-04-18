@@ -525,6 +525,41 @@
       border-radius: var(--radius-sm);
     }
 
+    /* === DROPDOWN (ABAS CLICAVEIS) === */
+    details.collapsible {
+      margin: 8px 0 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      overflow: hidden;
+    }
+    details.collapsible > summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    details.collapsible > summary::-webkit-details-marker { display: none; }
+    details.collapsible > summary::after {
+      content: "\25BC";
+      font-size: 10px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+      margin-left: auto;
+    }
+    details.collapsible[open] > summary::after { transform: rotate(180deg); }
+    details.collapsible > summary:hover { background: var(--bg-tertiary); }
+    details.collapsible > .collapsible-body {
+      padding: 4px 14px 12px;
+      border-top: 1px solid var(--border);
+    }
+
     /* === EMENDA CARD === */
     .emenda-card {
       background: var(--bg-card);
@@ -1272,7 +1307,10 @@ function renderPerfil(d) {
         </div>
         <span class="badge badge-accent">${d.total_emendas_valor_fmt}</span>
       </div>
-      ${fonteLabel}`;
+      ${fonteLabel}
+      <details class="collapsible">
+        <summary>Ver ${d.emendas.length} emenda(s)</summary>
+        <div class="collapsible-body">`;
     d.emendas.forEach(e => {
       html += `<div class="emenda-card">
         <div class="emenda-top">
@@ -1292,7 +1330,7 @@ function renderPerfil(d) {
         ${e.municipio ? `<div class="emenda-local">&#128205; ${e.municipio}${e.uf ? ', '+e.uf : ''}</div>` : ''}
       </div>`;
     });
-    html += '</div>';
+    html += '</div></details></div>';
   }
 
   // Despesas de gabinete (cota parlamentar - dados em tempo real da Camara)
@@ -1395,10 +1433,13 @@ function renderPerfil(d) {
         Empresas e pessoas que doaram dinheiro para a campanha do(a) político(a) em eleições. Informação pública, declarada à Justiça Eleitoral.
       </div>`;
 
+    const fmtBRLjs = (v) => v.toLocaleString('pt-BR', {style:'currency', currency:'BRL', maximumFractionDigits:0});
     if (d.doadores_empresa.length) {
-      const topE = d.doadores_empresa.slice(0, 5);
-      html += `<div style="font-size:13px; font-weight:700; color:var(--text-primary); margin:12px 0 6px;">&#127970; Empresas (${d.doadores_empresa.length})</div>`;
-      topE.forEach(e => {
+      const totE = d.doadores_empresa.reduce((s, e) => s + e.valor_total, 0);
+      html += `<details class="collapsible">
+        <summary><span>&#127970; ${d.doadores_empresa.length} empresa(s)</span> <span style="font-weight:700; color:var(--accent); margin-left:auto; margin-right:10px;">${fmtBRLjs(totE)}</span></summary>
+        <div class="collapsible-body">`;
+      d.doadores_empresa.forEach(e => {
         const cnpjStr = e.cnpj ? ` &middot; CNPJ ${e.cnpj}` : '';
         const nStr = e.n_doacoes > 1 ? ` &middot; ${e.n_doacoes} doações` : '';
         html += `<div class="conexao-card">
@@ -1410,15 +1451,15 @@ function renderPerfil(d) {
           <div class="conexao-valor">${e.valor_total_fmt}</div>
         </div>`;
       });
-      if (d.doadores_empresa.length > 5) {
-        html += `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:6px;">+ outras ${d.doadores_empresa.length - 5} empresas</div>`;
-      }
+      html += '</div></details>';
     }
 
     if (d.doadores_pessoa.length) {
-      const topP = d.doadores_pessoa.slice(0, 5);
-      html += `<div style="font-size:13px; font-weight:700; color:var(--text-primary); margin:12px 0 6px;">&#128100; Pessoas físicas (${d.doadores_pessoa.length})</div>`;
-      topP.forEach(p => {
+      const totP = d.doadores_pessoa.reduce((s, p) => s + p.valor_total, 0);
+      html += `<details class="collapsible">
+        <summary><span>&#128100; ${d.doadores_pessoa.length} pessoa(s) física(s)</span> <span style="font-weight:700; color:var(--accent); margin-left:auto; margin-right:10px;">${fmtBRLjs(totP)}</span></summary>
+        <div class="collapsible-body">`;
+      d.doadores_pessoa.forEach(p => {
         const cpfStr = p.cpf_mascarado ? ` &middot; CPF ${p.cpf_mascarado}` : '';
         const nStr = p.n_doacoes > 1 ? ` &middot; ${p.n_doacoes} doações` : '';
         html += `<div class="conexao-card">
@@ -1430,9 +1471,7 @@ function renderPerfil(d) {
           <div class="conexao-valor">${p.valor_total_fmt}</div>
         </div>`;
       });
-      if (d.doadores_pessoa.length > 5) {
-        html += `<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:6px;">+ outras ${d.doadores_pessoa.length - 5} pessoas</div>`;
-      }
+      html += '</div></details>';
     }
 
     html += '</div>';
@@ -1450,7 +1489,10 @@ function renderPerfil(d) {
       </div>
       <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.5;">
         Empresas em que o(a) político(a) aparece como sócio(a) na Receita Federal. Ter empresa não é ilegal, mas pode gerar conflito de interesse com decisões do mandato.
-      </div>`;
+      </div>
+      <details class="collapsible">
+        <summary>Ver ${d.socios.length} empresa(s)</summary>
+        <div class="collapsible-body">`;
     d.socios.forEach(s => {
       const cnpjStr = s.cnpj ? ` &middot; CNPJ ${s.cnpj}` : '';
       html += `<div class="conexao-card">
@@ -1462,7 +1504,7 @@ function renderPerfil(d) {
         ${s.capital_social_fmt ? `<div class="conexao-valor">${s.capital_social_fmt}</div>` : ''}
       </div>`;
     });
-    html += '</div>';
+    html += '</div></details></div>';
   }
 
   // Familia com ligacao politica
@@ -1477,7 +1519,10 @@ function renderPerfil(d) {
       </div>
       <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.5;">
         Familiares (cônjuge ou parentes) que também têm envolvimento em política ou com mandato. Pode ser só coincidência, mas ajuda a entender o contexto.
-      </div>`;
+      </div>
+      <details class="collapsible">
+        <summary>Ver ${d.familia.length} familiar(es)</summary>
+        <div class="collapsible-body">`;
     d.familia.forEach(f => {
       html += `<div class="conexao-card">
         <div class="conexao-icon pessoa">&#128100;</div>
@@ -1487,7 +1532,7 @@ function renderPerfil(d) {
         </div>
       </div>`;
     });
-    html += '</div>';
+    html += '</div></details></div>';
   }
 
   // Fallback: conexoes legadas (empresas nao-doadoras nao-socias, ex: state_agency)
@@ -1499,7 +1544,10 @@ function renderPerfil(d) {
           Outras ligações
         </div>
         <span class="badge badge-accent">${d.empresas.length}</span>
-      </div>`;
+      </div>
+      <details class="collapsible">
+        <summary>Ver ${d.empresas.length} ligação(ões)</summary>
+        <div class="collapsible-body">`;
     d.empresas.forEach(e => {
       const isEmpresa = e.cnpj && e.cnpj.length >= 14;
       html += `<div class="conexao-card">
@@ -1511,7 +1559,7 @@ function renderPerfil(d) {
         ${e.capital_social_fmt ? `<div class="conexao-valor">${e.capital_social_fmt}</div>` : ''}
       </div>`;
     });
-    html += '</div>';
+    html += '</div></details></div>';
   }
 
   // Contratos
