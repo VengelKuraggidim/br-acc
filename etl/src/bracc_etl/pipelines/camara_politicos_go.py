@@ -92,6 +92,15 @@ _JSON_CONTENT_TYPE = "application/json"
 
 _SOURCE_ID_CADASTRO = "camara_deputados"
 _SOURCE_ID_CEAP = "camara_deputados_ceap"
+# Foto do deputado (binário PNG/JPG servido pela CDN da Câmara). Fica em
+# source_id próprio pra separar cadência (cadastro semanal, foto raramente
+# muda, mas quando muda é independente do resto) e pra não misturar
+# binários com JSONs no bucket archival.
+_SOURCE_ID_FOTO = "camara_deputados_foto"
+
+# Content-types aceitos pro binário da foto. Qualquer outro valor (ex.:
+# ``text/html`` de erro de CDN) é descartado e a foto não é arquivada.
+_PHOTO_CONTENT_TYPES = frozenset({"image/png", "image/jpeg", "image/jpg"})
 
 
 def _expense_id(deputy_id: str, ano: int, mes: int, doc: str, valor: str) -> str:
@@ -207,6 +216,59 @@ def _fetch_deputy_detail(
     return dados, str(resp.request.url), snapshot_uri
 
 
+def _fetch_deputy_photo(
+    client: httpx.Client,
+    photo_url: str,
+    *,
+    run_id: str,
+) -> tuple[str, str] | None:
+    """Fetch the binary photo from the Câmara CDN and archive it.
+
+    Returns ``(snapshot_uri, normalized_content_type)`` or ``None`` if the
+    URL is empty, the GET fails, or the response doesn't look like an
+    image (e.g. CDN served an HTML error page). Failures are logged and
+    swallowed — the node still lands in the graph without snapshot.
+    """
+    if not photo_url:
+        return None
+    try:
+        resp = client.get(photo_url, headers=_DEFAULT_HEADERS)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "[camara_politicos_go] photo fetch %s failed: %s",
+            photo_url, exc,
+        )
+        return None
+    content_type_raw = resp.headers.get("content-type", "")
+    # Primary type only — tolera ``image/jpeg; charset=binary`` ou similares.
+    primary = content_type_raw.split(";", 1)[0].strip().lower()
+    if primary not in _PHOTO_CONTENT_TYPES:
+        logger.warning(
+            "[camara_politicos_go] photo %s returned non-image content-type %r",
+            photo_url, content_type_raw,
+        )
+        return None
+    # Normaliza ``image/jpg`` (alguns CDNs devolvem assim) pra ``image/jpeg``
+    # padrão IANA — o valor gravado no grafo fica consistente.
+    normalized = "image/jpeg" if primary == "image/jpg" else primary
+    try:
+        snapshot_uri = archive_fetch(
+            url=str(resp.request.url),
+            content=resp.content,
+            content_type=primary,
+            run_id=run_id,
+            source_id=_SOURCE_ID_FOTO,
+        )
+    except OSError as exc:
+        logger.warning(
+            "[camara_politicos_go] photo archival %s failed: %s",
+            photo_url, exc,
+        )
+        return None
+    return snapshot_uri, normalized
+
+
 class CamaraPoliticosGoPipeline(Pipeline):
     """Ingere deputados federais GO + despesas CEAP no grafo.
 
@@ -234,6 +296,7 @@ class CamaraPoliticosGoPipeline(Pipeline):
         end_year = int(
             kwargs.pop("end_year", datetime.now(tz=UTC).year),
         )
+        archive_photos = bool(kwargs.pop("archive_photos", True))
         http_client_factory = kwargs.pop(
             "http_client_factory",
             lambda: httpx.Client(
@@ -249,6 +312,9 @@ class CamaraPoliticosGoPipeline(Pipeline):
         )
         self.start_year = start_year
         self.end_year = end_year
+        # Opt-in por default — permite desligar em testes offline ou em
+        # reruns onde só cadastro/CEAP mudaram (a foto raramente muda).
+        self.archive_photos = archive_photos
         # Override pra testes injetarem cliente httpx mockado.
         self._http_client_factory = http_client_factory
 
@@ -267,6 +333,11 @@ class CamaraPoliticosGoPipeline(Pipeline):
         # snapshot mais rico (``/deputados/{id}``), não só o da listagem.
         self._detail_snapshot_by_id: dict[str, str] = {}
         self._listing_snapshot_by_id: dict[str, str] = {}
+        # Foto do deputado — snapshot binário arquivado + content-type
+        # normalizado (``image/png`` ou ``image/jpeg``). Ausência significa
+        # "foto não arquivada" (sem urlFoto, fetch falhou, ou opt-out).
+        self._photo_snapshot_by_id: dict[str, str] = {}
+        self._photo_content_type_by_id: dict[str, str] = {}
 
     def _stamp_ceap_provenance(
         self,
@@ -360,6 +431,30 @@ class CamaraPoliticosGoPipeline(Pipeline):
                 merged["_listing_url"] = page_url
                 deputies_by_id[dep_id] = merged
 
+                # --- Foto do deputado (opt-in, default=on) ---
+                # urlFoto canônica vem do detalhe (``ultimoStatus.urlFoto``);
+                # fallback pro campo raso da listagem quando o detalhe falhou.
+                if self.archive_photos:
+                    detail_dict = merged["_detail"] or {}
+                    ultimo = detail_dict.get("ultimoStatus") or {}
+                    photo_url = str(
+                        ultimo.get("urlFoto") or dep_listing.get("urlFoto") or "",
+                    ).strip()
+                    if not photo_url:
+                        logger.warning(
+                            "[camara_politicos_go] deputy %s has no urlFoto; "
+                            "skipping photo archival",
+                            dep_id,
+                        )
+                    else:
+                        photo_result = _fetch_deputy_photo(
+                            client, photo_url, run_id=self.run_id,
+                        )
+                        if photo_result is not None:
+                            snapshot_uri, normalized_ct = photo_result
+                            self._photo_snapshot_by_id[dep_id] = snapshot_uri
+                            self._photo_content_type_by_id[dep_id] = normalized_ct
+
             # --- Despesas CEAP por deputado, ano a ano ---
             for dep_id in deputies_by_id:
                 for ano in range(self.start_year, self.end_year + 1):
@@ -443,6 +538,12 @@ class CamaraPoliticosGoPipeline(Pipeline):
                 self._listing_snapshot_by_id.get(dep_id, ""),
             ) or None
 
+            # Foto archival (opt-in). ``foto_snapshot_uri`` + ``foto_content_type``
+            # são None quando o opt-in está desligado, a urlFoto está ausente,
+            # ou o fetch/archival falhou — a PWA continua servindo ``foto_url``.
+            foto_snapshot_uri = self._photo_snapshot_by_id.get(dep_id) or None
+            foto_content_type = self._photo_content_type_by_id.get(dep_id) or None
+
             node_row = self.attach_provenance(
                 {
                     "id_camara": dep_id,
@@ -453,6 +554,9 @@ class CamaraPoliticosGoPipeline(Pipeline):
                     "uf": _TARGET_UF,
                     "email": email,
                     "url_foto": url_foto,
+                    "foto_url": url_foto or None,
+                    "foto_snapshot_uri": foto_snapshot_uri,
+                    "foto_content_type": foto_content_type,
                     "situacao": situacao,
                     "legislatura_atual": (
                         int(legislatura)

@@ -66,6 +66,8 @@ _CONTENT_TYPE_EXTENSIONS: dict[str, str] = {
     "application/json": ".json",
     "application/pdf": ".pdf",
     "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
     "application/xml": ".xml",
     "text/xml": ".xml",
     "text/csv": ".csv",

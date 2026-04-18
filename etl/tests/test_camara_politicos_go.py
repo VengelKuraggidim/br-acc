@@ -22,8 +22,13 @@ import pytest
 from bracc_etl.pipelines.camara_politicos_go import (
     _SOURCE_ID_CADASTRO,
     _SOURCE_ID_CEAP,
+    _SOURCE_ID_FOTO,
     CamaraPoliticosGoPipeline,
 )
+
+# Fake 1x1 PNG/JPG bytes — só precisa ser determinístico pra hash content-address.
+_FAKE_PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"fake-png-payload-1001"
+_FAKE_JPG_BYTES = b"\xff\xd8\xff\xe0" + b"fake-jpg-payload-1002"
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -112,6 +117,21 @@ def _build_transport() -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         headers = {"content-type": "application/json; charset=utf-8"}
+        # Fotos binárias da Câmara (mockadas em example.gov.br nas fixtures).
+        # Deputy 1001 responde PNG; 1002 responde JPEG — garante cobertura
+        # das duas extensões no archival.
+        if url == "https://example.gov.br/foto1001.jpg":
+            return httpx.Response(
+                200,
+                content=_FAKE_PNG_BYTES,
+                headers={"content-type": "image/png"},
+            )
+        if url == "https://example.gov.br/foto1002.jpg":
+            return httpx.Response(
+                200,
+                content=_FAKE_JPG_BYTES,
+                headers={"content-type": "image/jpeg"},
+            )
         # /deputados?siglaUf=GO (listagem)
         if url.startswith(
             "https://dadosabertos.camara.leg.br/api/v2/deputados?",
@@ -417,6 +437,265 @@ class TestLoad:
         # we didn't blow up).
         assert len(p.legislators) == 0
         assert len(p.expenses) == 0
+
+
+# ---------------------------------------------------------------------------
+# foto — binário arquivado, snapshot_uri + content_type propagados
+# ---------------------------------------------------------------------------
+
+
+class TestPhotoArchival:
+    def test_extract_archives_png_and_jpeg(
+        self,
+        pipeline: CamaraPoliticosGoPipeline,
+        archival_root: Path,
+    ) -> None:
+        pipeline.extract()
+        foto_dir = archival_root / _SOURCE_ID_FOTO
+        assert foto_dir.exists()
+        # 1 PNG (deputy 1001) + 1 JPG (deputy 1002).
+        png_files = list(foto_dir.rglob("*.png"))
+        jpg_files = list(foto_dir.rglob("*.jpg"))
+        assert len(png_files) == 1
+        assert len(jpg_files) == 1
+
+    def test_extract_captures_photo_snapshot_uris(
+        self,
+        pipeline: CamaraPoliticosGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        assert set(pipeline._photo_snapshot_by_id.keys()) == {"1001", "1002"}
+        for uri in pipeline._photo_snapshot_by_id.values():
+            assert uri.startswith(f"{_SOURCE_ID_FOTO}/")
+
+    def test_extract_captures_photo_content_types(
+        self,
+        pipeline: CamaraPoliticosGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        assert pipeline._photo_content_type_by_id["1001"] == "image/png"
+        assert pipeline._photo_content_type_by_id["1002"] == "image/jpeg"
+
+    def test_transform_propagates_photo_props_to_legislator(
+        self,
+        pipeline: CamaraPoliticosGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        by_id = {leg["id_camara"]: leg for leg in pipeline.legislators}
+        # foto_url (novo alias público pra PWA) carrega a urlFoto original.
+        assert by_id["1001"]["foto_url"].startswith("https://example.gov.br/")
+        # snapshot_uri archival local + content-type normalizado.
+        assert by_id["1001"]["foto_snapshot_uri"].startswith(
+            f"{_SOURCE_ID_FOTO}/",
+        )
+        assert by_id["1001"]["foto_snapshot_uri"].endswith(".png")
+        assert by_id["1001"]["foto_content_type"] == "image/png"
+        assert by_id["1002"]["foto_snapshot_uri"].endswith(".jpg")
+        assert by_id["1002"]["foto_content_type"] == "image/jpeg"
+
+    def test_opt_out_skips_photo_fetch(
+        self,
+        archival_root: Path,
+    ) -> None:
+        """``archive_photos=False`` não baixa nem cria diretório de foto."""
+        transport = _build_transport()
+        p = CamaraPoliticosGoPipeline(
+            driver=MagicMock(),
+            data_dir="./data",
+            http_client_factory=lambda: httpx.Client(
+                transport=transport, follow_redirects=True,
+            ),
+            start_year=2024,
+            end_year=2024,
+            archive_photos=False,
+        )
+        p.extract()
+        p.transform()
+        assert p._photo_snapshot_by_id == {}
+        assert not (archival_root / _SOURCE_ID_FOTO).exists()
+        # Nó ainda é ingerido — snapshot/content_type ficam None, foto_url
+        # continua disponível da API pra fallback do frontend.
+        for leg in p.legislators:
+            assert leg["foto_snapshot_uri"] is None
+            assert leg["foto_content_type"] is None
+            assert leg["foto_url"]
+
+    def test_fetch_error_does_not_abort_pipeline(
+        self,
+        archival_root: Path,  # noqa: ARG002
+    ) -> None:
+        """CDN com 500/timeout: deputados continuam indo pro grafo sem snapshot."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            headers = {"content-type": "application/json; charset=utf-8"}
+            if url.startswith("https://example.gov.br/"):
+                # Falha completa da CDN pro binário da foto.
+                return httpx.Response(503, content=b"service unavailable")
+            if url.endswith("/api/v2/deputados") or "siglaUf=GO" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps(_deputy_listing_payload()).encode("utf-8"),
+                    headers=headers,
+                )
+            if "/despesas" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps({"dados": [], "links": []}).encode("utf-8"),
+                    headers=headers,
+                )
+            if "/deputados/" in url:
+                deputy_id = int(request.url.path.rsplit("/", 1)[-1])
+                return httpx.Response(
+                    200,
+                    content=json.dumps(
+                        _deputy_detail_payload(deputy_id, "11122233344", "X"),
+                    ).encode("utf-8"),
+                    headers=headers,
+                )
+            return httpx.Response(404)
+
+        transport = httpx.MockTransport(handler)
+        p = CamaraPoliticosGoPipeline(
+            driver=MagicMock(),
+            data_dir="./data",
+            http_client_factory=lambda: httpx.Client(
+                transport=transport, follow_redirects=True,
+            ),
+            start_year=2024,
+            end_year=2024,
+        )
+        p.extract()
+        p.transform()
+        assert len(p.legislators) == 2
+        for leg in p.legislators:
+            assert leg["foto_snapshot_uri"] is None
+            assert leg["foto_content_type"] is None
+            assert leg["foto_url"]  # ainda exposto pra PWA
+
+    def test_missing_url_foto_skips_archival(
+        self,
+        archival_root: Path,  # noqa: ARG002
+    ) -> None:
+        """Se o detail não traz urlFoto (campo opcional): skip gracioso."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            headers = {"content-type": "application/json; charset=utf-8"}
+            if url.endswith("/api/v2/deputados") or "siglaUf=GO" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps({
+                        "dados": [{
+                            "id": 3001,
+                            "nome": "SEM FOTO",
+                            "siglaPartido": "XYZ",
+                            "siglaUf": "GO",
+                            # urlFoto ausente na listagem.
+                        }],
+                        "links": [],
+                    }).encode("utf-8"),
+                    headers=headers,
+                )
+            if "/despesas" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps({"dados": [], "links": []}).encode("utf-8"),
+                    headers=headers,
+                )
+            if "/deputados/" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps({
+                        "dados": {
+                            "id": 3001,
+                            "cpf": "11122233344",
+                            "ultimoStatus": {
+                                "nomeEleitoral": "SEM FOTO",
+                                "siglaPartido": "XYZ",
+                                "siglaUf": "GO",
+                                "situacao": "Exercicio",
+                                # urlFoto ausente no detail.
+                                "idLegislatura": 57,
+                                "gabinete": {},
+                            },
+                        },
+                    }).encode("utf-8"),
+                    headers=headers,
+                )
+            return httpx.Response(404)
+
+        transport = httpx.MockTransport(handler)
+        p = CamaraPoliticosGoPipeline(
+            driver=MagicMock(),
+            data_dir="./data",
+            http_client_factory=lambda: httpx.Client(
+                transport=transport, follow_redirects=True,
+            ),
+            start_year=2024,
+            end_year=2024,
+        )
+        p.extract()
+        p.transform()
+        assert len(p.legislators) == 1
+        leg = p.legislators[0]
+        assert leg["foto_snapshot_uri"] is None
+        assert leg["foto_content_type"] is None
+        # foto_url vira None (não "" vazio) quando a API não traz urlFoto.
+        assert leg["foto_url"] is None
+
+    def test_non_image_content_type_is_rejected(
+        self,
+        archival_root: Path,
+    ) -> None:
+        """Se a CDN devolve HTML de erro (200 + text/html): não arquiva."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            headers = {"content-type": "application/json; charset=utf-8"}
+            if url.startswith("https://example.gov.br/"):
+                return httpx.Response(
+                    200,
+                    content=b"<html>erro</html>",
+                    headers={"content-type": "text/html"},
+                )
+            if url.endswith("/api/v2/deputados") or "siglaUf=GO" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps(_deputy_listing_payload()).encode("utf-8"),
+                    headers=headers,
+                )
+            if "/despesas" in url:
+                return httpx.Response(
+                    200,
+                    content=json.dumps({"dados": [], "links": []}).encode("utf-8"),
+                    headers=headers,
+                )
+            if "/deputados/" in url:
+                deputy_id = int(request.url.path.rsplit("/", 1)[-1])
+                return httpx.Response(
+                    200,
+                    content=json.dumps(
+                        _deputy_detail_payload(deputy_id, "11122233344", "X"),
+                    ).encode("utf-8"),
+                    headers=headers,
+                )
+            return httpx.Response(404)
+
+        transport = httpx.MockTransport(handler)
+        p = CamaraPoliticosGoPipeline(
+            driver=MagicMock(),
+            data_dir="./data",
+            http_client_factory=lambda: httpx.Client(
+                transport=transport, follow_redirects=True,
+            ),
+            start_year=2024,
+            end_year=2024,
+        )
+        p.extract()
+        p.transform()
+        # Nada arquivado no bucket de foto.
+        assert not (archival_root / _SOURCE_ID_FOTO).exists()
+        for leg in p.legislators:
+            assert leg["foto_snapshot_uri"] is None
 
 
 # ---------------------------------------------------------------------------
