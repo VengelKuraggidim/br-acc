@@ -1004,6 +1004,187 @@ class TestProvenanceSubRows:
         dump = d.provenance.model_dump_json()
         assert cpf_pleno not in dump
 
+    # --- SocioConectado -----------------------------------------------------
+
+    def test_socio_com_provenance_populado(self) -> None:
+        """Nó :Company com os 5+1 campos → ``SocioConectado.provenance`` carregado.
+
+        CNPJ é público — ``source_record_id`` preservado (sem risco LGPD).
+        """
+        conexoes = [_conn(rel_type="SOCIO_DE", target_id="emp_1")]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "22333444000155",
+                    "razao_social": "Minha Empresa SA",
+                    **_PROV_COMPLETO,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        s = resultado.socios[0]
+        assert s.provenance is not None
+        assert s.provenance.source_id == "tse_prestacao_contas"
+        # PJ preserva source_record_id (sem risco LGPD).
+        assert s.provenance.source_record_id == "REC-123"
+        assert s.provenance.snapshot_url == _PROV_COMPLETO["source_snapshot_uri"]
+
+    def test_socio_sem_campos_obrigatorios_vira_none(self) -> None:
+        """Nó legado sem os 4 campos obrigatórios → ``provenance=None``."""
+        conexoes = [_conn(rel_type="SOCIO_DE", target_id="emp_1")]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "22333444000155",
+                    "razao_social": "Legado SA",
+                    # Falta source_url/ingested_at/run_id.
+                    "source_id": "rfb_qsa",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert resultado.socios[0].provenance is None
+
+    # --- FamiliarConectado --------------------------------------------------
+
+    def test_familiar_com_provenance_populado_sem_record_id(self) -> None:
+        """Nó :Person com os 5+1 campos → ``FamiliarConectado.provenance`` com
+        ``source_record_id=None`` (LGPD: analogo a DoadorPessoa)."""
+        conexoes = [_conn(rel_type="CONJUGE_DE", target_id="p_1")]
+        entidades = {
+            "p_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "99988877766",
+                    "name": "Maria Silva",
+                    **_PROV_COMPLETO,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        f = resultado.familia[0]
+        assert f.provenance is not None
+        assert f.provenance.source_id == "tse_prestacao_contas"
+        assert f.provenance.source_url.startswith("https://")
+        # Crítico LGPD: record_id é forçado a None.
+        assert f.provenance.source_record_id is None
+
+    def test_familiar_sem_campos_obrigatorios_vira_none(self) -> None:
+        """Nó legado sem os 4 campos obrigatórios → ``provenance=None``."""
+        conexoes = [_conn(rel_type="PARENTE_DE", target_id="p_1")]
+        entidades = {
+            "p_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "44455566677",
+                    "name": "Irmao Legado",
+                    # Falta source_url/ingested_at/run_id.
+                    "source_id": "camara_deputados",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert resultado.familia[0].provenance is None
+
+    def test_provenance_nao_tem_cpf_em_familia(self) -> None:
+        """LGPD crítico: record_id contaminado com CPF pleno NAO pode vazar.
+
+        Análogo ao ``test_provenance_nao_tem_cpf_ou_cnpj_em_nenhum_campo``
+        pra DoadorPessoa, mas pra ``FamiliarConectado``. Garante que
+        ``drop_record_id=True`` esta sendo aplicado no sub-row familiar.
+        """
+        cpf_pleno = "99988877766"
+        conexoes = [_conn(rel_type="CONJUGE_DE", target_id="p_1")]
+        entidades = {
+            "p_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": cpf_pleno,
+                    "name": "Conjuge",
+                    # record_id contaminado com CPF — service deve drop.
+                    "source_id": "camara_deputados",
+                    "source_record_id": cpf_pleno,
+                    "source_url": "https://www.camara.leg.br/...",
+                    "ingested_at": "2026-04-18T00:00:00+00:00",
+                    "run_id": "camara_deputados_20260418000000",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        f = resultado.familia[0]
+        # Nenhum campo do ProvenanceBlock pode carregar os 11 dígitos.
+        assert f.provenance is not None
+        assert f.provenance.source_record_id is None
+        dump = f.provenance.model_dump_json()
+        assert cpf_pleno not in dump
+        # Serialização completa do model familiar também não pode vazar.
+        assert cpf_pleno not in f.model_dump_json()
+
+    # --- ContratoConectado --------------------------------------------------
+
+    def test_contrato_com_provenance_populado(self) -> None:
+        """Nó :Contract com os 5+1 campos → ``ContratoConectado.provenance``
+        carregado com ``source_record_id`` preservado (ID público)."""
+        conexoes = [_conn(rel_type="VENCEU", target_id="contract_1")]
+        entidades = {
+            "contract_1": {
+                "type": "Contract",
+                "properties": {
+                    "object": "Obra de pavimentacao",
+                    "value": 500_000.0,
+                    "contracting_org": "Ministerio X",
+                    "date": "2024-05-10",
+                    **_PROV_COMPLETO,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        c = resultado.contratos[0]
+        assert c.provenance is not None
+        assert c.provenance.source_id == "tse_prestacao_contas"
+        # ID de contrato é público — preserva source_record_id.
+        assert c.provenance.source_record_id == "REC-123"
+        assert c.provenance.snapshot_url == _PROV_COMPLETO["source_snapshot_uri"]
+
+    def test_contrato_go_procurement_com_provenance(self) -> None:
+        """Nó :Go_procurement também carrega provenance."""
+        conexoes = [_conn(rel_type="FORNECEU_GO", target_id="proc_1")]
+        entidades = {
+            "proc_1": {
+                "type": "Go_procurement",
+                "properties": {
+                    "object": "Aquisicao de materiais",
+                    "amount_estimated": 120_000.0,
+                    "agency_name": "Secretaria GO",
+                    "published_at": "2024-08-15",
+                    **_PROV_COMPLETO,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        c = resultado.contratos[0]
+        assert c.provenance is not None
+        assert c.provenance.source_record_id == "REC-123"
+
+    def test_contrato_sem_campos_obrigatorios_vira_none(self) -> None:
+        """Nó legado sem os 4 campos obrigatórios → ``provenance=None``."""
+        conexoes = [_conn(rel_type="VENCEU", target_id="contract_1")]
+        entidades = {
+            "contract_1": {
+                "type": "Contract",
+                "properties": {
+                    "object": "Contrato Legado",
+                    "value": 100.0,
+                    # Falta source_url/ingested_at/run_id.
+                    "source_id": "portal_transparencia",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert resultado.contratos[0].provenance is None
+
 
 # --- Cypher query sanity check ----------------------------------------------
 

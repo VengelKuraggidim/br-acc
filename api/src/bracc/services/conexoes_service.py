@@ -44,10 +44,13 @@ Constraints LGPD (aplicadas pelo service, testadas explicitamente):
   o record_id normalmente carrega o CPF pleno do doador, e surfar isso
   no chip de fonte vazaria o dado que já mascaramos em ``cpf_mascarado``.
 
-Proveniência (Fase 05, commit do chip de Fonte nos sub-cards):
+Proveniência (Fase 05, chip de Fonte nos 7 sub-cards):
 
-- ``Emenda``, ``DoadorEmpresa`` e ``DoadorPessoa`` carregam o campo
-  opcional ``provenance: ProvenanceBlock | None``. Construído via
+- Todas as 7 categorias do :class:`ConexoesClassificadas` carregam o
+  campo opcional ``provenance: ProvenanceBlock | None``
+  (``Emenda``/``DoadorEmpresa``/``DoadorPessoa``/``SocioConectado``/
+  ``FamiliarConectado``/``ContratoConectado``/``EmpresaConectada`` —
+  essa última ainda pendente). Construído via
   :func:`_provenance_from_props` a partir dos 5+1 campos carimbados pelo
   loader em ``attach_provenance``.
 - ``DoadorEmpresa`` / ``DoadorPessoa`` são agregados: o bloco publicado é
@@ -55,6 +58,10 @@ Proveniência (Fase 05, commit do chip de Fonte nos sub-cards):
   ordenação lexicográfica equivale à cronológica). Quando nenhuma
   doação agregada trouxe os 4 campos obrigatórios, ``provenance`` é
   ``None``.
+- ``FamiliarConectado`` usa ``drop_record_id=True`` (analogo a
+  ``DoadorPessoa``): record_id do nó :Person pode ser o CPF pleno.
+- ``SocioConectado`` e ``ContratoConectado`` usam ``drop_record_id=False``
+  — CNPJ e ID de contrato/licitação são dados públicos.
 """
 
 from __future__ import annotations
@@ -439,6 +446,8 @@ def classificar(
                     situacao=situacao,
                     situacao_fmt=situacao_fmt,
                     situacao_verified_at=verified_at,
+                    # CNPJ é público — preserva source_record_id.
+                    provenance=_provenance_from_props(target_props),
                 ),
             )
             continue
@@ -454,6 +463,12 @@ def classificar(
                     # LGPD: mascara AQUI antes de construir o model.
                     cpf_mascarado=mascarar_cpf(as_str(target_props, "cpf")),
                     relacao="Cônjuge" if rel_type == "CONJUGE_DE" else "Parente",
+                    # LGPD: drop_record_id=True — analogo a DoadorPessoa. O
+                    # record_id do nó Person pode ser o CPF pleno; surfar
+                    # isso violaria a máscara que aplicamos acima.
+                    provenance=_provenance_from_props(
+                        target_props, drop_record_id=True,
+                    ),
                 ),
             )
             continue
@@ -468,6 +483,8 @@ def classificar(
                     valor_fmt=fmt_brl(valor),
                     orgao=as_str(target_props, "contracting_org"),
                     data=as_str(target_props, "date"),
+                    # Identificador de contrato é público.
+                    provenance=_provenance_from_props(target_props),
                 ),
             )
             continue
@@ -483,6 +500,8 @@ def classificar(
                     valor_fmt=fmt_brl(valor),
                     orgao=as_str(target_props, "agency_name"),
                     data=as_str(target_props, "published_at"),
+                    # Identificador de licitação é público.
+                    provenance=_provenance_from_props(target_props),
                 ),
             )
             continue
