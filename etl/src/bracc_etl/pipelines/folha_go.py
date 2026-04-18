@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pandas as pd
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -33,6 +34,17 @@ _COMMISSIONED_KEYWORDS = re.compile(
 _CKAN_BASE = "https://dadosabertos.go.gov.br/api/3/action"
 _PAGE_LIMIT = 5_000
 _DEFAULT_DATASET = "folha-de-pagamento"
+# CKAN ``datastore_search`` always devolve JSON (mesmo quando o resource
+# é CSV); usado como fallback quando o servidor não carimba ``Content-Type``
+# explicitamente.
+_CKAN_JSON_CONTENT_TYPE = "application/json"
+# Coluna privada no DataFrame que carrega a URI do snapshot archival
+# por-linha (prefixo duplo underscore não colide com nomes reais do CKAN).
+# ``transform`` lê essa coluna pra popular ``source_snapshot_uri`` em
+# cada ``attach_provenance`` — e a filtra de volta antes de chegar ao
+# Neo4jBatchLoader, porque archival é opt-in e não faz parte do schema
+# dos nós StateEmployee/StateAgency.
+_SNAPSHOT_COLUMN = "__snapshot_uri"
 # The pipeline's offline fallback in ``extract`` reads this filename first;
 # keeping the downloader aligned avoids drift between ``fetch_to_disk`` and
 # the data_dir layout expected by the ETL runner. This name is used when a
@@ -151,14 +163,26 @@ def _discover_all_resources(
 def _fetch_ckan_records(
     resource_id: str,
     limit: int | None = None,
-) -> list[dict[str, Any]]:
+    *,
+    run_id: str | None = None,
+    source_id: str | None = None,
+) -> tuple[list[dict[str, Any]], list[str | None]]:
     """Fetch all records from a CKAN datastore resource with pagination.
 
     Stops early when ``limit`` records are accumulated, when a page returns
     no records, or when a page is shorter than requested (end-of-dataset).
+
+    When both ``run_id`` and ``source_id`` are provided, each raw page
+    payload is persisted via :func:`bracc_etl.archival.archive_fetch` and
+    the returned URI is replicated per record so ``transform`` can carimbar
+    ``source_snapshot_uri`` nas rows. Omitir ambos (ex.: caminho do CLI de
+    download) desliga archival — o comportamento original é preservado
+    e o segundo elemento da tupla fica cheio de ``None``.
     """
     records: list[dict[str, Any]] = []
+    snapshot_uris: list[str | None] = []
     offset = 0
+    archival_enabled = bool(run_id and source_id)
 
     with httpx.Client(timeout=60) as client:
         while limit is None or len(records) < limit:
@@ -176,20 +200,45 @@ def _fetch_ckan_records(
                 },
             )
             resp.raise_for_status()
+            page_uri: str | None = None
+            if archival_enabled:
+                # Archival é content-addressed: mesmo payload → mesma URI
+                # → sem re-escrita. Seguro chamar a cada página.
+                content_type = resp.headers.get(
+                    "content-type", _CKAN_JSON_CONTENT_TYPE,
+                )
+                page_uri = archive_fetch(
+                    url=str(resp.request.url),
+                    content=resp.content,
+                    content_type=content_type,
+                    run_id=run_id,  # type: ignore[arg-type]
+                    source_id=source_id,  # type: ignore[arg-type]
+                )
             result = resp.json().get("result", {})
             page_records = result.get("records", [])
             if not page_records:
                 break
             records.extend(page_records)
+            snapshot_uris.extend([page_uri] * len(page_records))
             offset += len(page_records)
             if len(page_records) < remaining:
                 break
 
-    return records
+    return records, snapshot_uris
 
 
-def _records_to_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
-    """Convert CKAN datastore records into a DataFrame matching row_pick keys."""
+def _records_to_dataframe(
+    records: list[dict[str, Any]],
+    snapshot_uris: list[str | None] | None = None,
+) -> pd.DataFrame:
+    """Convert CKAN datastore records into a DataFrame matching row_pick keys.
+
+    When ``snapshot_uris`` is provided (same length as ``records``), it is
+    attached as the hidden ``_SNAPSHOT_COLUMN`` column so ``transform`` pode
+    ler o URI da snapshot por-linha e carimbar em ``attach_provenance``.
+    Rows sem URI (ex.: offline/fixture path) simplesmente ficam com o valor
+    ``None`` nessa coluna.
+    """
     if not records:
         return pd.DataFrame()
     df = pd.DataFrame(records).astype(str)
@@ -203,6 +252,9 @@ def _records_to_dataframe(records: list[dict[str, Any]]) -> pd.DataFrame:
         "codorgao": "orgao_codigo",
         "anomes": "periodo",
     })
+    if snapshot_uris is not None and len(snapshot_uris) == len(df):
+        # Usa object dtype pra preservar ``None`` em vez de virar ``"None"``.
+        df[_SNAPSHOT_COLUMN] = pd.array(snapshot_uris, dtype="object")
     return df
 
 
@@ -224,7 +276,13 @@ def _write_resource_to_disk(
         limit,
     )
     try:
-        records = _fetch_ckan_records(resource_id, limit=limit)
+        # CLI path — archival desativado aqui porque os CSVs gravados em
+        # disco são usados como cache intermediário pelo ``extract``, que
+        # por sua vez roda (re-roda) archival quando cai no fallback
+        # online. Archival na camada do CLI seria duplicado e ainda
+        # precisaria de um ``run_id`` sintético que não casa com o run
+        # do pipeline.
+        records, _snapshot_uris = _fetch_ckan_records(resource_id, limit=limit)
     except httpx.HTTPError as exc:
         logger.error(
             "[folha_go] CKAN datastore_search failed for %s: %s",
@@ -372,9 +430,21 @@ class FolhaGoPipeline(Pipeline):
         Thin delegator around the module-level helpers so the online
         fallback in ``extract`` and the ``fetch_to_disk`` CLI wrapper share
         one HTTP/pagination implementation.
+
+        Ativa archival: cada página paginada é persistida via
+        ``archive_fetch`` e a URI retorna anexada como coluna
+        ``_SNAPSHOT_COLUMN`` no DataFrame, pra ``transform`` carimbar
+        ``source_snapshot_uri`` por-linha. Offline-path (CSVs locais em
+        ``data_dir/folha_go``) não passa por aqui e, portanto, não ganha
+        URI — consistente com o caráter opt-in do campo.
         """
-        records = _fetch_ckan_records(resource_id, limit=self.limit)
-        return _records_to_dataframe(records)
+        records, snapshot_uris = _fetch_ckan_records(
+            resource_id,
+            limit=self.limit,
+            run_id=self.run_id,
+            source_id=self.source_id,
+        )
+        return _records_to_dataframe(records, snapshot_uris=snapshot_uris)
 
     def _discover_resource_id(self, dataset_name: str) -> str | None:
         """Instance delegator kept for backwards compatibility."""
@@ -439,7 +509,19 @@ class FolhaGoPipeline(Pipeline):
         employee_agency_rels: list[dict[str, Any]] = []
         seen_agencies: set[str] = set()
 
+        # Snapshot URI por-linha só aparece quando o extract passou pelo
+        # fallback online (``_fetch_ckan_resource``). Offline/fixture path
+        # → coluna ausente → ``snapshot_uri`` permanece ``None`` e o campo
+        # fica fora do row stamped (compat com contrato opt-in).
+        has_snapshot_col = _SNAPSHOT_COLUMN in self._raw_servidores.columns
+
         for _, row in self._raw_servidores.iterrows():
+            snapshot_uri: str | None = None
+            if has_snapshot_col:
+                raw_uri = row.get(_SNAPSHOT_COLUMN)
+                if isinstance(raw_uri, str) and raw_uri:
+                    snapshot_uri = raw_uri
+
             name = normalize_name(
                 row_pick(row, "nome", "nome_servidor", "servidor", "name"),
             )
@@ -502,6 +584,7 @@ class FolhaGoPipeline(Pipeline):
                     "source": "folha_go",
                 },
                 record_id=employee_record_id,
+                snapshot_uri=snapshot_uri,
             ))
 
             # Build agency node
@@ -515,6 +598,7 @@ class FolhaGoPipeline(Pipeline):
                         "source": "folha_go",
                     },
                     record_id=agency_name,
+                    snapshot_uri=snapshot_uri,
                 ))
                 seen_agencies.add(agency_name)
 
@@ -527,6 +611,7 @@ class FolhaGoPipeline(Pipeline):
                         "target_key": agency_id,
                     },
                     record_id=employee_record_id,
+                    snapshot_uri=snapshot_uri,
                 ))
 
         self.employees = deduplicate_rows(employees, ["employee_id"])
