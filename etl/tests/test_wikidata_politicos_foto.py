@@ -22,8 +22,10 @@ import httpx
 import pytest
 
 from bracc_etl.pipelines.wikidata_politicos_foto import (
+    _HTTP_TIMEOUT,
     _SOURCE_ID,
     WikidataPoliticosFotoPipeline,
+    _strip_name_suffixes,
 )
 
 if TYPE_CHECKING:
@@ -446,6 +448,114 @@ class TestNonImageContentType:
 
 
 # ---------------------------------------------------------------------------
+# Sufixos patronimicos — TSE "MARCONI PERILLO JUNIOR" bate Wikidata "MARCONI PERILLO"
+# ---------------------------------------------------------------------------
+
+
+class TestSufixoPatronimico:
+    def test_strip_remove_sufixos_do_fim(self) -> None:
+        assert _strip_name_suffixes("MARCONI PERILLO JUNIOR") == "MARCONI PERILLO"
+        assert _strip_name_suffixes("JOSE SILVA FILHO") == "JOSE SILVA"
+        assert _strip_name_suffixes("PEDRO COSTA NETO") == "PEDRO COSTA"
+        assert _strip_name_suffixes("MARIA SOUZA JR") == "MARIA SOUZA"
+
+    def test_strip_preserva_nome_sem_sufixo(self) -> None:
+        assert _strip_name_suffixes("MARCONI PERILLO") == "MARCONI PERILLO"
+        assert _strip_name_suffixes("LULA") == "LULA"
+
+    def test_strip_nao_toca_sufixo_no_meio(self) -> None:
+        """"NETO DA SILVA" e o nome legal — NETO aqui e parte do nome, nao suffix."""
+        assert _strip_name_suffixes("NETO DA SILVA") == "NETO DA SILVA"
+
+    def test_sparql_bate_com_nome_sem_sufixo(
+        self,
+        archival_root: Path,  # noqa: ARG002
+    ) -> None:
+        """TSE "MARCONI PERILLO JUNIOR" deve bater Wikidata "MARCONI PERILLO"."""
+        targets = [
+            {"name": "MARCONI PERILLO JUNIOR", "labels": ["Person"], "key": "p_1"},
+        ]
+        transport = _build_transport(
+            # Wikidata label sem sufixo — e o que o SPARQL enxerga.
+            sparql_qids_by_name={"MARCONI PERILLO": [_QID_MARCONI]},
+            entity_p18_by_qid={_QID_MARCONI: _FILENAME_MARCONI},
+            image_responses={
+                _FILENAME_MARCONI: (200, _FAKE_JPG_BYTES, "image/jpeg"),
+            },
+        )
+        pipeline, _ = _make_pipeline(targets, transport)
+        pipeline.extract()
+        assert len(pipeline._updates) == 1
+        assert pipeline._updates[0]["wikidata_qid"] == _QID_MARCONI
+
+
+# ---------------------------------------------------------------------------
+# --limit honrado na Cypher discovery (evita puxar 100 quando so 5 interessam)
+# ---------------------------------------------------------------------------
+
+
+class TestLimitHonrado:
+    def test_cypher_limit_respeita_self_limit(
+        self,
+        archival_root: Path,  # noqa: ARG002
+    ) -> None:
+        """Com --limit=3 e batch_size=100, Cypher so deve pedir 3 rows."""
+        targets = [
+            {"name": f"PESSOA {i}", "labels": ["Person"], "key": f"p_{i}"}
+            for i in range(3)
+        ]
+        transport = _build_transport({}, {}, {})
+        driver, calls = _build_driver(targets)
+
+        def factory() -> httpx.Client:
+            return httpx.Client(transport=transport, follow_redirects=True)
+
+        pipeline = WikidataPoliticosFotoPipeline(
+            driver=driver,
+            data_dir="./data",
+            limit=3,
+            batch_size=100,
+            http_client_factory=factory,
+            sleep_fn=lambda _s: None,
+        )
+        pipeline.run_id = "wikidata_politicos_foto_20260418100000"
+        pipeline.extract()
+
+        discovery_call = next(
+            call for call in calls if "RETURN name" in call[0]
+        )
+        # O Cypher LIMIT tem que ser 3 (min de batch_size=100 e limit=3),
+        # nao 100 — e o ponto-chave do fix.
+        assert discovery_call[1]["batch_size"] == 3
+
+    def test_sem_limit_usa_batch_size(
+        self,
+        archival_root: Path,  # noqa: ARG002
+    ) -> None:
+        """Sem --limit, Cypher usa batch_size direto."""
+        transport = _build_transport({}, {}, {})
+        driver, calls = _build_driver([])
+
+        def factory() -> httpx.Client:
+            return httpx.Client(transport=transport, follow_redirects=True)
+
+        pipeline = WikidataPoliticosFotoPipeline(
+            driver=driver,
+            data_dir="./data",
+            batch_size=50,
+            http_client_factory=factory,
+            sleep_fn=lambda _s: None,
+        )
+        pipeline.run_id = "wikidata_politicos_foto_20260418100000"
+        pipeline.extract()
+
+        discovery_call = next(
+            call for call in calls if "RETURN name" in call[0]
+        )
+        assert discovery_call[1]["batch_size"] == 50
+
+
+# ---------------------------------------------------------------------------
 # Etiqueta — User-Agent + throttle
 # ---------------------------------------------------------------------------
 
@@ -492,6 +602,13 @@ class TestEtiquetaWikidata:
         assert captured_uas
         for ua in captured_uas:
             assert "FiscalCidadao" in ua
+
+    def test_http_timeout_e_explicito(self) -> None:
+        """``_HTTP_TIMEOUT`` precisa ser ``httpx.Timeout`` com connect + read."""
+        assert isinstance(_HTTP_TIMEOUT, httpx.Timeout)
+        # connect curto (DNS hang) e read de 30s pra SPARQL lento.
+        assert _HTTP_TIMEOUT.connect == 10.0
+        assert _HTTP_TIMEOUT.read == 30.0
 
     def test_throttle_chamado_entre_requests(
         self,

@@ -11,9 +11,11 @@ only open, automated source is Base dos Dados' mirror on BigQuery
 authenticated GCP billing project.
 
 Behaviour:
-  * With ``--billing-project <proj>``: streams GO-only rows from BigQuery to
-    ``filiados.csv``.
-  * Without ``--billing-project``: logs a clear "source needs GCP billing"
+  * With ``--billing-project <proj>`` (or ``GOOGLE_CLOUD_PROJECT`` /
+    ``GCP_PROJECT_ID`` env vars): streams GO-only rows from BigQuery to
+    ``filiados.csv``. The env-var fallback lets the bootstrap contract leave
+    the flag off and still ingest in dev where ``.env`` is loaded.
+  * Without any project source: logs a clear "source needs GCP billing"
     warning and exits 0 without writing (so public-mode bootstrap can skip
     gracefully). This is a hard external requirement, not a bypassable
     paywall, so the wrapper fails open rather than improvise.
@@ -31,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -97,6 +100,20 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _resolve_billing_project(cli_value: str | None) -> str | None:
+    """Resolve --billing-project, falling back to GOOGLE_CLOUD_PROJECT /
+    GCP_PROJECT_ID env vars so the bootstrap contract can leave the flag off
+    when running in dev with ``.env`` loaded.
+    """
+    if cli_value:
+        return cli_value
+    for env_key in ("GOOGLE_CLOUD_PROJECT", "GCP_PROJECT_ID"):
+        val = os.environ.get(env_key)
+        if val:
+            return val
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     logging.basicConfig(
@@ -104,24 +121,31 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
 
+    billing_project = _resolve_billing_project(args.billing_project)
+    if billing_project and not args.billing_project:
+        logging.info(
+            "[download_tse_filiados] using billing-project from env: %s",
+            billing_project,
+        )
+
     written = fetch_to_disk(
         output_dir=args.output_dir,
         uf=args.uf,
-        billing_project=args.billing_project,
+        billing_project=billing_project,
         all_statuses=args.all_statuses,
         skip_existing=not args.no_skip_existing,
     )
 
     if not written:
         # Not an error when billing_project is missing — the helper logs why.
-        if args.billing_project:
+        if billing_project:
             logging.error(
                 "[download_tse_filiados] no rows written despite billing-project; "
                 "check BQ auth and UF filter.",
             )
             return 1
         logging.info(
-            "[download_tse_filiados] skipped (no --billing-project); "
+            "[download_tse_filiados] skipped (no billing-project from CLI or env); "
             "bootstrap will proceed without filiados data.",
         )
         return 0

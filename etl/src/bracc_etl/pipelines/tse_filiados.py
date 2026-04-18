@@ -100,28 +100,34 @@ class TseFiliadosPipeline(Pipeline):
 
             mid = _membership_id(nome, party, uf, affiliation_date)
 
-            memberships.append({
-                "membership_id": mid,
-                "name": nome,
-                "party": party,
-                "uf": uf,
-                "affiliation_date": affiliation_date,
-                "status": status,
-                "municipality_id": municipality_id,
-                "birth_date": birth_date,
-                "source": "tse_filiados",
-            })
+            memberships.append(self.attach_provenance(
+                {
+                    "membership_id": mid,
+                    "name": nome,
+                    "party": party,
+                    "uf": uf,
+                    "affiliation_date": affiliation_date,
+                    "status": status,
+                    "municipality_id": municipality_id,
+                    "birth_date": birth_date,
+                    "source": "tse_filiados",
+                },
+                record_id=mid,
+            ))
 
-            person_rels.append({
-                "source_name": nome,
-                "source_uf": uf,
-                "source_birth_date": birth_date,
-                "source_municipality_id": municipality_id,
-                "target_key": mid,
-                "party": party,
-                "affiliation_date": affiliation_date,
-                "status": status,
-            })
+            person_rels.append(self.attach_provenance(
+                {
+                    "source_name": nome,
+                    "source_uf": uf,
+                    "source_birth_date": birth_date,
+                    "source_municipality_id": municipality_id,
+                    "target_key": mid,
+                    "party": party,
+                    "affiliation_date": affiliation_date,
+                    "status": status,
+                },
+                record_id=mid,
+            ))
 
         self.memberships = deduplicate_rows(memberships, ["membership_id"])
         self.person_rels = person_rels
@@ -167,6 +173,15 @@ class TseFiliadosPipeline(Pipeline):
             len(tier_high), len(tier_medium), len(all_rels),
         )
 
+        # Provenance carimbado em todos os tiers (contrato em docs/provenance.md).
+        _PROV_SET = (
+            "    r.source_id = row.source_id, "
+            "    r.source_record_id = row.source_record_id, "
+            "    r.source_url = row.source_url, "
+            "    r.ingested_at = row.ingested_at, "
+            "    r.run_id = row.run_id, "
+        )
+
         # Tier 1 (high): name + UF + birth_date
         if tier_high:
             query = (
@@ -179,6 +194,7 @@ class TseFiliadosPipeline(Pipeline):
                 "SET r.party = row.party, "
                 "    r.affiliation_date = row.affiliation_date, "
                 "    r.status = row.status, "
+                f"{_PROV_SET}"
                 "    r.match_confidence = 'high'"
             )
             loaded = loader.run_query_with_retry(query, tier_high)
@@ -197,6 +213,7 @@ class TseFiliadosPipeline(Pipeline):
                 "SET r.party = row.party, "
                 "    r.affiliation_date = row.affiliation_date, "
                 "    r.status = row.status, "
+                f"{_PROV_SET}"
                 "    r.match_confidence = 'medium'"
             )
             loaded = loader.run_query_with_retry(query, tier_medium)
@@ -214,6 +231,7 @@ class TseFiliadosPipeline(Pipeline):
             "SET r.party = row.party, "
             "    r.affiliation_date = row.affiliation_date, "
             "    r.status = row.status, "
+            f"{_PROV_SET}"
             "    r.match_confidence = 'low'"
         )
         loaded = loader.run_query_with_retry(query, all_rels)

@@ -386,7 +386,7 @@ class WikidataPoliticosFotoPipeline(Pipeline):
         except (json.JSONDecodeError, ValueError) as exc:
             logger.warning(
                 "[wikidata_politicos_foto] SPARQL JSON decode %r failed: %s",
-                name_normalized, exc,
+                primary_name, exc,
             )
             return [], snapshot_uri
 
@@ -425,6 +425,7 @@ class WikidataPoliticosFotoPipeline(Pipeline):
                     "User-Agent": _USER_AGENT,
                     "Accept": "application/json",
                 },
+                timeout=_HTTP_TIMEOUT,
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
@@ -487,6 +488,7 @@ class WikidataPoliticosFotoPipeline(Pipeline):
             resp = client.get(
                 image_url,
                 headers={"User-Agent": _USER_AGENT},
+                timeout=_HTTP_TIMEOUT,
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
@@ -547,9 +549,14 @@ class WikidataPoliticosFotoPipeline(Pipeline):
         with self._http_client_factory() as client:
             for idx, target in enumerate(self._targets):
                 name_normalized = target["name_normalized"]
+                name_stripped = target.get("name_stripped") or name_normalized
+                # Nome completo primeiro (SPARQL respeita a ordem da lista
+                # so pra dedup — match e via IN), stripped como fallback
+                # quando o label do Wikidata omite sufixo patronimico.
+                name_variants = [name_normalized, name_stripped]
                 self._sleep(self.throttle_seconds)
 
-                qids, sparql_uri = self._sparql_lookup(client, name_normalized)
+                qids, sparql_uri = self._sparql_lookup(client, name_variants)
                 if not qids:
                     self._stats["skipped_no_match"] += 1
                     logger.info(
