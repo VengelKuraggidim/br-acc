@@ -457,6 +457,79 @@ class TestProvenance:
 
         assert perfil.provenance is None
 
+    @pytest.mark.anyio
+    async def test_emenda_e_doador_empresa_populam_provenance_via_conexoes(
+        self,
+    ) -> None:
+        """Sub-rows (``Emenda`` / ``DoadorEmpresa``) carregam provenance
+        quando os props do nó alvo carregam os 5+1 campos."""
+        driver = _build_driver()
+        legislator = _legislator_node()
+        conexoes = [
+            {
+                "rel_type": "DOOU",
+                "rel_props": {"valor": 25_000.0},
+                "source_id": "4:empresa:1",
+                "target_id": "4:abc:1",
+                "target_element_id": "4:empresa:1",
+                "target_type": "Company",
+                "target_labels": ["Company"],
+                "target_props": {
+                    "cnpj": "11222333000181",
+                    "razao_social": "ACME LTDA",
+                    "source_id": "tse_prestacao_contas",
+                    "source_record_id": "DOC-42",
+                    "source_url": (
+                        "https://divulgacandcontas.tse.jus.br/.../DOC-42"
+                    ),
+                    "ingested_at": "2026-04-10T12:00:00+00:00",
+                    "run_id": "tse_prestacao_contas_20260410120000",
+                },
+            },
+            {
+                "rel_type": "PROPOS",
+                "rel_props": {},
+                "source_id": "4:abc:1",
+                "target_id": "4:amend:1",
+                "target_element_id": "4:amend:1",
+                "target_type": "Amendment",
+                "target_labels": ["Amendment"],
+                "target_props": {
+                    "amendment_id": "EM-2024-007",
+                    "type": "individual",
+                    "function": "saude",
+                    "value_committed": 200_000.0,
+                    "value_paid": 150_000.0,
+                    "source_id": "siop",
+                    "source_url": "https://siop.planejamento.gov.br/.../EM-2024-007",
+                    "ingested_at": "2026-04-12T00:00:00+00:00",
+                    "run_id": "siop_20260412000000",
+                },
+            },
+        ]
+        record = _mock_record({"politico": legislator, "conexoes": conexoes})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2], patches[3], patches[4],
+        ):
+            perfil = await obter_perfil(driver, "4:abc:1")
+
+        assert len(perfil.emendas) == 1
+        assert perfil.emendas[0].provenance is not None
+        assert perfil.emendas[0].provenance.source_id == "siop"
+
+        assert len(perfil.doadores_empresa) == 1
+        assert perfil.doadores_empresa[0].provenance is not None
+        assert perfil.doadores_empresa[0].provenance.source_id == (
+            "tse_prestacao_contas"
+        )
+
 
 # --- 6. Teto de gastos (novo campo TetoGastos) -----------------------------
 

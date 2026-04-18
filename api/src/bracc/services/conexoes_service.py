@@ -40,6 +40,21 @@ Constraints LGPD (aplicadas pelo service, testadas explicitamente):
   ``FormatacaoService``.
 - Empresas sem CNPJ NÃO duplicam por engano: a chave de agregação cai
   para ``element_id`` do nó alvo (prefixada com ``empresa_``).
+- ``DoadorPessoa.provenance.source_record_id`` é sempre ``None`` — no TSE
+  o record_id normalmente carrega o CPF pleno do doador, e surfar isso
+  no chip de fonte vazaria o dado que já mascaramos em ``cpf_mascarado``.
+
+Proveniência (Fase 05, commit do chip de Fonte nos sub-cards):
+
+- ``Emenda``, ``DoadorEmpresa`` e ``DoadorPessoa`` carregam o campo
+  opcional ``provenance: ProvenanceBlock | None``. Construído via
+  :func:`_provenance_from_props` a partir dos 5+1 campos carimbados pelo
+  loader em ``attach_provenance``.
+- ``DoadorEmpresa`` / ``DoadorPessoa`` são agregados: o bloco publicado é
+  o da **doação mais recente por ``ingested_at``** (ISO 8601 →
+  ordenação lexicográfica equivale à cronológica). Quando nenhuma
+  doação agregada trouxe os 4 campos obrigatórios, ``provenance`` é
+  ``None``.
 """
 
 from __future__ import annotations
@@ -47,6 +62,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from bracc.models.entity import ProvenanceBlock
 from bracc.models.perfil import (
     ContratoConectado,
     DoadorEmpresa,
@@ -63,6 +79,62 @@ from bracc.services.traducao_service import (
     traduzir_relacao,
     traduzir_tipo_emenda,
 )
+
+
+_PROV_REQUIRED = ("source_id", "source_url", "ingested_at", "run_id")
+
+
+def _provenance_from_props(
+    props: dict[str, Any],
+    *,
+    drop_record_id: bool = False,
+) -> ProvenanceBlock | None:
+    """Constrói ``ProvenanceBlock`` a partir dos props de um nó do grafo.
+
+    Retorna ``None`` quando qualquer um dos 4 campos obrigatórios
+    (``source_id``, ``source_url``, ``ingested_at``, ``run_id``) não está
+    presente ou está vazio — comportamento consistente com
+    :func:`bracc.routers.entity._extract_provenance`. Nós legados que ainda
+    não foram re-ingeridos sob o contrato de proveniência silenciosamente
+    devolvem ``None`` em vez de levantar.
+
+    Parameters
+    ----------
+    props:
+        Props do nó alvo (``target_props`` do shape normalizado). **Não é
+        mutado** — :func:`classificar` precisa dos mesmos props pra
+        extrair campos vizinhos (cnpj, situacao, etc.). Contrapartida do
+        ``pop`` usado no router entity.
+    drop_record_id:
+        Quando ``True``, ``source_record_id`` é forçado a ``None``. Usado
+        em ``DoadorPessoa`` porque no TSE o record_id do doador
+        costumeiramente carrega o CPF pleno — surfar isso no chip de
+        fonte violaria a máscara que o service já aplica no
+        ``cpf_mascarado``.
+
+    Returns
+    -------
+    ProvenanceBlock | None
+        Bloco populado (com ``snapshot_url`` opt-in) ou ``None`` pra
+        dados legados.
+    """
+    for required in _PROV_REQUIRED:
+        if not props.get(required):
+            return None
+    record_id_raw = props.get("source_record_id")
+    snapshot_raw = props.get("source_snapshot_uri")
+    return ProvenanceBlock(
+        source_id=str(props["source_id"]),
+        source_record_id=(
+            None
+            if drop_record_id or not record_id_raw
+            else str(record_id_raw)
+        ),
+        source_url=str(props["source_url"]),
+        ingested_at=str(props["ingested_at"]),
+        run_id=str(props["run_id"]),
+        snapshot_url=str(snapshot_raw) if snapshot_raw else None,
+    )
 
 
 @dataclass
@@ -86,6 +158,12 @@ class _DoacaoEmpresaAcc:
     empresa — se varias arestas DOOU apontam pro mesmo :Company, todas
     veem a mesma situacao cadastral (a do no), entao preservar o primeiro
     e suficiente.
+
+    ``provenance`` + ``provenance_ingested_at`` guardam a proveniência da
+    doação **mais recente por ``ingested_at``** vista até agora — o
+    agregado publicado vai carregar a última ingestão disponível do TSE
+    (razoável porque é o mesmo doador com doações que podem ter vindo de
+    batches diferentes).
     """
 
     nome: str
@@ -94,16 +172,24 @@ class _DoacaoEmpresaAcc:
     n: int = 0
     situacao: str | None = None
     situacao_verified_at: str | None = None
+    provenance: ProvenanceBlock | None = None
+    provenance_ingested_at: str | None = None
 
 
 @dataclass
 class _DoacaoPessoaAcc:
-    """Acumulador interno de doações por pessoa (CPF já mascarado)."""
+    """Acumulador interno de doações por pessoa (CPF já mascarado).
+
+    Mesma regra de agregação de proveniência de
+    :class:`_DoacaoEmpresaAcc`: mantém a da doação mais recente.
+    """
 
     nome: str
     cpf_mascarado: str | None
     total: float = 0.0
     n: int = 0
+    provenance: ProvenanceBlock | None = None
+    provenance_ingested_at: str | None = None
 
 
 def _valor_doacao(rel_props: dict[str, Any] | None) -> float:
@@ -234,6 +320,7 @@ def classificar(
                     valor_empenhado_fmt=fmt_brl(val_committed),
                     valor_pago=val_paid,
                     valor_pago_fmt=fmt_brl(val_paid),
+                    provenance=_provenance_from_props(target_props),
                 ),
             )
             continue
@@ -241,6 +328,10 @@ def classificar(
         # --- 2. Doadores (DOOU inbound; político = target) ----------------
         if rel_type == "DOOU" and not politico_is_source:
             valor = _valor_doacao(rel_props)
+            # Proveniência da DOAÇÃO: preferimos o nó da doação (que é
+            # quem tem o record_id do TSE), mas quando o target é a
+            # pessoa/empresa o mesmo nó carrega tb os campos de
+            # proveniência carimbados pelo loader em ``attach_provenance``.
             if target_type == "company":
                 cnpj = as_str(target_props, "cnpj")
                 # Gotcha do audit: CNPJ ausente → usa element_id como chave
@@ -249,6 +340,12 @@ def classificar(
                 situacao, _fmt, verified_at = _situacao_from_props(
                     target_props,
                 )
+                prov_block = _provenance_from_props(target_props)
+                prov_ingested = (
+                    as_str(target_props, "ingested_at")
+                    if prov_block is not None
+                    else None
+                )
                 emp_acc = doacoes_empresa.setdefault(
                     chave,
                     _DoacaoEmpresaAcc(
@@ -256,6 +353,8 @@ def classificar(
                         cnpj=cnpj,
                         situacao=situacao,
                         situacao_verified_at=verified_at,
+                        provenance=prov_block,
+                        provenance_ingested_at=prov_ingested,
                     ),
                 )
                 # Se a primeira doação vista não trazia situacao (props
@@ -263,6 +362,21 @@ def classificar(
                 if emp_acc.situacao is None and situacao is not None:
                     emp_acc.situacao = situacao
                     emp_acc.situacao_verified_at = verified_at
+                # Agregação de proveniência: fica com a doação mais
+                # recente por ``ingested_at`` (ISO 8601 → ordenação
+                # lexicográfica = ordenação cronológica).
+                if prov_block is not None and (
+                    emp_acc.provenance is None
+                    or (
+                        prov_ingested is not None
+                        and (
+                            emp_acc.provenance_ingested_at is None
+                            or prov_ingested > emp_acc.provenance_ingested_at
+                        )
+                    )
+                ):
+                    emp_acc.provenance = prov_block
+                    emp_acc.provenance_ingested_at = prov_ingested
                 emp_acc.total += valor
                 emp_acc.n += 1
                 continue
@@ -275,13 +389,38 @@ def classificar(
                 # descartada depois) se existir; senão o mascarado; senão o
                 # element_id pra preservar identidade do nó.
                 chave = cpf_pleno or cpf_mascarado or f"pessoa_{target_id}"
+                # LGPD: drop_record_id=True — no TSE o source_record_id do
+                # doador PF pode ser o próprio CPF. Surfar isso no chip
+                # vazaria o que já mascaramos em ``cpf_mascarado``.
+                prov_block = _provenance_from_props(
+                    target_props, drop_record_id=True,
+                )
+                prov_ingested = (
+                    as_str(target_props, "ingested_at")
+                    if prov_block is not None
+                    else None
+                )
                 pes_acc = doacoes_pessoa.setdefault(
                     chave,
                     _DoacaoPessoaAcc(
                         nome=as_str(target_props, "name") or "",
                         cpf_mascarado=cpf_mascarado,
+                        provenance=prov_block,
+                        provenance_ingested_at=prov_ingested,
                     ),
                 )
+                if prov_block is not None and (
+                    pes_acc.provenance is None
+                    or (
+                        prov_ingested is not None
+                        and (
+                            pes_acc.provenance_ingested_at is None
+                            or prov_ingested > pes_acc.provenance_ingested_at
+                        )
+                    )
+                ):
+                    pes_acc.provenance = prov_block
+                    pes_acc.provenance_ingested_at = prov_ingested
                 pes_acc.total += valor
                 pes_acc.n += 1
                 continue
@@ -396,6 +535,7 @@ def classificar(
                 else None
             ),
             situacao_verified_at=acc.situacao_verified_at,
+            provenance=acc.provenance,
         )
         for acc in doacoes_empresa.values()
     ]
@@ -409,6 +549,7 @@ def classificar(
             valor_total=acc.total,
             valor_total_fmt=fmt_brl(acc.total),
             n_doacoes=acc.n,
+            provenance=acc.provenance,
         )
         for acc in doacoes_pessoa.values()
     ]

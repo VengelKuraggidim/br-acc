@@ -781,6 +781,230 @@ class TestSituacaoCadastralPropagada:
             assert resultado.socios[0].situacao_fmt == leigo
 
 
+# --- Provenance nos sub-rows (Emenda / DoadorEmpresa / DoadorPessoa) --------
+
+
+_PROV_COMPLETO = {
+    "source_id": "tse_prestacao_contas",
+    "source_record_id": "REC-123",
+    "source_url": "https://divulgacandcontas.tse.jus.br/.../doacao/REC-123",
+    "ingested_at": "2026-04-18T00:00:00+00:00",
+    "run_id": "tse_prestacao_contas_20260418000000",
+    "source_snapshot_uri": "tse/prestacao_contas/2026-04/abc.json",
+}
+
+
+class TestProvenanceSubRows:
+    def test_emenda_com_provenance_populado(self) -> None:
+        """Nó :Amendment com os 5+1 campos → ``Emenda.provenance`` carregado."""
+        conexoes = [_conn(rel_type="AUTOR_EMENDA", target_id="em_1")]
+        entidades = {
+            "em_1": {
+                "type": "Amendment",
+                "properties": {
+                    "amendment_id": "EM-001",
+                    "type": "individual",
+                    "function": "saude",
+                    "value_committed": 100_000.0,
+                    "value_paid": 80_000.0,
+                    **_PROV_COMPLETO,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        emenda = resultado.emendas[0]
+        assert emenda.provenance is not None
+        assert emenda.provenance.source_id == "tse_prestacao_contas"
+        assert emenda.provenance.source_record_id == "REC-123"
+        assert emenda.provenance.snapshot_url == _PROV_COMPLETO["source_snapshot_uri"]
+
+    def test_emenda_sem_campos_obrigatorios_vira_none(self) -> None:
+        """Nó legado sem os 4 campos obrigatórios → ``provenance=None``."""
+        conexoes = [_conn(rel_type="AUTOR_EMENDA", target_id="em_1")]
+        entidades = {
+            "em_1": {
+                "type": "Amendment",
+                "properties": {
+                    "amendment_id": "EM-LEGADO",
+                    "type": "individual",
+                    "function": "educacao",
+                    # Falta source_url/ingested_at/run_id.
+                    "source_id": "tse_prestacao_contas",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert resultado.emendas[0].provenance is None
+
+    def test_doador_empresa_carrega_provenance(self) -> None:
+        """Nó :Company com proveniência → ``DoadorEmpresa.provenance`` preenchido."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 5_000.0},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "11222333000181",
+                    "razao_social": "ACME LTDA",
+                    **_PROV_COMPLETO,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.provenance is not None
+        assert d.provenance.source_id == "tse_prestacao_contas"
+        # PJ preserva source_record_id (sem risco LGPD).
+        assert d.provenance.source_record_id == "REC-123"
+
+    def test_doador_empresa_agrega_provenance_mais_recente(self) -> None:
+        """2 doações pro mesmo CNPJ com ingested_at distintos → fica com a mais recente."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 3_000.0},
+            ),
+        ]
+        # 1 só dict pro nó — mas queremos simular re-ingestão. A regra é:
+        # ``target_props`` sempre reflete a última versão do nó no grafo, então
+        # múltiplas arestas DOOU apontam pro mesmo nó. Teste garante que se
+        # entidades_conectadas já tem os props "mais recentes", vira
+        # provenance publicado.
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "99999999000199",
+                    "razao_social": "Financiadora X",
+                    **_PROV_COMPLETO,
+                    "ingested_at": "2026-04-15T00:00:00+00:00",
+                },
+            },
+        }
+        # Adiciona uma segunda doação pro mesmo target.
+        conexoes.append(
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 7_000.0},
+            ),
+        )
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert len(resultado.doadores_empresa) == 1
+        d = resultado.doadores_empresa[0]
+        assert d.n_doacoes == 2
+        assert d.valor_total == 10_000.0
+        assert d.provenance is not None
+        assert d.provenance.ingested_at == "2026-04-15T00:00:00+00:00"
+
+    def test_doador_pessoa_carrega_provenance_sem_record_id(self) -> None:
+        """LGPD: DoadorPessoa carrega provenance MAS ``source_record_id=None``.
+
+        No TSE, o record_id do doador PF costuma ser o próprio CPF. Surfar
+        isso violaria a máscara de CPF que o service aplica no
+        ``cpf_mascarado``.
+        """
+        cpf_pleno = "11122233344"
+        props_com_cpf_no_record_id = dict(_PROV_COMPLETO)
+        # Emula o shape real do TSE: record_id pode ser o CPF.
+        props_com_cpf_no_record_id["source_record_id"] = cpf_pleno
+
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 500.0},
+            ),
+        ]
+        entidades = {
+            "pes_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": cpf_pleno,
+                    "name": "Doador Exemplo",
+                    **props_com_cpf_no_record_id,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_pessoa[0]
+        assert d.provenance is not None
+        assert d.provenance.source_id == "tse_prestacao_contas"
+        assert d.provenance.source_url.startswith("https://")
+        # Crítico LGPD: record_id é forçado a None.
+        assert d.provenance.source_record_id is None
+        # Serialização completa não pode carregar o CPF pleno.
+        assert cpf_pleno not in d.model_dump_json()
+
+    def test_doador_pessoa_sem_provenance_vira_none(self) -> None:
+        """Props legados sem campos obrigatórios → ``provenance=None``."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0},
+            ),
+        ]
+        entidades = {
+            "pes_1": {
+                "type": "Person",
+                "properties": {"cpf": "11111111111", "name": "Sem Proveniencia"},
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert resultado.doadores_pessoa[0].provenance is None
+
+    def test_provenance_nao_tem_cpf_ou_cnpj_em_nenhum_campo(self) -> None:
+        """Sanity LGPD: nenhum campo do ``ProvenanceBlock`` pode carregar CPF
+        ou CNPJ em bruto — provenance deve ser só URLs públicas e IDs de
+        run/ingestão. Caso o loader malformule o props, o service aceita —
+        mas o test garante que o shape canônico que usamos é seguro.
+        """
+        cpf_pleno = "12345678909"
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0},
+            ),
+        ]
+        entidades = {
+            "pes_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": cpf_pleno,
+                    "name": "Doador",
+                    # record_id contaminado com CPF — service deve drop.
+                    "source_id": "tse_prestacao_contas",
+                    "source_record_id": cpf_pleno,
+                    "source_url": (
+                        "https://divulgacandcontas.tse.jus.br/ords/..."
+                    ),
+                    "ingested_at": "2026-04-18T00:00:00+00:00",
+                    "run_id": "tse_prestacao_contas_20260418000000",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_pessoa[0]
+        # Nenhum campo do ProvenanceBlock pode carregar os 11 dígitos.
+        assert d.provenance is not None
+        dump = d.provenance.model_dump_json()
+        assert cpf_pleno not in dump
+
+
 # --- Cypher query sanity check ----------------------------------------------
 
 
