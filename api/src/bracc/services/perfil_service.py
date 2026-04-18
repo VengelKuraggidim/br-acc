@@ -322,7 +322,41 @@ def _build_entidade_for_alertas(
 
 
 def _build_descricao_conexoes(resultado: Any) -> str:
-    """Monta a descrição leiga de conexões — espelho exato do Flask (l. 876-896)."""
+    """Monta a descrição textual leiga das conexões do(a) político(a).
+
+    Por que existe:
+        O PWA exibe um parágrafo explicativo em português natural pra
+        preparar o leitor leigo antes de mostrar as listas de conexões.
+        Essa função centraliza a geração desse parágrafo — antes estava
+        no Flask (``backend/app.py`` l. 876-896) e era duplicado entre
+        rotas. Mantemos o mesmo fraseado pra não mudar a expectativa do
+        usuário que já conhece a UI.
+
+    Parameters
+    ----------
+    resultado:
+        :class:`~bracc.services.conexoes_service.ConexoesClassificadas`
+        — estrutura com as listas ``doadores_empresa``, ``doadores_pessoa``,
+        ``socios`` e ``familia`` já classificadas. Tipagem frouxa (``Any``)
+        é deliberada: a função só acessa atributos e faz ``len()``, e
+        tipar como ``ConexoesClassificadas`` criaria import circular
+        ``perfil_service`` ↔ ``conexoes_service``.
+
+    Returns
+    -------
+    str
+        Texto em português natural, montado somando categorias separadas
+        por ``; `` e finalizado com a nota explicativa sobre a origem
+        (TSE/Receita Federal). Exemplo:
+
+            "Encontramos: 3 empresa(s) que doaram para a campanha;
+            2 familiar(es) com ligacao politica. Esses dados vem da
+            Justica Eleitoral (TSE) e da Receita Federal — sao publicos.
+            …"
+
+        Retorna string vazia quando todas as listas relevantes estão
+        vazias — o PWA interpreta como "política sem conexões a mostrar".
+    """
     cats: list[str] = []
     if resultado.doadores_empresa:
         cats.append(
@@ -447,6 +481,11 @@ async def obter_perfil(
     if record is None:
         raise EntityNotFoundError(f"Politico '{entity_id}' nao encontrado")
 
+    # ``record.get`` do driver Neo4j devolve ``Any`` por design — não dá
+    # pra estreitar sem cast explícito. A conversão segura acontece
+    # logo abaixo via ``dict(...)`` + ``_is_politician`` que valida
+    # labels. Mantemos ``Any`` local pra deixar claro que a origem é
+    # o payload não-tipado do driver.
     politico_node_raw: Any = record.get("politico")
     if not politico_node_raw:
         raise EntityNotFoundError(f"Politico '{entity_id}' nao encontrado")

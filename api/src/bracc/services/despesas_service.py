@@ -47,7 +47,36 @@ _DEFAULT_AMOSTRA = 10
 
 
 def _default_anos() -> list[int]:
-    """Default do Flask: ano corrente + ano anterior."""
+    """Janela padrão de anos pra consulta de despesas: ano atual + anterior.
+
+    Por que 2 anos:
+        Espelha o comportamento do Flask original
+        (``backend/apis_externas.py::buscar_despesas_deputado``). A
+        janela de 2 anos dá cobertura completa do mandato corrente sem
+        trazer dados antigos que inflam o UI sem agregar valor — no
+        PWA a seção de despesas é um "resumo recente", não histórico
+        longitudinal.
+
+    Quando é chamado:
+        Default para o parâmetro ``anos`` de :func:`obter_ceap_deputado`,
+        :func:`obter_verba_indenizatoria_alego` e
+        :func:`obter_cota_vereador_goiania`. O caller pode passar uma
+        lista explícita pra override (útil em testes e em pesquisas
+        históricas ad-hoc).
+
+    Comportamento dependente de calendário:
+        Usa :func:`datetime.now` com ``tz=UTC`` — o valor muda por ano
+        calendário. Em 1/jan o range se desloca automaticamente (isso
+        é desejado — em janeiro ainda há processamento do ano anterior
+        pendente no portal da Câmara). Testes que fixam ``now`` devem
+        mockar este módulo.
+
+    Returns
+    -------
+    list[int]
+        ``[ano_atual, ano_atual - 1]`` — ordem decrescente, preservada
+        pelas queries Cypher downstream.
+    """
     ano_atual = datetime.now(tz=UTC).year
     return [ano_atual, ano_atual - 1]
 
