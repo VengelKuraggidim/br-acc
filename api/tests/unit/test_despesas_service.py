@@ -20,6 +20,7 @@ import pytest
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
+    obter_cota_vereador_goiania,
     obter_verba_indenizatoria_alego,
 )
 
@@ -286,6 +287,83 @@ class TestObterVerbaIndenizatoriaAlego:
     async def test_anos_default_sao_os_ultimos_dois(self) -> None:
         driver = _build_driver([])
         await obter_verba_indenizatoria_alego(driver, legislator_id="X")
+
+        session_cm = driver.session.return_value
+        session = session_cm.__aenter__.return_value
+        params = session.run.await_args.args[1]
+        anos = params["anos"]
+        assert len(anos) == 2
+        assert anos[0] - anos[1] == 1
+
+
+class TestObterCotaVereadorGoiania:
+    """Cota/despesas de gabinete de vereador da Camara Municipal de Goiania —
+    shape identico ao CEAP federal e a verba ALEGO estadual."""
+
+    @pytest.mark.anyio
+    async def test_agrupa_por_tipo_e_ordena_desc(self) -> None:
+        """Mesma logica de agregacao aplicada aos lancamentos da CMG."""
+        records = [
+            _mock_record(
+                {"tipo_raw": "COMBUSTIVEIS E LUBRIFICANTES", "valor": 150.0, "ano": "2025"},
+            ),
+            _mock_record(
+                {"tipo_raw": "COMBUSTIVEIS E LUBRIFICANTES", "valor": 100.0, "ano": "2025"},
+            ),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": 800.0, "ano": "2025"}),
+        ]
+        driver = _build_driver(records)
+
+        resultado = await obter_cota_vereador_goiania(
+            driver, vereador_id="vgyn-001",
+        )
+
+        assert len(resultado) == 2
+        assert resultado[0].tipo == "Telefone"
+        assert resultado[0].total == 800.0
+        assert resultado[1].tipo == "Combustivel"
+        assert resultado[1].total == pytest.approx(250.0)
+
+    @pytest.mark.anyio
+    async def test_sem_cota_retorna_lista_vazia(self) -> None:
+        driver = _build_driver([])
+        resultado = await obter_cota_vereador_goiania(
+            driver, vereador_id="semdata",
+        )
+        assert resultado == []
+
+    @pytest.mark.anyio
+    async def test_ignora_valores_invalidos(self) -> None:
+        records = [
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": None}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": -1.0}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": "xx"}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": 50.0}),
+        ]
+        driver = _build_driver(records)
+        resultado = await obter_cota_vereador_goiania(
+            driver, vereador_id="vgyn-002",
+        )
+        assert len(resultado) == 1
+        assert resultado[0].total == 50.0
+
+    @pytest.mark.anyio
+    async def test_params_passados_para_query(self) -> None:
+        driver = _build_driver([])
+        await obter_cota_vereador_goiania(
+            driver, vereador_id="VHASH7", anos=[2024, 2025],
+        )
+
+        session_cm = driver.session.return_value
+        session = session_cm.__aenter__.return_value
+        params = session.run.await_args.args[1]
+        assert params["vereador_id"] == "VHASH7"
+        assert params["anos"] == [2024, 2025]
+
+    @pytest.mark.anyio
+    async def test_anos_default_sao_os_ultimos_dois(self) -> None:
+        driver = _build_driver([])
+        await obter_cota_vereador_goiania(driver, vereador_id="V")
 
         session_cm = driver.session.return_value
         session = session_cm.__aenter__.return_value

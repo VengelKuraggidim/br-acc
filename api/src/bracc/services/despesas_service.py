@@ -199,6 +199,84 @@ async def obter_verba_indenizatoria_alego(
     ]
 
 
+async def obter_cota_vereador_goiania(
+    driver: AsyncDriver,
+    vereador_id: str,
+    anos: list[int] | None = None,
+) -> list[DespesaGabinete]:
+    """Le cota/despesas de gabinete de um vereador da Camara Municipal de Goiania.
+
+    A Camara Municipal de Goiania publica as despesas de gabinete dos
+    vereadores no portal ``goiania.go.leg.br`` (endpoint ``@@transparency-json``).
+    O pipeline ``camara_goiania`` ingere os lancamentos e cria a rel
+    ``(:GoVereador)-[:DESPESA_GABINETE]->(:GoCouncilExpense)``.
+
+    Esta funcao e o analogo municipal de :func:`obter_ceap_deputado` (federal)
+    e :func:`obter_verba_indenizatoria_alego` (estadual) — **mesmo shape de
+    saida** (``DespesaGabinete`` agregado por tipo) pra que o ``PerfilService``
+    trate os 3 niveis (federal/estadual/municipal GO) de forma transparente
+    pro PWA.
+
+    Args:
+        driver: Neo4j async driver.
+        vereador_id: ``vereador_id`` do no ``:GoVereador`` (hash estavel
+            gerado pelo pipeline ``camara_goiania`` a partir de nome+partido).
+        anos: Lista de anos a considerar. Se ``None``, usa
+            ``[ano_atual, ano_atual - 1]`` (mesmo default de CEAP/ALEGO).
+            Se ``[]``, traz todos os anos ingeridos.
+
+    Returns:
+        Lista de ``DespesaGabinete`` ordenada por ``total`` decrescente.
+        Lista vazia se o vereador nao tem despesas ingeridas ou o no nao
+        existe; nunca levanta excecao nesse caso (log ``warning``).
+    """
+    anos_filtro = anos if anos is not None else _default_anos()
+
+    async with driver.session(database=settings.neo4j_database) as session:
+        records = await execute_query(
+            session,
+            "perfil_cota_vereador_goiania",
+            {"vereador_id": str(vereador_id), "anos": anos_filtro},
+        )
+
+    if not records:
+        logger.warning(
+            "[despesas_service] sem cota vereador GYN para vereador_id=%s anos=%s",
+            vereador_id, anos_filtro,
+        )
+        return []
+
+    # Mesma logica de agregacao do CEAP/ALEGO (preserva total_fmt BRL).
+    por_tipo: dict[str, float] = {}
+    for record in records:
+        tipo_raw = record.get("tipo_raw") or ""
+        valor_raw = record.get("valor")
+        if valor_raw is None:
+            continue
+        try:
+            valor = float(valor_raw)
+        except (TypeError, ValueError):
+            continue
+        if valor <= 0:
+            continue
+        tipo_traduzido = traduzir_despesa(str(tipo_raw)) if tipo_raw else "Outros"
+        por_tipo[tipo_traduzido] = por_tipo.get(tipo_traduzido, 0.0) + valor
+
+    if not por_tipo:
+        logger.warning(
+            "[despesas_service] cota vereador GYN de vereador_id=%s sem valores validos",
+            vereador_id,
+        )
+        return []
+
+    return [
+        DespesaGabinete(tipo=tipo, total=total, total_fmt=fmt_brl(total))
+        for tipo, total in sorted(
+            por_tipo.items(), key=lambda kv: -kv[1],
+        )
+    ]
+
+
 async def calcular_media_ceap_estado(
     driver: AsyncDriver,
     uf: str,
