@@ -375,7 +375,7 @@
       "required_inputs": [
         "data/querido_diario/*"
       ],
-      "blocking_reason_if_any": "Text availability gap",
+      "blocking_reason_if_any": "superseded by querido_diario_go; federal scope (~5570 municipalities, multi-GB backfill) out of Fiscal Cidadao GO-only mission",
       "core": false
     },
     {
