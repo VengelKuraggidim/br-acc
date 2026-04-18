@@ -11,6 +11,7 @@ from bracc.models.entity import (
     EntityResponse,
     EntityWithConnections,
     ExposureResponse,
+    ProvenanceBlock,
     SourceAttribution,
     TimelineEvent,
     TimelineResponse,
@@ -31,6 +32,39 @@ router = APIRouter(prefix="/api/v1/entity", tags=["entity"])
 
 CPF_PATTERN = re.compile(r"^\d{11}$")
 CNPJ_PATTERN = re.compile(r"^\d{14}$")
+
+_PROVENANCE_FIELDS = (
+    "source_id",
+    "source_record_id",
+    "source_url",
+    "ingested_at",
+    "run_id",
+)
+
+
+def _extract_provenance(props: dict[str, Any]) -> ProvenanceBlock | None:
+    """Pop the five provenance fields off ``props`` and return them as a block.
+
+    Returns ``None`` when any required field (source_id, source_url,
+    ingested_at, run_id) is missing or empty — which means the node/rel was
+    loaded before the provenance contract was in force. Legacy rows keep
+    flowing without a provenance block instead of raising.
+    """
+    popped = {field: props.pop(field, None) for field in _PROVENANCE_FIELDS}
+    for required in ("source_id", "source_url", "ingested_at", "run_id"):
+        if not popped.get(required):
+            return None
+    return ProvenanceBlock(
+        source_id=str(popped["source_id"]),
+        source_record_id=(
+            str(popped["source_record_id"])
+            if popped.get("source_record_id")
+            else None
+        ),
+        source_url=str(popped["source_url"]),
+        ingested_at=str(popped["ingested_at"]),
+        run_id=str(popped["run_id"]),
+    )
 
 
 def _clean_identifier(raw: str) -> str:
@@ -64,6 +98,7 @@ def _node_to_entity(
     node: Any, labels: list[str], entity_id: str
 ) -> EntityResponse:
     props = dict(node)
+    provenance = _extract_provenance(props)
     entity_type = labels[0].lower() if labels else "unknown"
     entity_label = labels[0] if labels else None
     sources = []
@@ -81,6 +116,7 @@ def _node_to_entity(
         identity_quality=identity_quality,
         properties=sanitize_public_properties(sanitize_props(props)),
         sources=sources,
+        provenance=provenance,
         is_pep=_is_pep(props),
         exposure_tier=infer_exposure_tier(labels),
     )
@@ -173,6 +209,7 @@ async def get_entity_timeline(
         lbls: list[str] = record["lbls"]
         entity_type = lbls[0] if lbls else "unknown"
         props: dict[str, Any] = dict(record["props"])
+        provenance = _extract_provenance(props)
         event_date: str = record["event_date"]
 
         label = props.get("object", props.get("type", entity_type))
@@ -184,6 +221,7 @@ async def get_entity_timeline(
             entity_type=entity_type,
             properties=sanitize_public_properties(sanitize_props(props)),
             sources=[SourceAttribution(database="neo4j_graph")],
+            provenance=provenance,
         ))
 
     next_cursor = events[-1].date if len(events) == limit else None
@@ -240,6 +278,7 @@ async def get_connections(
             continue
 
         rel_props = dict(record["r"])
+        rel_provenance = _extract_provenance(rel_props)
         confidence = float(rel_props.pop("confidence", 1.0))
         source_val = rel_props.pop("source", None)
         rel_sources: list[SourceAttribution] = []
@@ -255,6 +294,7 @@ async def get_connections(
             properties=sanitize_public_properties(sanitize_props(rel_props)),
             confidence=confidence,
             sources=rel_sources,
+            provenance=rel_provenance,
             exposure_tier=infer_exposure_tier(target_labels),
         ))
 

@@ -9,6 +9,21 @@ class SourceAttribution(BaseModel):
     extracted_at: str | None = None
 
 
+class ProvenanceBlock(BaseModel):
+    """Per-record traceability fields. See ``docs/provenance.md``.
+
+    Present on every node/relationship persisted under the current
+    contract. May be absent for legacy data loaded before the contract
+    was in force, in which case the field is ``None``.
+    """
+
+    source_id: str
+    source_record_id: str | None = None
+    source_url: str
+    ingested_at: str
+    run_id: str
+
+
 class EntityResponse(BaseModel):
     id: str
     type: str
@@ -16,6 +31,7 @@ class EntityResponse(BaseModel):
     identity_quality: str | None = None
     properties: dict[str, str | float | int | bool | None]
     sources: list[SourceAttribution]
+    provenance: ProvenanceBlock | None = None
     is_pep: bool = False
     exposure_tier: str = "public_safe"
 
@@ -27,6 +43,7 @@ class ConnectionResponse(BaseModel):
     properties: dict[str, str | float | int | bool | None]
     confidence: float = 1.0
     sources: list[SourceAttribution]
+    provenance: ProvenanceBlock | None = None
     exposure_tier: str = "public_safe"
 
 
@@ -61,6 +78,7 @@ class TimelineEvent(BaseModel):
     entity_type: str
     properties: dict[str, Any]
     sources: list[SourceAttribution]
+    provenance: ProvenanceBlock | None = None
 
 
 class TimelineResponse(BaseModel):
