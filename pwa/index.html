@@ -404,6 +404,34 @@
       color: var(--accent);
     }
 
+    /* === CHIP DE FONTE (proveniência rastreável) === */
+    /* Rodapé discreto em cards de fato — exibe ProvenanceBlock do backend
+       (source_id, source_record_id, ingested_at, source_url, snapshot_url).
+       Ver docs/provenance.md. */
+    .chip-fonte {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: right;
+      line-height: 1.5;
+    }
+    .chip-fonte .chip-fonte-meta {
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .chip-fonte a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      margin-left: 8px;
+      white-space: nowrap;
+    }
+    .chip-fonte a:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+
     /* === ALERTA === */
     .alerta-card {
       display: flex;
@@ -1061,6 +1089,61 @@ const API = (window.location.hostname === "localhost" || window.location.hostnam
   : "/api";
 let buscaTimeout = null;
 
+// === CHIP DE FONTE (proveniência rastreável) ===
+// Renderiza rodapé discreto com ProvenanceBlock do backend.
+// Campos exibidos: source_id, source_record_id, ingested_at (data),
+// source_url (link "Ver fonte"), snapshot_url (link "Cópia preservada").
+// Retorna "" se provenance for null/undefined — PerfilPolitico.provenance
+// pode ser None em agregações que ainda não carimbam origem.
+// Escapa HTML pra evitar XSS vindo de source_id/record_id.
+function escaparHTML(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatarDataIngestao(iso) {
+  // ingested_at vem como ISO 8601 (ex: "2025-03-14T12:00:00Z").
+  // Formata em pt-BR (dd/mm/yyyy). Se parsing falhar, devolve a string crua.
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return escaparHTML(iso);
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function renderChipFonte(provenance) {
+  if (!provenance) return "";
+  const sid = escaparHTML(provenance.source_id || "");
+  const recId = escaparHTML(provenance.source_record_id || "");
+  const ingDate = formatarDataIngestao(provenance.ingested_at);
+  const srcUrl = provenance.source_url || "";
+  const snapUrl = provenance.snapshot_url || "";
+
+  const partes = [];
+  if (sid) partes.push(sid);
+  if (recId) partes.push(recId);
+  if (ingDate) partes.push(`ingerido ${ingDate}`);
+  const metaTxt = partes.length ? `Fonte: ${partes.join(" &middot; ")}` : "Fonte";
+
+  let html = `<div class="chip-fonte"><span class="chip-fonte-meta">${metaTxt}</span>`;
+  if (srcUrl) {
+    html += `<a href="${escaparHTML(srcUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir fonte original">&#128279; Ver fonte</a>`;
+  }
+  if (snapUrl) {
+    const tip = ingDate ? `Ver cópia de ${ingDate}` : "Cópia preservada";
+    html += `<a href="${escaparHTML(snapUrl)}" target="_blank" rel="noopener noreferrer" title="${escaparHTML(tip)}">&#128247; Cópia preservada</a>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
 // === NAVEGACAO ===
 function irPara(pageId, tabEl) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -1371,6 +1454,7 @@ function renderPerfil(d) {
           <div class="profile-patrimonio-label">Patrimônio declarado</div>
           <div class="profile-patrimonio-value">${p.patrimonio_formatado}</div>
         </div>` : ''}
+      ${renderChipFonte(d.provenance)}
     </div>
 
     ${d.resumo ? `
