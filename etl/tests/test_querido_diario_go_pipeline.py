@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
+import httpx
+import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+from bracc_etl.archival import restore_snapshot
 from bracc_etl.pipelines.querido_diario_go import (  # type: ignore[attr-defined]
     QueridoDiarioGoPipeline,
     _classify_act,
@@ -16,7 +24,15 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _make_pipeline() -> QueridoDiarioGoPipeline:
-    return QueridoDiarioGoPipeline(driver=MagicMock(), data_dir=str(FIXTURES))
+    # ``archive=False``: fixtures offline não têm MockTransport pro fetch
+    # dos PDFs, então desativamos archival pra não hit network. O caminho
+    # online (``archive=True`` + ``MockTransport``) é coberto em
+    # ``TestArchivalRetrofit`` abaixo.
+    return QueridoDiarioGoPipeline(
+        driver=MagicMock(),
+        data_dir=str(FIXTURES),
+        archive=False,
+    )
 
 
 class TestMetadata:
@@ -169,3 +185,165 @@ class TestLoad:
         pipeline.load()
 
         assert mock_driver(pipeline).session.called
+
+
+# ---------------------------------------------------------------------------
+# Archival — snapshot dos PDFs dos diários no momento do fetch (retrofit #9
+# do plano em todo-list-prompts/high_priority/11-archival-retrofit-go.md).
+#
+# Estratégia: fixture (``gazettes.json`` com 2 edições, Goiânia 2026-03-10
+# e Anápolis 2026-03-12) fornece as rows; mockamos ``httpx.Client`` no
+# módulo ``querido_diario_go`` com um ``MockTransport`` que devolve um PDF
+# fake por URL de diário. Daí:
+#  * snapshot gravado em ``BRACC_ARCHIVAL_ROOT/querido_diario_go/YYYY-MM/*.pdf``
+#    (um por edição, content-addressed);
+#  * todas as rows (acts, mentions, appointments) ganham ``source_snapshot_uri``
+#    pela chave natural ``territory_id|date|edition``;
+#  * ``restore_snapshot`` devolve os bytes originais do PDF (round-trip).
+# O path offline (``archive=False``) NÃO deve popular o campo — rodado em
+# paralelo pra garantir que o retrofit continua opt-in.
+# ---------------------------------------------------------------------------
+
+
+_FAKE_PDF_GOIANIA = (
+    b"%PDF-1.4\n%qd_go fake bulletin goiania 2026-03-10\n%%EOF"
+)
+_FAKE_PDF_ANAPOLIS = (
+    b"%PDF-1.4\n%qd_go fake bulletin anapolis 2026-03-12\n%%EOF"
+)
+_GAZETTE_URL_GOIANIA = (
+    "https://queridodiario.ok.org.br/api/gazettes/5208707/2026-03-10"
+)
+_GAZETTE_URL_ANAPOLIS = (
+    "https://queridodiario.ok.org.br/api/gazettes/5201108/2026-03-12"
+)
+
+
+def _qd_handler() -> httpx.MockTransport:
+    """MockTransport que devolve um PDF fake por URL de diário."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == _GAZETTE_URL_GOIANIA:
+            return httpx.Response(
+                200,
+                content=_FAKE_PDF_GOIANIA,
+                headers={"content-type": "application/pdf"},
+            )
+        if url == _GAZETTE_URL_ANAPOLIS:
+            return httpx.Response(
+                200,
+                content=_FAKE_PDF_ANAPOLIS,
+                headers={"content-type": "application/pdf"},
+            )
+        return httpx.Response(
+            404,
+            content=b"not found",
+            headers={"content-type": "text/plain"},
+        )
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.fixture()
+def archival_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[Path]:
+    root = tmp_path / "archival"
+    monkeypatch.setenv("BRACC_ARCHIVAL_ROOT", str(root))
+    yield root
+
+
+@pytest.fixture()
+def online_pipeline(
+    archival_root: Path,  # noqa: ARG001 — just activates the env var
+    monkeypatch: pytest.MonkeyPatch,
+) -> QueridoDiarioGoPipeline:
+    """Pipeline com HTTP mockado, ``archive=True`` e fixtures locais.
+
+    ``data_dir`` reusa ``tests/fixtures/querido_diario_go/gazettes.json``
+    (Goiânia 2026-03-10 + Anápolis 2026-03-12) pra transform produzir
+    rows, enquanto o mock devolve um PDF fake por URL de diário pra
+    popular o mapa de snapshot URIs.
+    """
+    transport = _qd_handler()
+    original_client = httpx.Client
+
+    def _client_factory(*args: Any, **kwargs: Any) -> httpx.Client:
+        kwargs["transport"] = transport
+        return original_client(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "bracc_etl.pipelines.querido_diario_go.httpx.Client",
+        _client_factory,
+    )
+    pipeline = QueridoDiarioGoPipeline(
+        driver=MagicMock(),
+        data_dir=str(FIXTURES),
+        archive=True,
+    )
+    # run_id canônico (``{source}_YYYYMMDDHHMMSS``) cai no bucket 2026-03,
+    # só pra facilitar conferência visual do path no assert.
+    pipeline.run_id = "querido_diario_go_20260310000000"
+    return pipeline
+
+
+class TestArchivalRetrofit:
+    """Retrofit: querido_diario_go agora grava snapshots dos PDFs dos diários."""
+
+    def test_carimba_source_snapshot_uri_em_rows(
+        self,
+        online_pipeline: QueridoDiarioGoPipeline,
+        archival_root: Path,
+    ) -> None:
+        online_pipeline.extract()
+        online_pipeline.transform()
+
+        # Ambas as edições do fixture têm PDF fake no mock — logo todas
+        # as rows geradas (acts, mentions, appointments) ganham
+        # ``source_snapshot_uri``.
+        assert online_pipeline.acts
+        for act in online_pipeline.acts:
+            uri = act.get("source_snapshot_uri")
+            assert isinstance(uri, str) and uri
+            # Shape: ``querido_diario_go/YYYY-MM/hash12.pdf``
+            parts = uri.split("/")
+            assert parts[0] == "querido_diario_go"
+            assert parts[1] == "2026-03"
+            assert parts[2].endswith(".pdf")
+
+        # Granularidade por diário: os 2 PDFs fake geram URIs distintas.
+        uris = {act["source_snapshot_uri"] for act in online_pipeline.acts}
+        assert len(uris) == 2
+
+        # Mentions e appointments extraídos do mesmo diário herdam a URI.
+        for m in online_pipeline.company_mentions:
+            assert isinstance(m.get("source_snapshot_uri"), str)
+        for appt in online_pipeline.appointments:
+            assert isinstance(appt.get("source_snapshot_uri"), str)
+
+        # Storage: arquivo fisicamente presente sob o root configurado.
+        sample_uri = online_pipeline.acts[0]["source_snapshot_uri"]
+        absolute = archival_root / sample_uri
+        assert absolute.exists(), f"snapshot ausente em {absolute}"
+
+        # Round-trip: restore_snapshot devolve os bytes originais do mock.
+        restored = restore_snapshot(sample_uri)
+        assert restored in (_FAKE_PDF_GOIANIA, _FAKE_PDF_ANAPOLIS)
+
+    def test_offline_path_nao_popula_snapshot_uri(self) -> None:
+        """Pipeline com ``archive=False`` deixa o campo fora (opt-in)."""
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+
+        assert pipeline.acts
+        for act in pipeline.acts:
+            # Ausência do campo == opt-in não ativado (contrato do
+            # ``attach_provenance``: só injeta a chave quando snapshot_uri
+            # não é None).
+            assert "source_snapshot_uri" not in act
+        for m in pipeline.company_mentions:
+            assert "source_snapshot_uri" not in m
+        for appt in pipeline.appointments:
+            assert "source_snapshot_uri" not in appt

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
@@ -16,8 +17,10 @@ from bracc_etl.transforms import (
     format_cnpj,
     normalize_name,
     parse_date,
-    stable_id as _stable_id,
     strip_document,
+)
+from bracc_etl.transforms import (
+    stable_id as _stable_id,
 )
 
 if TYPE_CHECKING:
@@ -39,6 +42,11 @@ _REQUEST_SLEEP_SECONDS = 0.3
 # Goiás UF code — kept for reference / logging. Filtering is now done via
 # per-municipality IBGE codes fetched from the ``/cities`` endpoint.
 _GOIAS_STATE_CODE = "GO"
+
+# Fallback content-type quando o servidor não carimba ``Content-Type`` na
+# resposta do download do PDF do diário. O endpoint ``/api/gazettes/.../``
+# do Querido Diário serve o PDF bruto da edição.
+_PDF_CONTENT_TYPE = "application/pdf"
 
 _CNPJ_RE = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
 _CPF_RE = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
@@ -84,6 +92,19 @@ def _extract_cnpjs(text: str) -> list[tuple[str, str]]:
         span = f"{match.start()}:{match.end()}"
         out.append((cnpj, span))
     return out
+
+
+def _gazette_snapshot_key(gazette: dict[str, Any]) -> str:
+    """Chave natural do diário pro mapa de snapshot URIs.
+
+    Granularidade: cada edição (município + data + edition) tem uma URI
+    própria. ``transform`` usa a mesma chave pra recuperar a URI na hora
+    de carimbar as rows de act/appointment/mention geradas daquele diário.
+    """
+    territory_id = str(gazette.get("territory_id", "")).strip()
+    date = str(gazette.get("date", "")).strip()
+    edition = str(gazette.get("edition", "")).strip()
+    return f"{territory_id}|{date}|{edition}"
 
 
 def _extract_appointments(text: str) -> list[dict[str, str]]:
@@ -307,6 +328,8 @@ class QueridoDiarioGoPipeline(Pipeline):
         data_dir: str = "./data",
         limit: int | None = None,
         chunk_size: int = 50_000,
+        *,
+        archive: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(driver, data_dir, limit=limit, chunk_size=chunk_size, **kwargs)
@@ -314,6 +337,18 @@ class QueridoDiarioGoPipeline(Pipeline):
         self.acts: list[dict[str, Any]] = []
         self.appointments: list[dict[str, Any]] = []
         self.company_mentions: list[dict[str, Any]] = []
+        # Opt-out switch pro fetch online dos PDFs dos diários. Fixtures
+        # offline (sem mock de HTTP) desativam via ``archive=False`` pra
+        # não hit network. Produção e testes com ``MockTransport`` deixam
+        # ``True`` (default) — cada PDF baixado é persistido
+        # content-addressed via :func:`archive_fetch`.
+        self._archive_enabled = archive
+        # Mapa ``"{territory_id}|{date}|{edition}" -> snapshot_uri``
+        # alimentado pelo fetch online dos PDFs. ``transform`` usa pra
+        # carimbar ``source_snapshot_uri`` em cada row cuja chave natural
+        # casa com um PDF arquivado. Vazio no caminho offline (fixture
+        # JSON sem HTTP) — consistente com o contrato opt-in do campo.
+        self._pdf_snapshot_uris: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Extract
@@ -363,6 +398,73 @@ class QueridoDiarioGoPipeline(Pipeline):
 
         return records
 
+    def _archive_gazette_pdfs_online(
+        self,
+        gazettes: list[dict[str, Any]],
+    ) -> dict[str, str]:
+        """Baixa e arquiva o PDF de cada diário (online-only).
+
+        Retorna ``{"{territory_id}|{date}|{edition}": snapshot_uri}`` —
+        chave natural do diário, valor é a URI relativa devolvida por
+        :func:`bracc_etl.archival.archive_fetch`. Diários cujo download
+        falha ficam fora do dict (as rows geradas deles não ganham
+        ``source_snapshot_uri`` — opt-in preservado).
+
+        Granularidade: **por diário** (município + data + edição). A doc
+        `11-archival-retrofit-go.md` estimou "1 fetch por dia"; na prática
+        o Querido Diário expõe uma edição por município por dia, então a
+        chave composta acima é o que bate com as rows (act, appointment,
+        mention) produzidas em ``transform``.
+
+        Falhas de HTTP são logadas e engolidas: o pipeline continua
+        transformando mesmo se algum PDF estiver fora do ar.
+        """
+        uris: dict[str, str] = {}
+        if not gazettes:
+            return uris
+
+        try:
+            with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
+                for gazette in gazettes:
+                    url = str(gazette.get("url", "")).strip()
+                    if not url:
+                        continue
+                    try:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                    except httpx.HTTPError as exc:
+                        logger.warning(
+                            "[querido_diario_go] failed to download %s: %s",
+                            url,
+                            exc,
+                        )
+                        continue
+                    content_type = resp.headers.get(
+                        "content-type", _PDF_CONTENT_TYPE,
+                    )
+                    uri = archive_fetch(
+                        url=url,
+                        content=resp.content,
+                        content_type=content_type,
+                        run_id=self.run_id,
+                        source_id=self.source_id,
+                    )
+                    key = _gazette_snapshot_key(gazette)
+                    # Primeiro fetch vence: idempotência do archival já
+                    # garante content-addressing, e queremos que a chave
+                    # aponte pro primeiro snapshot gravado no run.
+                    uris.setdefault(key, uri)
+                    logger.info(
+                        "[querido_diario_go] archived gazette %s -> %s",
+                        key,
+                        uri,
+                    )
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "[querido_diario_go] online archival aborted: %s", exc,
+            )
+        return uris
+
     def extract(self) -> None:
         # Try local files first (offline / cached mode)
         records = self._read_local_files()
@@ -379,6 +481,18 @@ class QueridoDiarioGoPipeline(Pipeline):
         self._raw_gazettes = records
         self.rows_in = len(records)
         logger.info("[querido_diario_go] extracted %d gazette entries", len(records))
+
+        # Online archival dos PDFs dos diários. Rodando produção com
+        # ``archive=True`` (default), tenta baixar o PDF apontado por
+        # cada ``gazette["url"]`` pra gerar snapshot via
+        # :func:`archive_fetch`. Falhas de HTTP são absorvidas — se o
+        # portal estiver fora, o dict fica vazio e rows não ganham
+        # ``source_snapshot_uri`` (opt-in preservado). Testes offline
+        # passam ``archive=False`` pra evitar network.
+        if self._archive_enabled and self._raw_gazettes:
+            self._pdf_snapshot_uris = self._archive_gazette_pdfs_online(
+                self._raw_gazettes,
+            )
 
     # ------------------------------------------------------------------
     # Transform
@@ -410,6 +524,12 @@ class QueridoDiarioGoPipeline(Pipeline):
             act_id = _stable_id(territory_id, date, edition, text[:180])
             act_record_id = f"{territory_id}|{date}|{edition}"
             act_url = url or None  # deep-link to the act when gazette provided one
+            # Resolve snapshot URI pela chave natural do diário (município
+            # + data + edição). Sem PDF arquivado pro diário → ``None`` →
+            # ``attach_provenance`` não injeta a chave (opt-in). O mapa é
+            # populado em ``extract`` só quando ``archive=True`` e o fetch
+            # online do PDF deu certo.
+            snapshot_uri = self._pdf_snapshot_uris.get(act_record_id)
 
             acts.append(self.attach_provenance(
                 {
@@ -427,6 +547,7 @@ class QueridoDiarioGoPipeline(Pipeline):
                 },
                 record_id=act_record_id,
                 record_url=act_url,
+                snapshot_uri=snapshot_uri,
             ))
 
             # Extract CNPJ mentions
@@ -442,6 +563,7 @@ class QueridoDiarioGoPipeline(Pipeline):
                     },
                     record_id=f"{act_record_id}|{cnpj}|{span}",
                     record_url=act_url,
+                    snapshot_uri=snapshot_uri,
                 ))
 
             # Extract appointment data
@@ -482,6 +604,7 @@ class QueridoDiarioGoPipeline(Pipeline):
                         },
                         record_id=appt_record_id,
                         record_url=act_url,
+                        snapshot_uri=snapshot_uri,
                     ))
 
         self.acts = deduplicate_rows(acts, ["act_id"])
@@ -519,6 +642,7 @@ class QueridoDiarioGoPipeline(Pipeline):
                     },
                     record_id=row["source_record_id"],
                     record_url=row.get("source_url"),
+                    snapshot_uri=row.get("source_snapshot_uri"),
                 )
                 for row in self.appointments
             ]
@@ -541,6 +665,7 @@ class QueridoDiarioGoPipeline(Pipeline):
                         },
                         record_id=row["cnpj"],
                         record_url=row.get("source_url"),
+                        snapshot_uri=row.get("source_snapshot_uri"),
                     )
                     for row in self.company_mentions
                 ],
