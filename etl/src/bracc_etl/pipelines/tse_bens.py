@@ -63,6 +63,7 @@ class TseBensPipeline(Pipeline):
         )
         if self.limit:
             self._raw = self._raw.head(self.limit)
+        self.rows_in = len(self._raw)
         logger.info("[tse_bens] Extracted %d rows", len(self._raw))
 
     def transform(self) -> None:
@@ -88,24 +89,30 @@ class TseBensPipeline(Pipeline):
 
             asset_id = _make_asset_id(digits, year, asset_type, value_raw.strip(), description)
 
-            assets.append({
-                "asset_id": asset_id,
-                "candidate_cpf": cpf_formatted,
-                "candidate_name": nome,
-                "asset_type": asset_type,
-                "asset_description": description,
-                "asset_value": value,
-                "election_year": int(year) if year.isdigit() else 0,
-                "uf": uf,
-                "partido": partido,
-                "source": "tse_bens",
-            })
+            assets.append(self.attach_provenance(
+                {
+                    "asset_id": asset_id,
+                    "candidate_cpf": cpf_formatted,
+                    "candidate_name": nome,
+                    "asset_type": asset_type,
+                    "asset_description": description,
+                    "asset_value": value,
+                    "election_year": int(year) if year.isdigit() else 0,
+                    "uf": uf,
+                    "partido": partido,
+                    "source": "tse_bens",
+                },
+                record_id=asset_id,
+            ))
 
-            person_rels.append({
-                "source_key": cpf_formatted,
-                "target_key": asset_id,
-                "person_name": nome,
-            })
+            person_rels.append(self.attach_provenance(
+                {
+                    "source_key": cpf_formatted,
+                    "target_key": asset_id,
+                    "person_name": nome,
+                },
+                record_id=asset_id,
+            ))
 
         self.assets = deduplicate_rows(assets, ["asset_id"])
         self.person_rels = person_rels
@@ -128,7 +135,10 @@ class TseBensPipeline(Pipeline):
             cpf = rel["source_key"]
             if cpf not in persons_seen:
                 persons_seen.add(cpf)
-                unique_persons.append({"cpf": cpf, "name": rel["person_name"]})
+                unique_persons.append(self.attach_provenance(
+                    {"cpf": cpf, "name": rel["person_name"]},
+                    record_id=cpf,
+                ))
         if unique_persons:
             loader.load_nodes("Person", unique_persons, key_field="cpf")
 
@@ -137,10 +147,16 @@ class TseBensPipeline(Pipeline):
                 "UNWIND $rows AS row "
                 "MATCH (p:Person {cpf: row.source_key}) "
                 "MATCH (a:DeclaredAsset {asset_id: row.target_key}) "
-                "MERGE (p)-[:DECLAROU_BEM]->(a)"
+                "MERGE (p)-[r:DECLAROU_BEM]->(a) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
             loader.run_query_with_retry(query, self.person_rels)
 
+        self.rows_loaded = len(self.assets)
         logger.info(
             "[tse_bens] Loaded: %d assets, %d persons, %d rels",
             len(self.assets),

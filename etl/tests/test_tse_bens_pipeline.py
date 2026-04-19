@@ -235,6 +235,9 @@ class TestTseBensTransform:
             "asset_id", "candidate_cpf", "candidate_name", "asset_type",
             "asset_description", "asset_value", "election_year", "uf",
             "partido", "source",
+            # Provenance fields (attach_provenance stamps every row).
+            "source_id", "source_record_id", "source_url",
+            "ingested_at", "run_id",
         }
         for asset in pipeline.assets:
             assert set(asset.keys()) == expected_fields
