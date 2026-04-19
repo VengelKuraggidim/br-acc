@@ -100,3 +100,4 @@ AGENTS.md
 AGENTS*.md
 frontend/
 .last-deploy
+.claude/worktrees/
