@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 # Classified contracts (Polícia Federal etc.) use this sentinel CNPJ.
 _SIGILOSO_CNPJ = "-11"
 
+# Base URL canônica do Portal da Transparência. Usada como ``record_url``
+# pra ``attach_provenance`` porque o ``source_id`` interno do pipeline é
+# ``portal_transparencia`` (divergente do registry ``transparencia``;
+# normalização do alias fica no prompt 06, fora de escopo aqui) e o
+# ``primary_url_for(source_id)`` retornaria vazio. Pipeline-wide constante:
+# todo row carimba o mesmo URL porque o Portal não expõe deep-links
+# estáveis por contrato individual — a página agrega o bulk download.
+_TRANSPARENCIA_SOURCE_URL = "https://portaldatransparencia.gov.br/download-de-dados"
+
 
 def _extract_cpf_middle6(cpf_raw: str) -> str | None:
     """Extract 6 middle digits from LGPD-masked CPF (***.ABC.DEF-**)."""
@@ -96,6 +105,22 @@ class TransparenciaPipeline(Pipeline):
             self._raw_emendas = pd.read_csv(
                 emendas_path, dtype=str, keep_default_na=False, encoding="utf-8",
             )
+        # rows_in = total de linhas cruas extraídas (antes de filtros de
+        # qualidade em transform). É o denominador do funnel que vai pro
+        # IngestionRun pra operador saber se o download foi útil.
+        self.rows_in = (
+            len(self._raw_contratos)
+            + len(self._raw_servidores)
+            + len(self._raw_emendas)
+        )
+        logger.info(
+            "[%s] extracted contratos=%d servidores=%d emendas=%d (rows_in=%d)",
+            self.name,
+            len(self._raw_contratos),
+            len(self._raw_servidores),
+            len(self._raw_emendas),
+            self.rows_in,
+        )
 
     def transform(self) -> None:
         contracts: list[dict[str, Any]] = []
@@ -178,38 +203,63 @@ class TransparenciaPipeline(Pipeline):
             })
         self.amendments = deduplicate_rows(amendments, ["amendment_id"])
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canônica embutida.
+
+        Portal da Transparência não expõe deep-link por registro — todo
+        row carimba o mesmo ``source_url`` (bulk download page). O
+        ``record_url`` explícito evita o lookup ``primary_url_for`` que
+        retornaria vazio porque ``source_id='portal_transparencia'``
+        diverge do registry (``transparencia``); normalização canônica
+        fica no prompt 06.
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url=_TRANSPARENCIA_SOURCE_URL,
+        )
+
     def load(self) -> None:
         loader = Neo4jBatchLoader(self.driver)
+        loaded = 0
 
         if self.contracts:
-            loader.load_nodes(
-                "Contract",
-                [
+            contract_rows = [
+                self._stamp(
                     {
                         "contract_id": c["contract_id"],
                         "object": c["object"],
                         "value": c["value"],
                         "contracting_org": c["contracting_org"],
                         "date": c["date"],
-                    }
-                    for c in self.contracts
-                ],
-                key_field="contract_id",
-            )
+                    },
+                    record_id=c["contract_id"],
+                )
+                for c in self.contracts
+            ]
+            loaded += loader.load_nodes("Contract", contract_rows, key_field="contract_id")
+
             # Ensure Company nodes exist for contracted companies
             companies = deduplicate_rows(
                 [{"cnpj": c["cnpj"], "razao_social": c["razao_social"]} for c in self.contracts],
                 ["cnpj"],
             )
-            loader.load_nodes("Company", companies, key_field="cnpj")
+            company_rows = [
+                self._stamp(co, record_id=co["cnpj"]) for co in companies
+            ]
+            loaded += loader.load_nodes("Company", company_rows, key_field="cnpj")
 
             # VENCEU: Company -> Contract
-            loader.load_relationships(
+            venceu_rows = [
+                self._stamp(
+                    {"source_key": c["cnpj"], "target_key": c["contract_id"]},
+                    record_id=c["contract_id"],
+                )
+                for c in self.contracts
+            ]
+            loaded += loader.load_relationships(
                 rel_type="VENCEU",
-                rows=[
-                    {"source_key": c["cnpj"], "target_key": c["contract_id"]}
-                    for c in self.contracts
-                ],
+                rows=venceu_rows,
                 source_label="Company",
                 source_key="cnpj",
                 target_label="Contract",
@@ -218,13 +268,19 @@ class TransparenciaPipeline(Pipeline):
 
         if self.offices:
             # PublicOffice nodes — keyed on office_id (hash of cpf_partial+name+org)
+            office_rows = [
+                self._stamp(o, record_id=o["office_id"]) for o in self.offices
+            ]
             po_query = (
                 "UNWIND $rows AS row "
                 "MERGE (po:PublicOffice {office_id: row.office_id}) "
                 "SET po.cpf_partial = row.cpf_partial, po.name = row.name, "
-                "po.org = row.org, po.salary = row.salary"
+                "po.org = row.org, po.salary = row.salary, "
+                "po.source_id = row.source_id, po.source_url = row.source_url, "
+                "po.source_record_id = row.source_record_id, "
+                "po.ingested_at = row.ingested_at, po.run_id = row.run_id"
             )
-            loader.run_query(po_query, self.offices)
+            loaded += loader.run_query(po_query, office_rows)
 
             # Person nodes — keyed on servidor_id (hash of cpf_partial+name)
             # DO NOT set cpf — would conflict with uniqueness constraint
@@ -239,34 +295,43 @@ class TransparenciaPipeline(Pipeline):
                 ],
                 ["servidor_id"],
             )
+            person_rows = [
+                self._stamp(p, record_id=p["servidor_id"]) for p in persons
+            ]
             person_query = (
                 "UNWIND $rows AS row "
                 "MERGE (p:Person {servidor_id: row.servidor_id}) "
                 "SET p.cpf_partial = row.cpf_partial, p.name = row.name, "
-                "p.source = 'portal_transparencia'"
+                "p.source = 'portal_transparencia', "
+                "p.source_id = row.source_id, p.source_url = row.source_url, "
+                "p.source_record_id = row.source_record_id, "
+                "p.ingested_at = row.ingested_at, p.run_id = row.run_id"
             )
-            loader.run_query(person_query, persons)
+            loaded += loader.run_query(person_query, person_rows)
 
             # RECEBEU_SALARIO: Person -> PublicOffice
             rel_query = (
                 "UNWIND $rows AS row "
                 "MATCH (p:Person {servidor_id: row.servidor_id}) "
                 "MATCH (po:PublicOffice {office_id: row.office_id}) "
-                "MERGE (p)-[:RECEBEU_SALARIO]->(po)"
+                "MERGE (p)-[r:RECEBEU_SALARIO]->(po) "
+                "SET r.source_id = row.source_id, r.source_url = row.source_url, "
+                "r.source_record_id = row.source_record_id, "
+                "r.ingested_at = row.ingested_at, r.run_id = row.run_id"
             )
-            loader.run_query(
-                rel_query,
-                [
-                    {"servidor_id": o["servidor_id"], "office_id": o["office_id"]}
-                    for o in self.offices
-                ],
-            )
+            rel_rows = [
+                self._stamp(
+                    {"servidor_id": o["servidor_id"], "office_id": o["office_id"]},
+                    record_id=o["office_id"],
+                )
+                for o in self.offices
+            ]
+            loaded += loader.run_query(rel_query, rel_rows)
 
         if self.amendments:
             # Amendment nodes — each emenda is its own entity
-            loader.load_nodes(
-                "Amendment",
-                [
+            amendment_rows = [
+                self._stamp(
                     {
                         "amendment_id": a["amendment_id"],
                         "object": a["object"],
@@ -278,10 +343,13 @@ class TransparenciaPipeline(Pipeline):
                         "year": a.get("year", ""),
                         "value_committed": a.get("value_committed", 0.0),
                         "value_paid": a.get("value_paid", 0.0),
-                    }
-                    for a in self.amendments
-                ],
-                key_field="amendment_id",
+                    },
+                    record_id=a["amendment_id"],
+                )
+                for a in self.amendments
+            ]
+            loaded += loader.load_nodes(
+                "Amendment", amendment_rows, key_field="amendment_id",
             )
 
             # Person nodes for amendment authors (keyed by author_key).
@@ -290,17 +358,29 @@ class TransparenciaPipeline(Pipeline):
                 [{"name": a["name"], "author_key": a["author_key"]} for a in self.amendments],
                 ["author_key"],
             )
-            loader.load_nodes("Person", persons, key_field="author_key")
+            person_rows = [
+                self._stamp(p, record_id=p["author_key"]) for p in persons
+            ]
+            loaded += loader.load_nodes("Person", person_rows, key_field="author_key")
 
             # AUTOR_EMENDA: Person -> Amendment
-            loader.load_relationships(
+            autor_rows = [
+                self._stamp(
+                    {"source_key": a["author_key"], "target_key": a["amendment_id"]},
+                    record_id=a["amendment_id"],
+                )
+                for a in self.amendments
+            ]
+            loaded += loader.load_relationships(
                 rel_type="AUTOR_EMENDA",
-                rows=[
-                    {"source_key": a["author_key"], "target_key": a["amendment_id"]}
-                    for a in self.amendments
-                ],
+                rows=autor_rows,
                 source_label="Person",
                 source_key="author_key",
                 target_label="Amendment",
                 target_key="amendment_id",
             )
+
+        # rows_loaded = total de rows escritas no Neo4j (nodes + rels). É o
+        # numerador do funnel; combined com rows_in vira quality signal.
+        self.rows_loaded = loaded
+        logger.info("[%s] loaded %d rows into Neo4j", self.name, loaded)
