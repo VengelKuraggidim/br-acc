@@ -69,6 +69,9 @@ services:
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./pwa:/usr/share/nginx/html:ro
+      # archival content-addressed — cópias preservadas das fontes
+      # públicas (ver docs/archival.md). Servido em /archival/ read-only.
+      - ./etl/archival:/var/lib/archival:ro
       - certbot-conf:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
     depends_on:

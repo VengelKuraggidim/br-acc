@@ -259,7 +259,11 @@ class TestDeputadoFederalCompleto:
         assert perfil.provenance is not None
         assert isinstance(perfil.provenance, ProvenanceBlock)
         assert perfil.provenance.source_id == "camara_deputados"
-        assert perfil.provenance.snapshot_url == PROV_FIELDS["source_snapshot_uri"]
+        # snapshot_url é reescrito pelo ``archival_url`` (prefixo /archival/)
+        # pra que o browser bata no endpoint que serve a cópia preservada.
+        assert perfil.provenance.snapshot_url == (
+            f"/archival/{PROV_FIELDS['source_snapshot_uri']}"
+        )
 
         # --- Político focal ---
         assert perfil.politico.id == "4:abc:1"

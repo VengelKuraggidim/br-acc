@@ -801,6 +801,108 @@
       flex-shrink: 0;
     }
 
+    /* === CARD EXPANDIVEL (proveniencia detalhada) ===
+       Transforma cards (`.conexao-card`, `.emenda-card`) em `<details>`
+       clicável: fechado mostra o conteúdo compacto de sempre; aberto
+       revela painel rico (fonte, record_id, run_id, botões de link).
+       Mutual exclusion garantida via listener JS (`toggle` capture). */
+    details.card-expandable {
+      display: block;
+      padding: 0;
+    }
+    details.card-expandable > summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      list-style: none;
+      cursor: pointer;
+      flex-wrap: wrap;
+      border-radius: var(--radius-sm);
+    }
+    details.card-expandable > summary::-webkit-details-marker { display: none; }
+    details.card-expandable > summary::marker { content: ''; }
+    details.card-expandable > summary:hover {
+      background: var(--bg-card-hover);
+    }
+    details.card-expandable[open] {
+      border-left: 3px solid var(--accent);
+      background: var(--bg-card-hover);
+    }
+    details.card-expandable[open] > summary {
+      border-bottom: 1px solid var(--border);
+    }
+    /* Emenda-card tem layout próprio (blocos empilhados, não flex row).
+       Reseta o flex do summary quando for emenda-card. */
+    details.emenda-card.card-expandable > summary {
+      display: block;
+      padding: 14px;
+    }
+
+    .detalhes-proveniencia {
+      padding: 14px 14px 12px 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      background: rgba(59, 130, 246, 0.04);
+      border-bottom-left-radius: var(--radius-sm);
+      border-bottom-right-radius: var(--radius-sm);
+    }
+    .detalhes-row {
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+    .detalhes-row strong {
+      color: var(--text-primary);
+      margin-right: 6px;
+      font-weight: 600;
+    }
+    .detalhes-row code {
+      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+    .detalhes-botoes {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0 8px 0;
+    }
+    .btn-fonte {
+      display: inline-block;
+      padding: 8px 14px;
+      background: var(--info-bg);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 6px;
+      color: var(--info);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .btn-fonte:hover {
+      background: rgba(59, 130, 246, 0.22);
+    }
+    .btn-fonte-snapshot {
+      background: rgba(139, 92, 246, 0.12);
+      border-color: rgba(139, 92, 246, 0.3);
+      color: #a78bfa;
+    }
+    .btn-fonte-snapshot:hover {
+      background: rgba(139, 92, 246, 0.22);
+    }
+    .detalhes-explicacao {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      font-style: italic;
+      margin-top: 8px;
+    }
+
     /* === BACK BUTTON === */
     .back-btn {
       display: flex;
@@ -1320,6 +1422,105 @@ function formatarDataIngestao(iso) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+// Dicionário de rótulos humanos para `source_id` do grafo.
+// Usado tanto no chip compacto quanto no painel expandido. Se o id não
+// estiver aqui, caímos pra echo do próprio id (pra não quebrar cards novos
+// enquanto não atualizamos o dicionário).
+const SOURCE_ID_LABELS = {
+  tse: 'TSE — Eleições e doações (bulk)',
+  tse_prestacao_contas: 'TSE — Prestação de contas eleitorais (GO)',
+  tse_filiados: 'TSE — Filiados a partidos',
+  tse_bens: 'TSE — Bens declarados por candidato',
+  tse_candidatos_foto: 'TSE — Fotos oficiais de candidatos',
+  cnpj: 'Receita Federal — Base CNPJ (dados abertos)',
+  brasilapi_cnpj: 'BrasilAPI — Situação cadastral CNPJ',
+  camara: 'Câmara dos Deputados — CEAP (bulk)',
+  camara_deputados: 'Câmara dos Deputados — Deputados federais (GO)',
+  camara_deputados_ceap: 'Câmara dos Deputados — CEAP (cota parlamentar, GO)',
+  camara_votes_bills: 'Câmara dos Deputados — Votações e proposições',
+  camara_inquiries: 'Câmara dos Deputados — Requerimentos e comissões',
+  camara_goiania: 'Câmara Municipal de Goiânia',
+  senado: 'Senado Federal — CEAPS (cota)',
+  senado_cpis: 'Senado Federal — CPIs',
+  senado_votes_bills: 'Senado Federal — Votações e proposições',
+  senado_senadores_foto: 'Senado Federal — Fotos oficiais de senadores',
+  pncp: 'PNCP — Portal Nacional de Contratações Públicas',
+  pncp_go: 'PNCP — Licitações e contratos (Goiás)',
+  tce_go: 'TCE-GO — Tribunal de Contas do Estado de Goiás',
+  tcm_go: 'SICONFI — Finanças municipais de Goiás',
+  tcmgo_sancoes: 'TCM-GO — Gestores impedidos e contas rejeitadas',
+  alego: 'Assembleia Legislativa de Goiás (ALEGO)',
+  alego_deputados_foto: 'ALEGO — Fotos oficiais de deputados estaduais',
+  datajud: 'CNJ DataJud — Processos judiciais',
+  stf: 'STF — Supremo Tribunal Federal',
+  stj_dados_abertos: 'STJ — Dados abertos',
+  dou: 'DOU — Diário Oficial da União',
+  querido_diario: 'Querido Diário — Diários oficiais municipais',
+  querido_diario_go: 'Querido Diário — Goiás',
+  portal_transparencia_emendas: 'Portal da Transparência — Emendas parlamentares',
+  tesouro_emendas: 'Tesouro Nacional — Emendas (Siga Brasil)',
+  transferegov: 'TransfereGov — Transferências voluntárias',
+  siconfi: 'SICONFI — Finanças públicas (Tesouro Nacional)',
+  transparencia: 'Portal da Transparência — Federal',
+  folha_go: 'Folha de pagamento do Estado de Goiás',
+  ssp_go: 'Secretaria de Segurança Pública de Goiás',
+  pep_cgu: 'CGU — Pessoas Expostas Politicamente',
+  ceaf: 'CGU — Cadastro de Empresas Inidôneas (CEAF)',
+  cepim: 'CGU — Cadastro de Entidades Privadas Sem Fins Lucrativos Impedidas (CEPIM)',
+  leniency: 'CGU — Acordos de leniência',
+  cnciai_improbidade: 'CNJ — Condenações por improbidade (CNCIAI)',
+  entity_resolution_politicos_go: 'Fiscal Cidadão — Resolução de entidades (políticos GO)',
+  wikidata_politicos_foto: 'Wikidata — Fotos de políticos',
+  propagacao_fotos_person: 'Fiscal Cidadão — Propagação de fotos (pessoa)',
+};
+function labelFonte(sid) {
+  if (!sid) return 'Fonte desconhecida';
+  return SOURCE_ID_LABELS[sid] || sid;
+}
+
+// Painel expandido de proveniência: explicação humana da fonte + IDs + run
+// do ETL + botões grandes para abrir fonte original e cópia preservada.
+// `extras` é opcional — pode trazer { datas: [...], n_ocorrencias: N, ... }
+// quando o call site tem metadados adicionais relevantes ao card.
+function renderDetalhesProveniencia(provenance, extras) {
+  if (!provenance) return "";
+  const sid = provenance.source_id || "";
+  const recId = provenance.source_record_id || "";
+  const runId = provenance.run_id || "";
+  const srcUrl = provenance.source_url || "";
+  const snapUrl = provenance.snapshot_url || "";
+  const ingFmt = provenance.ingested_at
+    ? formatarDataIngestao(provenance.ingested_at)
+    : "—";
+
+  let linhas = "";
+  linhas += `<div class="detalhes-row"><strong>Fonte:</strong> <span>${escaparHTML(labelFonte(sid))}</span></div>`;
+  linhas += `<div class="detalhes-row"><strong>ID do registro na fonte:</strong> <code>${escaparHTML(recId || '—')}</code></div>`;
+  linhas += `<div class="detalhes-row"><strong>Ingerido em:</strong> ${escaparHTML(ingFmt)}</div>`;
+  if (runId) {
+    linhas += `<div class="detalhes-row"><strong>Execução ETL:</strong> <code>${escaparHTML(runId)}</code></div>`;
+  }
+  if (extras && Array.isArray(extras.datas) && extras.datas.length) {
+    linhas += `<div class="detalhes-row"><strong>Datas das ocorrências:</strong> ${extras.datas.map(escaparHTML).join(', ')}</div>`;
+  }
+  if (extras && extras.n_ocorrencias != null) {
+    linhas += `<div class="detalhes-row"><strong>Ocorrências:</strong> ${escaparHTML(String(extras.n_ocorrencias))}</div>`;
+  }
+
+  let botoes = "";
+  if (srcUrl) {
+    botoes += `<a class="btn-fonte" href="${escaparHTML(srcUrl)}" target="_blank" rel="noopener noreferrer">&#128279; Ver fonte original</a>`;
+  }
+  if (snapUrl) {
+    botoes += `<a class="btn-fonte btn-fonte-snapshot" href="${escaparHTML(snapUrl)}" target="_blank" rel="noopener noreferrer">&#128247; Ver cópia preservada</a>`;
+  }
+  const botoesHtml = botoes ? `<div class="detalhes-botoes">${botoes}</div>` : "";
+
+  const explicacao = `<div class="detalhes-explicacao">Este dado foi extraído da fonte acima na data de ingestão. A "cópia preservada" é uma captura imutável do arquivo original — útil quando a fonte sai do ar ou muda.</div>`;
+
+  return `<div class="detalhes-proveniencia">${linhas}${botoesHtml}${explicacao}</div>`;
+}
+
 function renderChipFonte(provenance, variant) {
   // variant: undefined (default, card principal) | "sub" (sub-cards compactos).
   if (!provenance) return "";
@@ -1347,6 +1548,19 @@ function renderChipFonte(provenance, variant) {
   html += `</div>`;
   return html;
 }
+
+// Mutual exclusion: só um card de proveniência aberto por vez na página.
+// O evento `toggle` nativo de <details> NÃO faz bubble, por isso usamos
+// capture (`true`). Ao abrir um card, fecha os outros com a mesma classe.
+document.addEventListener('toggle', (e) => {
+  const t = e.target;
+  if (!(t instanceof HTMLElement)) return;
+  if (!t.matches('details.card-expandable')) return;
+  if (!t.open) return;
+  document.querySelectorAll('details.card-expandable[open]').forEach(el => {
+    if (el !== t) el.removeAttribute('open');
+  });
+}, true);
 
 // === NAVEGACAO ===
 function irPara(pageId, tabEl) {
@@ -1744,8 +1958,7 @@ function renderPerfil(d) {
         const pct = Math.round((pago / emp) * 100);
         statusHtml = `<div class="emenda-status warning">&#9888; Pago parcial (${pct}% do empenhado)</div>`;
       }
-      html += `<div class="emenda-card${cardCls}">
-        <div class="emenda-top">
+      const emendaInner = `<div class="emenda-top">
           <div class="emenda-funcao">${e.funcao}</div>
           <span class="emenda-tipo">${e.tipo}</span>
         </div>
@@ -1761,8 +1974,15 @@ function renderPerfil(d) {
         </div>
         ${statusHtml}
         ${e.municipio ? `<div class="emenda-local">&#128205; ${e.municipio}${e.uf ? ', '+e.uf : ''}</div>` : ''}
-        ${renderChipFonte(e.provenance, "sub")}
-      </div>`;
+        ${renderChipFonte(e.provenance, "sub")}`;
+      if (e.provenance) {
+        html += `<details class="emenda-card${cardCls} card-expandable">
+          <summary>${emendaInner}</summary>
+          ${renderDetalhesProveniencia(e.provenance)}
+        </details>`;
+      } else {
+        html += `<div class="emenda-card${cardCls}">${emendaInner}</div>`;
+      }
     });
     html += '</div></details></div>';
   }
@@ -1954,15 +2174,22 @@ function renderPerfil(d) {
         const cnpjStr = e.cnpj ? ` &middot; CNPJ ${e.cnpj}` : '';
         const nStr = e.n_doacoes > 1 ? ` &middot; ${e.n_doacoes} doações` : '';
         const chip = renderChipFonte(e.provenance, "sub");
-        h += `<div class="conexao-card" style="flex-wrap:wrap;">
-          <div class="conexao-icon empresa">${icone}</div>
+        const inner = `<div class="conexao-icon empresa">${icone}</div>
           <div class="conexao-info">
             <div class="conexao-nome">${e.nome}</div>
             <div class="conexao-rel">Repassou valor à campanha${cnpjStr}${nStr}</div>
           </div>
           <div class="conexao-valor">${e.valor_total_fmt}</div>
-          ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
-        </div>`;
+          ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
+        if (e.provenance) {
+          const extras = e.n_doacoes > 1 ? { n_ocorrencias: e.n_doacoes } : null;
+          h += `<details class="conexao-card card-expandable">
+            <summary>${inner}</summary>
+            ${renderDetalhesProveniencia(e.provenance, extras)}
+          </details>`;
+        } else {
+          h += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
+        }
       });
       h += '</div></details>';
       return h;
@@ -1982,15 +2209,22 @@ function renderPerfil(d) {
         const cpfStr = p.cpf_mascarado ? ` &middot; CPF ${p.cpf_mascarado}` : '';
         const nStr = p.n_doacoes > 1 ? ` &middot; ${p.n_doacoes} doações` : '';
         const chip = renderChipFonte(p.provenance, "sub");
-        html += `<div class="conexao-card" style="flex-wrap:wrap;">
-          <div class="conexao-icon pessoa">&#128100;</div>
+        const inner = `<div class="conexao-icon pessoa">&#128100;</div>
           <div class="conexao-info">
             <div class="conexao-nome">${p.nome}</div>
             <div class="conexao-rel">Doou para campanha${cpfStr}${nStr}</div>
           </div>
           <div class="conexao-valor">${p.valor_total_fmt}</div>
-          ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
-        </div>`;
+          ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
+        if (p.provenance) {
+          const extras = p.n_doacoes > 1 ? { n_ocorrencias: p.n_doacoes } : null;
+          html += `<details class="conexao-card card-expandable">
+            <summary>${inner}</summary>
+            ${renderDetalhesProveniencia(p.provenance, extras)}
+          </details>`;
+        } else {
+          html += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
+        }
       });
       html += '</div></details>';
     }
@@ -2017,15 +2251,21 @@ function renderPerfil(d) {
     d.socios.forEach(s => {
       const cnpjStr = s.cnpj ? ` &middot; CNPJ ${s.cnpj}` : '';
       const chip = renderChipFonte(s.provenance, "sub");
-      html += `<div class="conexao-card" style="flex-wrap:wrap;">
-        <div class="conexao-icon empresa">&#127970;</div>
+      const inner = `<div class="conexao-icon empresa">&#127970;</div>
         <div class="conexao-info">
           <div class="conexao-nome">${s.nome}</div>
           <div class="conexao-rel">Sócio(a)${cnpjStr}</div>
         </div>
         ${s.capital_social_fmt ? `<div class="conexao-valor">${s.capital_social_fmt}</div>` : ''}
-        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
-      </div>`;
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
+      if (s.provenance) {
+        html += `<details class="conexao-card card-expandable">
+          <summary>${inner}</summary>
+          ${renderDetalhesProveniencia(s.provenance)}
+        </details>`;
+      } else {
+        html += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
+      }
     });
     html += '</div></details></div>';
   }
@@ -2048,14 +2288,20 @@ function renderPerfil(d) {
         <div class="collapsible-body">`;
     d.familia.forEach(f => {
       const chip = renderChipFonte(f.provenance, "sub");
-      html += `<div class="conexao-card" style="flex-wrap:wrap;">
-        <div class="conexao-icon pessoa">&#128100;</div>
+      const inner = `<div class="conexao-icon pessoa">&#128100;</div>
         <div class="conexao-info">
           <div class="conexao-nome">${f.nome}</div>
           <div class="conexao-rel">${f.relacao}</div>
         </div>
-        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
-      </div>`;
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
+      if (f.provenance) {
+        html += `<details class="conexao-card card-expandable">
+          <summary>${inner}</summary>
+          ${renderDetalhesProveniencia(f.provenance)}
+        </details>`;
+      } else {
+        html += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
+      }
     });
     html += '</div></details></div>';
   }
@@ -2099,15 +2345,22 @@ function renderPerfil(d) {
       </div>`;
     d.contratos.forEach(c => {
       const chip = renderChipFonte(c.provenance, "sub");
-      html += `<div class="conexao-card" style="flex-wrap:wrap;">
-        <div class="conexao-icon contrato">&#128196;</div>
+      const inner = `<div class="conexao-icon contrato">&#128196;</div>
         <div class="conexao-info">
           <div class="conexao-nome">${c.objeto}</div>
           <div class="conexao-rel">${c.orgao || ''} ${c.data ? '- '+c.data : ''}</div>
         </div>
         <div class="conexao-valor">${c.valor_fmt}</div>
-        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
-      </div>`;
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
+      if (c.provenance) {
+        const extras = c.data ? { datas: [c.data] } : null;
+        html += `<details class="conexao-card card-expandable">
+          <summary>${inner}</summary>
+          ${renderDetalhesProveniencia(c.provenance, extras)}
+        </details>`;
+      } else {
+        html += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
+      }
     });
     html += '</div>';
   }

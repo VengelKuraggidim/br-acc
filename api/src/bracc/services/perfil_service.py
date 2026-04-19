@@ -65,6 +65,7 @@ from bracc.services.analise_service import (
     analisar_despesas_vs_cidadao,
     gerar_resumo_politico,
 )
+from bracc.services.common_helpers import archival_url
 from bracc.services.conexoes_service import classificar
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
@@ -159,7 +160,7 @@ def _extract_provenance(props: dict[str, Any]) -> ProvenanceBlock | None:
         source_url=str(popped["source_url"]),
         ingested_at=str(popped["ingested_at"]),
         run_id=str(popped["run_id"]),
-        snapshot_url=str(snapshot_uri) if snapshot_uri else None,
+        snapshot_url=archival_url(str(snapshot_uri) if snapshot_uri else None),
     )
 
 

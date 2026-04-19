@@ -72,10 +72,15 @@ class TestExtractProvenance:
         props = _stamped_props(source_snapshot_uri="pncp_go/2026-04/abcdef123456.json")
         block = _extract_provenance(props)
         assert block is not None
-        assert block.snapshot_url == "pncp_go/2026-04/abcdef123456.json"
+        # URI relativa é prefixada com ``/archival/`` pra que o browser
+        # resolva contra o endpoint que serve a cópia preservada.
+        assert block.snapshot_url == "/archival/pncp_go/2026-04/abcdef123456.json"
         # source_snapshot_uri popped off properties dict
         assert "source_snapshot_uri" not in props
-        assert block.model_dump()["snapshot_url"] == "pncp_go/2026-04/abcdef123456.json"
+        assert (
+            block.model_dump()["snapshot_url"]
+            == "/archival/pncp_go/2026-04/abcdef123456.json"
+        )
 
     def test_empty_source_snapshot_uri_treated_as_none(self) -> None:
         # Se alguém gravou string vazia por engano, tratamos como ausência.

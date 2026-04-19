@@ -14,6 +14,9 @@ Aqui ficam as versões públicas (sem underscore). Contrato estável:
   ``None`` ou parse falhar (nunca levanta).
 * :func:`norm_type` — lowercase seguro pra labels Neo4j (que vêm em
   PascalCase); ``""`` se a entrada não for string.
+* :func:`archival_url` — prefixa URIs relativas de snapshot archival com
+  ``/archival/`` pra que o browser bata no endpoint correto em vez de
+  cair no fallback do PWA.
 
 Funções puras, stateless, zero IO — seguem o padrão dos demais helpers
 da camada ``services/``.
@@ -75,3 +78,29 @@ def norm_type(target_type: Any) -> str:
     if not isinstance(target_type, str):
         return ""
     return target_type.lower()
+
+
+def archival_url(snapshot_uri: str | None) -> str | None:
+    """Reescreve URI relativa de snapshot pra caminho servido pelo nginx.
+
+    O loader carimba ``source_snapshot_uri`` como caminho content-addressed
+    relativo à raiz ``BRACC_ARCHIVAL_ROOT`` (ex.: ``tse_prestacao_contas/
+    2026-04/954b8a10119c.bin``). Serializar esse caminho cru no JSON faz o
+    browser resolver contra o origin da página — o link cai no fallback do
+    PWA em vez do arquivo. O nginx serve o diretório archival no prefixo
+    ``/archival/``; esta função garante que todo ``snapshot_url`` que sai da
+    API já venha com o prefixo correto.
+
+    Contrato:
+
+    * ``None`` / string vazia → ``None``.
+    * Já começa com ``http://``, ``https://`` ou ``/archival/`` → passa
+      sem alteração (pipelines podem gravar URLs absolutas em casos
+      excepcionais).
+    * Qualquer outra coisa → ``/archival/{uri.lstrip('/')}``.
+    """
+    if not snapshot_uri:
+        return None
+    if snapshot_uri.startswith(("http://", "https://", "/archival/")):
+        return snapshot_uri
+    return f"/archival/{snapshot_uri.lstrip('/')}"

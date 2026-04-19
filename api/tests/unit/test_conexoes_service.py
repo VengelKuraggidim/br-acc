@@ -816,7 +816,9 @@ class TestProvenanceSubRows:
         assert emenda.provenance is not None
         assert emenda.provenance.source_id == "tse_prestacao_contas"
         assert emenda.provenance.source_record_id == "REC-123"
-        assert emenda.provenance.snapshot_url == _PROV_COMPLETO["source_snapshot_uri"]
+        assert emenda.provenance.snapshot_url == (
+            f"/archival/{_PROV_COMPLETO['source_snapshot_uri']}"
+        )
 
     def test_emenda_sem_campos_obrigatorios_vira_none(self) -> None:
         """Nó legado sem os 4 campos obrigatórios → ``provenance=None``."""
@@ -1028,7 +1030,9 @@ class TestProvenanceSubRows:
         assert s.provenance.source_id == "tse_prestacao_contas"
         # PJ preserva source_record_id (sem risco LGPD).
         assert s.provenance.source_record_id == "REC-123"
-        assert s.provenance.snapshot_url == _PROV_COMPLETO["source_snapshot_uri"]
+        assert s.provenance.snapshot_url == (
+            f"/archival/{_PROV_COMPLETO['source_snapshot_uri']}"
+        )
 
     def test_socio_sem_campos_obrigatorios_vira_none(self) -> None:
         """Nó legado sem os 4 campos obrigatórios → ``provenance=None``."""
@@ -1146,7 +1150,9 @@ class TestProvenanceSubRows:
         assert c.provenance.source_id == "tse_prestacao_contas"
         # ID de contrato é público — preserva source_record_id.
         assert c.provenance.source_record_id == "REC-123"
-        assert c.provenance.snapshot_url == _PROV_COMPLETO["source_snapshot_uri"]
+        assert c.provenance.snapshot_url == (
+            f"/archival/{_PROV_COMPLETO['source_snapshot_uri']}"
+        )
 
     def test_contrato_go_procurement_com_provenance(self) -> None:
         """Nó :Go_procurement também carrega provenance."""
@@ -1184,6 +1190,240 @@ class TestProvenanceSubRows:
         }
         resultado = classificar(conexoes, entidades, POLITICO_ID)
         assert resultado.contratos[0].provenance is None
+
+
+# --- Provenance: preferir rel :DOOU, cair no nó só como fallback -----------
+
+
+_PROV_REL = {
+    "source_id": "tse_prestacao_contas",
+    "source_record_id": "DON-REL-42",
+    "source_url": "https://divulgacandcontas.tse.jus.br/.../doacao/DON-REL-42",
+    "ingested_at": "2026-04-19T00:00:00+00:00",
+    "run_id": "tse_prestacao_contas_20260419000000",
+    "source_snapshot_uri": "tse_prestacao_contas/2026-04/doacao42.json",
+}
+
+_PROV_NODE = {
+    "source_id": "tse_prestacao_contas",
+    "source_record_id": "NODE-REC-9",
+    "source_url": "https://divulgacandcontas.tse.jus.br/.../doador/NODE-REC-9",
+    "ingested_at": "2026-04-10T00:00:00+00:00",
+    "run_id": "tse_prestacao_contas_20260410000000",
+    "source_snapshot_uri": "tse_prestacao_contas/2026-04/doador9.json",
+}
+
+
+class TestProvenanceRelDoou:
+    """FIX: ler proveniência da relação :DOOU e não só do nó doador.
+
+    Pipeline TSE (:func:`attach_provenance` em ``rel_row``) carimba a rel
+    — cada doação tem o seu próprio record_id/ingested_at/run_id. Antes
+    deste fix, o service lia só de ``target_props`` e todas as ~30
+    doações de um político mostravam chip vazio (ou o mesmo de 1 só).
+    """
+
+    def test_pj_prov_na_rel_no_sem_prov_chip_aparece(self) -> None:
+        """Doador PJ cujo nó não tem prov mas a rel tem → chip da rel."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 5_000.0, **_PROV_REL},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "11222333000181",
+                    "razao_social": "ACME LTDA",
+                    # Sem proveniência no nó — legado.
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.provenance is not None
+        assert d.provenance.source_id == "tse_prestacao_contas"
+        # Campos vieram da REL, não do nó.
+        assert d.provenance.source_record_id == "DON-REL-42"
+        assert d.provenance.ingested_at == "2026-04-19T00:00:00+00:00"
+        assert d.provenance.run_id == "tse_prestacao_contas_20260419000000"
+
+    def test_pf_prov_na_rel_no_sem_prov_chip_aparece_sem_record_id(self) -> None:
+        """Doador PF cujo nó não tem prov mas a rel tem → chip, record_id dropado."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 200.0, **_PROV_REL},
+            ),
+        ]
+        entidades = {
+            "pes_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "11122233344",
+                    "name": "Doador PF Legado",
+                    # Sem proveniência no nó.
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_pessoa[0]
+        assert d.provenance is not None
+        assert d.provenance.source_id == "tse_prestacao_contas"
+        assert d.provenance.ingested_at == "2026-04-19T00:00:00+00:00"
+        # LGPD: record_id forçado a None (pode carregar CPF no TSE).
+        assert d.provenance.source_record_id is None
+
+    def test_pj_prov_no_no_sem_na_rel_fallback_chip_aparece(self) -> None:
+        """Doador cujo nó TEM prov mas rel não → chip com campos do nó (fallback)."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 1_000.0},  # Sem provenance na rel.
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "99999999000199",
+                    "razao_social": "Legado com Prov no Nó",
+                    **_PROV_NODE,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.provenance is not None
+        # Fallback pro nó: record_id do nó.
+        assert d.provenance.source_record_id == "NODE-REC-9"
+        assert d.provenance.ingested_at == "2026-04-10T00:00:00+00:00"
+
+    def test_pj_rel_prevalece_sobre_no(self) -> None:
+        """Rel e nó ambos têm prov → prevalece o da rel (mais específico)."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 2_500.0, **_PROV_REL},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "33444555000166",
+                    "razao_social": "Dupla Prov",
+                    **_PROV_NODE,  # Nó também tem prov (mais antigo).
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.provenance is not None
+        # Rel venceu — record_id e ingested_at são da aresta.
+        assert d.provenance.source_record_id == "DON-REL-42"
+        assert d.provenance.ingested_at == "2026-04-19T00:00:00+00:00"
+        # E o snapshot_url veio da rel (e foi prefixado via archival_url).
+        assert d.provenance.snapshot_url == (
+            "/archival/tse_prestacao_contas/2026-04/doacao42.json"
+        )
+
+    def test_pf_rel_prevalece_sobre_no_com_drop_record_id(self) -> None:
+        """Dupla prov em PF: rel vence, record_id ainda é dropado (LGPD)."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 750.0, **_PROV_REL},
+            ),
+        ]
+        entidades = {
+            "pes_1": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "55566677788",
+                    "name": "Doador Dupla Prov",
+                    **_PROV_NODE,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_pessoa[0]
+        assert d.provenance is not None
+        # ingested_at da rel (mais recente) — garante que prov_ingested
+        # usado na agregação vem da mesma fonte que prov_block.
+        assert d.provenance.ingested_at == "2026-04-19T00:00:00+00:00"
+        assert d.provenance.source_record_id is None
+
+    def test_agregacao_escolhe_doacao_mais_recente_entre_rels(self) -> None:
+        """2 doações pro mesmo CNPJ, cada uma com prov na rel → fica a mais recente."""
+        prov_antiga = dict(_PROV_REL)
+        prov_antiga["source_record_id"] = "DON-REL-ANTIGA"
+        prov_antiga["ingested_at"] = "2026-03-01T00:00:00+00:00"
+        prov_nova = dict(_PROV_REL)
+        prov_nova["source_record_id"] = "DON-REL-NOVA"
+        prov_nova["ingested_at"] = "2026-04-19T00:00:00+00:00"
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 1_000.0, **prov_antiga},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 3_000.0, **prov_nova},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {"cnpj": "77788899000100", "razao_social": "Doadora"},
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.n_doacoes == 2
+        assert d.valor_total == 4_000.0
+        # Agregação escolheu o bloco da rel mais recente — consistente
+        # com o ingested_at que guiou a agregação.
+        assert d.provenance is not None
+        assert d.provenance.source_record_id == "DON-REL-NOVA"
+        assert d.provenance.ingested_at == "2026-04-19T00:00:00+00:00"
+
+    def test_snapshot_url_prefixado_nas_7_categorias(self) -> None:
+        """Sanity: ``snapshot_url`` de ``Emenda`` (nó com prov) vem com prefixo."""
+        conexoes = [_conn(rel_type="AUTOR_EMENDA", target_id="em_1")]
+        entidades = {
+            "em_1": {
+                "type": "Amendment",
+                "properties": {
+                    "amendment_id": "EM-PREF",
+                    "type": "individual",
+                    "function": "saude",
+                    **_PROV_REL,
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        emenda = resultado.emendas[0]
+        assert emenda.provenance is not None
+        assert emenda.provenance.snapshot_url == (
+            "/archival/tse_prestacao_contas/2026-04/doacao42.json"
+        )
 
 
 # --- Cypher query sanity check ----------------------------------------------

@@ -79,7 +79,7 @@ from bracc.models.perfil import (
     FamiliarConectado,
     SocioConectado,
 )
-from bracc.services.common_helpers import as_float, as_str, norm_type
+from bracc.services.common_helpers import archival_url, as_float, as_str, norm_type
 from bracc.services.formatacao_service import fmt_brl, mascarar_cpf
 from bracc.services.traducao_service import (
     traduzir_funcao_emenda,
@@ -121,8 +121,9 @@ def _provenance_from_props(
     Returns
     -------
     ProvenanceBlock | None
-        Bloco populado (com ``snapshot_url`` opt-in) ou ``None`` pra
-        dados legados.
+        Bloco populado (com ``snapshot_url`` opt-in, já prefixado via
+        :func:`archival_url` quando relativo) ou ``None`` pra dados
+        legados.
     """
     for required in _PROV_REQUIRED:
         if not props.get(required):
@@ -139,8 +140,56 @@ def _provenance_from_props(
         source_url=str(props["source_url"]),
         ingested_at=str(props["ingested_at"]),
         run_id=str(props["run_id"]),
-        snapshot_url=str(snapshot_raw) if snapshot_raw else None,
+        snapshot_url=archival_url(str(snapshot_raw) if snapshot_raw else None),
     )
+
+
+def _provenance_with_ingested(
+    rel_props: dict[str, Any],
+    target_props: dict[str, Any],
+    *,
+    drop_record_id: bool = False,
+) -> tuple[ProvenanceBlock | None, str | None]:
+    """Escolhe a proveniência da rel (preferencial) ou do nó (fallback).
+
+    Pipelines como ``tse_prestacao_contas_go`` carimbam proveniência na
+    relação ``:DOOU`` — o record_id aponta pro registro único da doação,
+    e a ``ingested_at`` reflete a ingestão daquela aresta específica.
+    Ler só do nó target (``:Person`` / ``:Company``) colapsa todas as
+    doações do doador num único registro de proveniência: só a primeira
+    ou a última vista leva o chip.
+
+    Regra: se ``rel_props`` traz os 4 campos obrigatórios, é a fonte
+    preferida (mais específica). Caso contrário cai pra ``target_props``.
+    O timestamp ``ingested_at`` retornado vem sempre da **mesma fonte**
+    que o bloco — misturar (bloco da rel + timestamp do nó) quebraria a
+    agregação por "doação mais recente" em ``classificar``.
+
+    Parameters
+    ----------
+    rel_props:
+        Props da aresta (``conn["properties"]``).
+    target_props:
+        Props do nó alvo.
+    drop_record_id:
+        Forwarded para :func:`_provenance_from_props` — LGPD pra PF.
+
+    Returns
+    -------
+    tuple[ProvenanceBlock | None, str | None]
+        ``(bloco, ingested_at)`` — ``(None, None)`` se nenhum dos dois
+        lados tem os 4 campos obrigatórios.
+    """
+    rel_block = _provenance_from_props(rel_props, drop_record_id=drop_record_id)
+    if rel_block is not None:
+        return rel_block, as_str(rel_props, "ingested_at")
+    node_block = _provenance_from_props(
+        target_props,
+        drop_record_id=drop_record_id,
+    )
+    if node_block is not None:
+        return node_block, as_str(target_props, "ingested_at")
+    return None, None
 
 
 @dataclass
@@ -334,10 +383,9 @@ def classificar(
         # --- 2. Doadores (DOOU inbound; político = target) ----------------
         if rel_type == "DOOU" and not politico_is_source:
             valor = _valor_doacao(rel_props)
-            # Proveniência da DOAÇÃO: preferimos o nó da doação (que é
-            # quem tem o record_id do TSE), mas quando o target é a
-            # pessoa/empresa o mesmo nó carrega tb os campos de
-            # proveniência carimbados pelo loader em ``attach_provenance``.
+            # Proveniência da DOAÇÃO: preferida na rel :DOOU (onde o
+            # pipeline TSE carimba 1 registro por doação), com fallback
+            # nos ``target_props`` do nó doador pra legados.
             if target_type == "company":
                 cnpj = as_str(target_props, "cnpj")
                 # Gotcha do audit: CNPJ ausente → usa element_id como chave
@@ -346,11 +394,12 @@ def classificar(
                 situacao, _fmt, verified_at = _situacao_from_props(
                     target_props,
                 )
-                prov_block = _provenance_from_props(target_props)
-                prov_ingested = (
-                    as_str(target_props, "ingested_at")
-                    if prov_block is not None
-                    else None
+                # Proveniência da DOAÇÃO individual: ler da rel :DOOU
+                # (pipeline TSE carimba 1 registro por doação na aresta).
+                # Fallback pro nó apenas quando a rel estiver sem os
+                # campos obrigatórios — mantém legados fluindo.
+                prov_block, prov_ingested = _provenance_with_ingested(
+                    rel_props, target_props,
                 )
                 emp_acc = doacoes_empresa.setdefault(
                     chave,
@@ -395,16 +444,14 @@ def classificar(
                 # descartada depois) se existir; senão o mascarado; senão o
                 # element_id pra preservar identidade do nó.
                 chave = cpf_pleno or cpf_mascarado or f"pessoa_{target_id}"
+                # Proveniência da DOAÇÃO individual: idem empresa, ler da
+                # rel :DOOU primeiro (mais específica) e cair no nó só
+                # quando a rel estiver sem os 4 campos obrigatórios.
                 # LGPD: drop_record_id=True — no TSE o source_record_id do
                 # doador PF pode ser o próprio CPF. Surfar isso no chip
                 # vazaria o que já mascaramos em ``cpf_mascarado``.
-                prov_block = _provenance_from_props(
-                    target_props, drop_record_id=True,
-                )
-                prov_ingested = (
-                    as_str(target_props, "ingested_at")
-                    if prov_block is not None
-                    else None
+                prov_block, prov_ingested = _provenance_with_ingested(
+                    rel_props, target_props, drop_record_id=True,
                 )
                 pes_acc = doacoes_pessoa.setdefault(
                     chave,

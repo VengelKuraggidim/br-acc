@@ -16,6 +16,7 @@ from bracc.models.entity import (
     TimelineEvent,
     TimelineResponse,
 )
+from bracc.services.common_helpers import archival_url
 from bracc.services.intelligence_provider import IntelligenceProvider
 from bracc.services.neo4j_service import execute_query, execute_query_single, sanitize_props
 from bracc.services.public_guard import (
@@ -73,7 +74,7 @@ def _extract_provenance(props: dict[str, Any]) -> ProvenanceBlock | None:
         source_url=str(popped["source_url"]),
         ingested_at=str(popped["ingested_at"]),
         run_id=str(popped["run_id"]),
-        snapshot_url=str(snapshot_uri) if snapshot_uri else None,
+        snapshot_url=archival_url(str(snapshot_uri) if snapshot_uri else None),
     )
 
 
