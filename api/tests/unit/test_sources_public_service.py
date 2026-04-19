@@ -7,6 +7,7 @@ import pytest
 
 from bracc.services import sources_public_service
 from bracc.services.sources_public_service import (
+    _derive_live_badge,
     build_public_sources,
     build_public_sources_grouped,
     get_copy_path,
@@ -103,6 +104,8 @@ class TestBuildPublicSources:
         assert result[0]["category_label"] == "Cadastro de empresas"
         assert result[0]["copy_disponivel"] is True
         assert result[0]["arquivos_exemplo"] == ["ZIP"]
+        # Sem live => badge "sem_dados" por default
+        assert result[0]["live"]["badge"] == "sem_dados"
 
     def test_inclui_tces_e_portais_de_outros_estados(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -195,6 +198,63 @@ class TestBuildPublicSourcesGrouped:
         # Fonte fora do mapping cai em fallback title-case
         cadastro = next(g for g in grupos if g["category_label"] == "Cadastro de empresas")
         assert {s["id"] for s in cadastro["sources"]} == {"cnpj", "brasilapi_cnpj"}
+
+
+class TestDeriveLiveBadge:
+    def test_sem_dados_quando_sem_statuses(self) -> None:
+        assert _derive_live_badge([], 0) == "sem_dados"
+
+    def test_com_dados_quando_loaded_e_rows(self) -> None:
+        assert _derive_live_badge(["loaded"], 1000) == "com_dados"
+        assert _derive_live_badge(["loaded", "running"], 42) == "com_dados"
+
+    def test_parcial_quando_loaded_mas_zero_rows(self) -> None:
+        assert _derive_live_badge(["loaded"], 0) == "parcial"
+
+    def test_parcial_quando_running(self) -> None:
+        assert _derive_live_badge(["running"], 0) == "parcial"
+
+    def test_falhou_quando_quality_fail_sem_loaded(self) -> None:
+        assert _derive_live_badge(["quality_fail"], 0) == "falhou"
+
+    def test_com_dados_vence_quality_fail(self) -> None:
+        """Se uma run anterior carregou, falha posterior não apaga o badge."""
+        assert _derive_live_badge(["loaded", "quality_fail"], 500) == "com_dados"
+
+
+class TestBuildPublicSourcesComLive:
+    def test_hidrata_live_status(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _write_registry(
+            tmp_path,
+            [
+                "cnpj,Receita,identity,P0,loaded,implemented,loaded,monthly,true,"
+                "https://x,cnpj,A,file,,,,,,,healthy",
+                "dou,DOU,gazette,P0,not_loaded,implemented,not_loaded,daily,true,"
+                "https://x,dou,A,file,,,,,,,healthy",
+            ],
+        )
+        copy = _write_copy(tmp_path, {})
+        monkeypatch.setenv("BRACC_SOURCE_REGISTRY_PATH", str(registry))
+        monkeypatch.setenv("BRACC_SOURCES_COPY_PATH", str(copy))
+        live = {
+            "cnpj": {
+                "runs": 2,
+                "last_run_at": "2026-04-18T00:00:00Z",
+                "rows_loaded": 50000,
+                "statuses": ["loaded"],
+                "badge": "com_dados",
+            }
+        }
+        result = build_public_sources(live)
+        by_id = {s["id"]: s for s in result}
+        assert by_id["cnpj"]["live"]["badge"] == "com_dados"
+        assert by_id["cnpj"]["live"]["rows_loaded"] == 50000
+        # dou sem entry em live => fallback
+        assert by_id["dou"]["live"]["badge"] == "sem_dados"
+        assert by_id["dou"]["live"]["runs"] == 0
+        assert by_id["dou"]["declared_load_state"] == "not_loaded"
 
 
 def test_production_copy_loads() -> None:

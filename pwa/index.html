@@ -1036,6 +1036,42 @@
       border-radius: 6px;
       margin-right: 4px;
     }
+    .fonte-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+    .fonte-badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .fonte-badge.com-dados { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .fonte-badge.com-dados .fonte-badge-dot { background: #22c55e; }
+    .fonte-badge.parcial { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .fonte-badge.parcial .fonte-badge-dot { background: #f59e0b; }
+    .fonte-badge.falhou { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .fonte-badge.falhou .fonte-badge-dot { background: #ef4444; }
+    .fonte-badge.sem-dados { background: var(--bg-secondary); color: var(--text-dim); }
+    .fonte-badge.sem-dados .fonte-badge-dot { background: var(--text-dim); }
+    .fonte-live-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 8px;
+      padding: 8px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      line-height: 1.5;
+    }
+    .fonte-live-meta strong { color: var(--text-secondary); font-weight: 600; }
     .fonte-item-corpo {
       padding: 6px 12px 12px 12px;
       border-top: 1px solid var(--border);
@@ -2167,8 +2203,48 @@ function renderFontes(grupos) {
   `).join("");
 }
 
+const BADGE_LABEL = {
+  com_dados: "Com dados",
+  parcial: "Parcial",
+  falhou: "Falha",
+  sem_dados: "Sem dados",
+};
+const BADGE_CLASS = {
+  com_dados: "com-dados",
+  parcial: "parcial",
+  falhou: "falhou",
+  sem_dados: "sem-dados",
+};
+
+function renderFonteBadge(badge) {
+  const key = badge || "sem_dados";
+  const label = BADGE_LABEL[key] || BADGE_LABEL.sem_dados;
+  const cls = BADGE_CLASS[key] || BADGE_CLASS.sem_dados;
+  return `<span class="fonte-badge ${cls}"><span class="fonte-badge-dot"></span>${label}</span>`;
+}
+
+function renderFonteLiveMeta(live) {
+  if (!live || live.badge === "sem_dados") {
+    return `<div class="fonte-live-meta">Pipeline catalogada, mas ainda não rodou no grafo.</div>`;
+  }
+  const rows = (live.rows_loaded || 0).toLocaleString("pt-BR");
+  const lastIso = live.last_run_at || "";
+  const lastFmt = lastIso ? formatarDataIngestao(lastIso) : "—";
+  const partes = [];
+  partes.push(`<strong>Última execução:</strong> ${escaparHTML(lastFmt)}`);
+  partes.push(`<strong>Linhas carregadas:</strong> ${rows}`);
+  partes.push(`<strong>Runs:</strong> ${live.runs || 0}`);
+  if (live.statuses && live.statuses.length) {
+    partes.push(`<strong>Status:</strong> ${live.statuses.map(escaparHTML).join(", ")}`);
+  }
+  return `<div class="fonte-live-meta">${partes.join(" &middot; ")}</div>`;
+}
+
 function renderFonteItem(s) {
   const sigla = s.sigla_full || s.name || s.id;
+  const live = s.live || {};
+  const badge = renderFonteBadge(live.badge);
+  const liveMeta = renderFonteLiveMeta(live);
   const oQueE = s.o_que_e
     ? `<div class="fonte-bloco"><div class="fonte-bloco-rotulo">O que é</div><p>${escaparHTML(s.o_que_e)}</p></div>`
     : "";
@@ -2189,6 +2265,7 @@ function renderFonteItem(s) {
     <details class="fonte-item">
       <summary>
         <span class="fonte-sigla">${escaparHTML(sigla)}</span>
+        ${badge}
         <span class="fonte-id">${escaparHTML(s.id)}</span>
       </summary>
       <div class="fonte-item-corpo">
@@ -2196,6 +2273,7 @@ function renderFonteItem(s) {
         ${oQuePegamos}
         ${porQueImporta}
         ${arquivosBloco}
+        ${liveMeta}
         ${linkFonte}
       </div>
     </details>

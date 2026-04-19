@@ -8,7 +8,10 @@ from bracc.dependencies import get_session
 from bracc.services.neo4j_service import execute_query, execute_query_single
 from bracc.services.public_guard import should_hide_person_entities
 from bracc.services.source_registry import load_source_registry, source_registry_summary
-from bracc.services.sources_public_service import build_public_sources_grouped
+from bracc.services.sources_public_service import (
+    build_public_sources_grouped,
+    load_live_source_status,
+)
 
 router = APIRouter(prefix="/api/v1/meta", tags=["meta"])
 
@@ -141,10 +144,19 @@ async def list_sources() -> dict[str, list[dict[str, Any]]]:
 
 
 @router.get("/sources/publico")
-async def list_public_sources() -> dict[str, list[dict[str, Any]]]:
+async def list_public_sources(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, list[dict[str, Any]]]:
     """Lista fontes com copy pedagógico pt-BR, agrupadas por categoria.
 
-    Consumido pela aba 'Fontes' na PWA. TCEs de outros estados e portais
-    estaduais fora-de-GO são filtrados (escopo Fiscal Cidadão é Goiás).
+    Hidratada com status live do grafo: cada fonte ganha um bloco ``live``
+    com ``badge`` (com_dados/parcial/falhou/sem_dados), ``last_run_at``,
+    ``rows_loaded`` e ``runs``. O badge é derivado de IngestionRun agregado
+    no Neo4j — atualiza sozinho conforme pipelines rodam (cache 5min).
+
+    Consumido pela aba 'Fontes' na PWA. Exclui pipelines de enriquecimento
+    interno (entity_resolution, propagacao_fotos) — são derivações, não
+    fontes externas.
     """
-    return {"grupos": build_public_sources_grouped()}
+    live = await load_live_source_status(session)
+    return {"grupos": build_public_sources_grouped(live)}
