@@ -3,14 +3,14 @@
 > Fork re-scoped to Goiás. Derived from [`brunoclz/br-acc`](https://github.com/brunoclz/br-acc) (AGPL v3). Goiás-specific pipelines (`camara_goiania`, `folha_go`, `mides`, SIOP GO transfers, etc.) are the priority; federal sources are kept where they add context for GO-based entities.
 
 <!-- SOURCE_SUMMARY_START -->
-**Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-19T05:18:28Z)**
+**Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-19T07:34:06Z)**
 
 - Universe v1 sources: 127
 - Implemented pipelines: 68
-- Loaded sources (load_state=loaded): 41
+- Loaded sources (load_state=loaded): 40
 - Partial sources (load_state=partial): 19
-- Not loaded sources (load_state=not_loaded): 67
-- Status counts: loaded=41, partial=10, stale=3, blocked_external=1, not_built=59
+- Not loaded sources (load_state=not_loaded): 68
+- Status counts: loaded=40, partial=10, stale=3, blocked_external=2, not_built=59
 <!-- SOURCE_SUMMARY_END -->
 
 
