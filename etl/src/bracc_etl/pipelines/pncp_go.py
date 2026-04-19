@@ -495,6 +495,12 @@ class PncpGoPipeline(Pipeline):
 
         logger.info("Total raw GO procurement records: %d", len(records))
         self._raw_records = records
+        # Denominador do funil: total de registros brutos da fonte, antes da
+        # normalizacao/dedup/skip por CNPJ ou valor zero. Mantem consistencia
+        # com o padrao dos outros pipelines (transparencia/tse/cvm) — sem
+        # isto, IngestionRun reporta rows_in=0 mesmo com carga bem-sucedida,
+        # cegando o operador sobre a saude da ingestao.
+        self.rows_in = len(records)
 
     # ------------------------------------------------------------------
     # Transform
@@ -656,6 +662,11 @@ class PncpGoPipeline(Pipeline):
         ]
         count = loader.load_nodes("GoProcurement", procurement_nodes, key_field="procurement_id")
         logger.info("Loaded %d GoProcurement nodes", count)
+        # Numerador do funil: procurements carregadas (fato primario desta
+        # fonte). Rels CONTRATOU_GO / FORNECEU_GO e Company (agencias/
+        # fornecedores) sao derivadas — nao contam no rows_loaded pra
+        # nao inflacionar artificialmente a metrica (padrao transparencia.py).
+        self.rows_loaded += count
 
         # Ensure Company nodes exist for contracting agencies. Use the raw
         # CNPJ digits as record_id (natural key for the Company entity).
