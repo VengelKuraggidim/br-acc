@@ -11,7 +11,25 @@ Todo deploy roda por:
   bash scripts/deploy/deploy_all.sh <flags>
 
 ----------------------------------------------------------------
- O QUE FLAG RODAR EM CADA CASO
+ MAIS COMUM: NÃO SEI O QUE MUDOU
+----------------------------------------------------------------
+
+  bash scripts/deploy/deploy_all.sh
+
+  (sem flags = --auto)
+
+Compara arquivos locais com o último deploy (arquivo .last-deploy,
+gitignored) e detecta se pwa/ ou api/ mudaram. Deploya só o que
+mudou. Se nada mudou, termina em segundos avisando.
+
+Caveat: --graph NÃO é detectado automaticamente. Por quê?
+Mudança em etl/src/ só significa "código novo do pipeline", mas
+pra Aura precisar ser atualizada o pipeline tem que ter SIDO
+RODADO. Se você re-ingeriu dados, passe --graph explícito:
+  bash scripts/deploy/deploy_all.sh --auto --graph
+
+----------------------------------------------------------------
+ O QUE FLAG RODAR EM CADA CASO (se quiser controle)
 ----------------------------------------------------------------
 
 Mudei arquivo do site (pwa/index.html, sw.js, manifest.json):
