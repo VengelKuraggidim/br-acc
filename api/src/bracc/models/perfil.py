@@ -82,6 +82,23 @@ class EmpresaConectada(BaseModel):
     situacao_verified_at: str | None = None
 
 
+class DoacaoItem(BaseModel):
+    """Uma doação individual (linha do CSV TSE) dentro de um doador agregado.
+
+    Cada item carrega valor + data + proveniência da doação específica.
+    Ordenado cronologicamente por ``data_doacao`` (ISO → ordenação
+    lexicográfica) quando emitido na lista ``doacoes`` dos modelos doador.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    valor: float
+    valor_fmt: str
+    data_doacao: str | None = None
+    data_doacao_fmt: str | None = None
+    provenance: ProvenanceBlock | None = None
+
+
 class DoadorEmpresa(BaseModel):
     """Pessoa jurídica agregada por CNPJ que doou para a campanha.
 
@@ -94,6 +111,17 @@ class DoadorEmpresa(BaseModel):
     ``ingested_at``. ``None`` quando nenhuma das doações agregadas trouxe
     os 4 campos obrigatórios (``source_id``/``source_url``/``ingested_at``/
     ``run_id``).
+
+    ``data_primeira_doacao``/``data_ultima_doacao`` são ISO ``YYYY-MM-DD``
+    do menor/maior ``donated_at`` visto entre as doações agregadas. ``None``
+    quando nenhuma doação trouxe a data (legado pré-DT_RECEITA). ``*_fmt``
+    é o mesmo valor em ``DD/MM/YYYY`` pra display direto no PWA.
+
+    ``doacoes`` é a lista detalhada de :class:`DoacaoItem` — uma entry por
+    linha do CSV TSE — ordenada por data. Permite ao PWA expandir o card e
+    mostrar "DD/MM/YYYY — R$ X · Ver fonte" pra cada doação com rastreio
+    individual. Vazia quando o pipeline fonte não carimbou ``donated_at``
+    (legado pré-DT_RECEITA).
     """
 
     model_config = _PERFIL_MODEL_CONFIG
@@ -106,6 +134,11 @@ class DoadorEmpresa(BaseModel):
     situacao: str | None = None
     situacao_fmt: str | None = None
     situacao_verified_at: str | None = None
+    data_primeira_doacao: str | None = None
+    data_primeira_doacao_fmt: str | None = None
+    data_ultima_doacao: str | None = None
+    data_ultima_doacao_fmt: str | None = None
+    doacoes: list[DoacaoItem] = []
     provenance: ProvenanceBlock | None = None
 
 
@@ -121,6 +154,8 @@ class DoadorPessoa(BaseModel):
     normalmente é o CPF do doador, e surfar isso no chip de fonte violaria
     a máscara de CPF que o service aplica no próprio ``cpf_mascarado``. O
     restante dos campos (URLs públicas, timestamps, run_id) é preservado.
+
+    Campos de data seguem a mesma semântica de :class:`DoadorEmpresa`.
     """
 
     model_config = _PERFIL_MODEL_CONFIG
@@ -130,6 +165,11 @@ class DoadorPessoa(BaseModel):
     valor_total: float
     valor_total_fmt: str
     n_doacoes: int
+    data_primeira_doacao: str | None = None
+    data_primeira_doacao_fmt: str | None = None
+    data_ultima_doacao: str | None = None
+    data_ultima_doacao_fmt: str | None = None
+    doacoes: list[DoacaoItem] = []
     provenance: ProvenanceBlock | None = None
 
 

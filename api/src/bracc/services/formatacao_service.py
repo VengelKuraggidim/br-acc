@@ -68,3 +68,23 @@ def nomear_mes(mes: int | None) -> str:
     if mes is None:
         return ""
     return _MESES.get(mes, str(mes))
+
+
+def fmt_data_br(iso: str | None) -> str | None:
+    """Converte data ISO ``YYYY-MM-DD`` (ou ``YYYY-MM-DDTHH:MM:SS``) em
+    ``DD/MM/YYYY`` para exibição.
+
+    Retorna ``None`` quando a entrada é ``None``, vazia, ou não começa com
+    um prefixo ``YYYY-MM-DD`` válido — evita surfar strings quebradas no
+    UI e mantém paridade com ``provenance.ingested_at`` (ISO 8601).
+    """
+    if not iso:
+        return None
+    # Aceita prefixo "YYYY-MM-DD" no começo (pode vir com hora depois).
+    head = iso[:10]
+    if len(head) != 10 or head[4] != "-" or head[7] != "-":
+        return None
+    yyyy, mm, dd = head[:4], head[5:7], head[8:10]
+    if not (yyyy.isdigit() and mm.isdigit() and dd.isdigit()):
+        return None
+    return f"{dd}/{mm}/{yyyy}"

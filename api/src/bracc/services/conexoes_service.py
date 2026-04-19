@@ -72,6 +72,7 @@ from typing import Any
 from bracc.models.entity import ProvenanceBlock
 from bracc.models.perfil import (
     ContratoConectado,
+    DoacaoItem,
     DoadorEmpresa,
     DoadorPessoa,
     Emenda,
@@ -80,7 +81,7 @@ from bracc.models.perfil import (
     SocioConectado,
 )
 from bracc.services.common_helpers import archival_url, as_float, as_str, norm_type
-from bracc.services.formatacao_service import fmt_brl, mascarar_cpf
+from bracc.services.formatacao_service import fmt_brl, fmt_data_br, mascarar_cpf
 from bracc.services.traducao_service import (
     traduzir_funcao_emenda,
     traduzir_relacao,
@@ -219,6 +220,12 @@ class _DoacaoEmpresaAcc:
     agregado publicado vai carregar a última ingestão disponível do TSE
     (razoável porque é o mesmo doador com doações que podem ter vindo de
     batches diferentes).
+
+    ``data_primeira_iso``/``data_ultima_iso`` acompanham o min/max do
+    ``donated_at`` (ISO YYYY-MM-DD) carimbado pelos pipelines TSE nas rels
+    ``:DOOU``. Comparação lexicográfica ISO equivale a cronológica.
+    ``None`` quando nenhuma das rels agregadas trouxe ``donated_at``
+    (legado pré-DT_RECEITA).
     """
 
     nome: str
@@ -229,6 +236,9 @@ class _DoacaoEmpresaAcc:
     situacao_verified_at: str | None = None
     provenance: ProvenanceBlock | None = None
     provenance_ingested_at: str | None = None
+    data_primeira_iso: str | None = None
+    data_ultima_iso: str | None = None
+    doacoes: list[DoacaoItem] = field(default_factory=list)
 
 
 @dataclass
@@ -245,6 +255,9 @@ class _DoacaoPessoaAcc:
     n: int = 0
     provenance: ProvenanceBlock | None = None
     provenance_ingested_at: str | None = None
+    data_primeira_iso: str | None = None
+    data_ultima_iso: str | None = None
+    doacoes: list[DoacaoItem] = field(default_factory=list)
 
 
 def _valor_doacao(rel_props: dict[str, Any] | None) -> float:
@@ -255,6 +268,17 @@ def _valor_doacao(rel_props: dict[str, Any] | None) -> float:
     if raw is None:
         raw = rel_props.get("amount")
     return as_float(raw)
+
+
+def _donated_at_iso(rel_props: dict[str, Any]) -> str | None:
+    """Extrai ``donated_at`` da rel :DOOU. ``None`` quando vazio/ausente.
+
+    Carimbado pelos pipelines TSE com ``parse_date`` → ISO ``YYYY-MM-DD``
+    ou string vazia. Rels legadas (pré-DT_RECEITA) não têm o campo — o
+    service aceita silenciosamente e o agregado fica ``None``.
+    """
+    raw = as_str(rel_props, "donated_at")
+    return raw if raw else None
 
 
 def _nome_empresa(props: dict[str, Any]) -> str:
@@ -383,6 +407,7 @@ def classificar(
         # --- 2. Doadores (DOOU inbound; político = target) ----------------
         if rel_type == "DOOU" and not politico_is_source:
             valor = _valor_doacao(rel_props)
+            donated_at = _donated_at_iso(rel_props)
             # Proveniência da DOAÇÃO: preferida na rel :DOOU (onde o
             # pipeline TSE carimba 1 registro por doação), com fallback
             # nos ``target_props`` do nó doador pra legados.
@@ -432,6 +457,26 @@ def classificar(
                 ):
                     emp_acc.provenance = prov_block
                     emp_acc.provenance_ingested_at = prov_ingested
+                if donated_at is not None:
+                    if (
+                        emp_acc.data_primeira_iso is None
+                        or donated_at < emp_acc.data_primeira_iso
+                    ):
+                        emp_acc.data_primeira_iso = donated_at
+                    if (
+                        emp_acc.data_ultima_iso is None
+                        or donated_at > emp_acc.data_ultima_iso
+                    ):
+                        emp_acc.data_ultima_iso = donated_at
+                emp_acc.doacoes.append(
+                    DoacaoItem(
+                        valor=valor,
+                        valor_fmt=fmt_brl(valor),
+                        data_doacao=donated_at,
+                        data_doacao_fmt=fmt_data_br(donated_at),
+                        provenance=prov_block,
+                    ),
+                )
                 emp_acc.total += valor
                 emp_acc.n += 1
                 continue
@@ -474,6 +519,29 @@ def classificar(
                 ):
                     pes_acc.provenance = prov_block
                     pes_acc.provenance_ingested_at = prov_ingested
+                if donated_at is not None:
+                    if (
+                        pes_acc.data_primeira_iso is None
+                        or donated_at < pes_acc.data_primeira_iso
+                    ):
+                        pes_acc.data_primeira_iso = donated_at
+                    if (
+                        pes_acc.data_ultima_iso is None
+                        or donated_at > pes_acc.data_ultima_iso
+                    ):
+                        pes_acc.data_ultima_iso = donated_at
+                pes_acc.doacoes.append(
+                    DoacaoItem(
+                        valor=valor,
+                        valor_fmt=fmt_brl(valor),
+                        data_doacao=donated_at,
+                        data_doacao_fmt=fmt_data_br(donated_at),
+                        # ``prov_block`` já vem de ``_provenance_with_ingested``
+                        # com ``drop_record_id=True`` — LGPD preservada por
+                        # doação individual também.
+                        provenance=prov_block,
+                    ),
+                )
                 pes_acc.total += valor
                 pes_acc.n += 1
                 continue
@@ -586,6 +654,13 @@ def classificar(
         # espelha o Flask.
 
     # --- Materialização de doadores (após agregação) ----------------------
+    # Ordena doações por data (rels sem ``donated_at`` ficam no fim).
+    def _ordenar_doacoes(itens: list[DoacaoItem]) -> list[DoacaoItem]:
+        return sorted(
+            itens,
+            key=lambda it: (it.data_doacao is None, it.data_doacao or ""),
+        )
+
     doadores_empresa: list[DoadorEmpresa] = [
         DoadorEmpresa(
             nome=acc.nome,
@@ -600,6 +675,11 @@ def classificar(
                 else None
             ),
             situacao_verified_at=acc.situacao_verified_at,
+            data_primeira_doacao=acc.data_primeira_iso,
+            data_primeira_doacao_fmt=fmt_data_br(acc.data_primeira_iso),
+            data_ultima_doacao=acc.data_ultima_iso,
+            data_ultima_doacao_fmt=fmt_data_br(acc.data_ultima_iso),
+            doacoes=_ordenar_doacoes(acc.doacoes),
             provenance=acc.provenance,
         )
         for acc in doacoes_empresa.values()
@@ -614,6 +694,11 @@ def classificar(
             valor_total=acc.total,
             valor_total_fmt=fmt_brl(acc.total),
             n_doacoes=acc.n,
+            data_primeira_doacao=acc.data_primeira_iso,
+            data_primeira_doacao_fmt=fmt_data_br(acc.data_primeira_iso),
+            data_ultima_doacao=acc.data_ultima_iso,
+            data_ultima_doacao_fmt=fmt_data_br(acc.data_ultima_iso),
+            doacoes=_ordenar_doacoes(acc.doacoes),
             provenance=acc.provenance,
         )
         for acc in doacoes_pessoa.values()

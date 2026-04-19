@@ -1454,3 +1454,252 @@ class TestCypherQuery:
             "rel_props",
         ):
             assert chave in conteudo, f"Campo obrigatório ausente na query: {chave}"
+
+
+# --- Datas de doação (min/max agregado) ------------------------------------
+
+
+class TestDatasDoacao:
+    """``data_primeira_doacao`` / ``data_ultima_doacao`` vêm do ``donated_at``
+    carimbado pelos pipelines TSE nas rels ``:DOOU``. Service agrega min/max
+    lexicográfico (ISO 8601 ⇒ cronológico).
+    """
+
+    _EMP_ENT = {
+        "emp_1": {
+            "type": "Company",
+            "properties": {"cnpj": "12345678000190", "name": "ACME"},
+        },
+    }
+    _PES_ENT = {
+        "pes_1": {
+            "type": "Person",
+            "properties": {"cpf": "11122233344", "name": "PEDRO DOADOR"},
+        },
+    }
+
+    def test_empresa_doacao_unica_primeira_igual_ultima(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 1_000.0, "donated_at": "2022-09-15"},
+            ),
+        ]
+        resultado = classificar(conexoes, self._EMP_ENT, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.data_primeira_doacao == "2022-09-15"
+        assert d.data_ultima_doacao == "2022-09-15"
+        assert d.data_primeira_doacao_fmt == "15/09/2022"
+        assert d.data_ultima_doacao_fmt == "15/09/2022"
+
+    def test_empresa_multiplas_doacoes_agrega_min_max(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0, "donated_at": "2022-09-15"},
+            ),
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 200.0, "donated_at": "2022-08-01"},
+            ),
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 300.0, "donated_at": "2022-10-25"},
+            ),
+        ]
+        resultado = classificar(conexoes, self._EMP_ENT, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.data_primeira_doacao == "2022-08-01"
+        assert d.data_ultima_doacao == "2022-10-25"
+        assert d.data_primeira_doacao_fmt == "01/08/2022"
+        assert d.data_ultima_doacao_fmt == "25/10/2022"
+
+    def test_empresa_sem_donated_at_fica_none(self) -> None:
+        """Rels legadas (pré-DT_RECEITA) sem ``donated_at`` → campos None."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 1_000.0},
+            ),
+        ]
+        resultado = classificar(conexoes, self._EMP_ENT, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.data_primeira_doacao is None
+        assert d.data_ultima_doacao is None
+        assert d.data_primeira_doacao_fmt is None
+
+    def test_empresa_donated_at_vazio_ignorado(self) -> None:
+        """``donated_at=""`` do ETL (parse falhou) não contamina o agregado."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 500.0, "donated_at": ""},
+            ),
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 600.0, "donated_at": "2022-07-10"},
+            ),
+        ]
+        resultado = classificar(conexoes, self._EMP_ENT, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert d.data_primeira_doacao == "2022-07-10"
+        assert d.data_ultima_doacao == "2022-07-10"
+
+    def test_pessoa_range_de_datas(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 50.0, "donated_at": "2022-09-01"},
+            ),
+            _conn(
+                rel_type="DOOU", target_id="pes_1",
+                politico_is_source=False,
+                rel_props={"valor": 80.0, "donated_at": "2022-09-30"},
+            ),
+        ]
+        resultado = classificar(conexoes, self._PES_ENT, POLITICO_ID)
+        d = resultado.doadores_pessoa[0]
+        assert d.data_primeira_doacao == "2022-09-01"
+        assert d.data_ultima_doacao == "2022-09-30"
+        assert d.data_primeira_doacao_fmt == "01/09/2022"
+        assert d.data_ultima_doacao_fmt == "30/09/2022"
+
+
+# --- Lista detalhada de doações individuais --------------------------------
+
+
+_PROV_FIELDS = {
+    "source_id": "tse_prestacao_contas",
+    "source_url": "https://cdn.tse.jus.br/...",
+    "ingested_at": "2026-04-19T12:00:00Z",
+    "run_id": "tse_prestacao_contas_20260419120000",
+}
+
+
+class TestDoacoesDetalhadas:
+    """``doacoes`` expõe cada doação individual (valor + data + provenance)
+    dentro do DoadorEmpresa/DoadorPessoa agregado.
+    """
+
+    _EMP_ENT = {
+        "emp_1": {
+            "type": "Company",
+            "properties": {
+                "cnpj": "12345678000190",
+                "name": "ACME",
+                **_PROV_FIELDS,
+                "source_record_id": "rec-acme",
+            },
+        },
+    }
+    _PES_ENT = {
+        "pes_1": {
+            "type": "Person",
+            "properties": {
+                "cpf": "11122233344",
+                "name": "DOADOR PF",
+                **_PROV_FIELDS,
+                "source_record_id": "CPF-LEAK-11122233344",
+            },
+        },
+    }
+
+    def test_empresa_lista_ordenada_por_data(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 500.0,
+                    "donated_at": "2022-10-05",
+                    **_PROV_FIELDS,
+                    "source_record_id": "doacao-b",
+                },
+            ),
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 1000.0,
+                    "donated_at": "2022-08-10",
+                    **_PROV_FIELDS,
+                    "source_record_id": "doacao-a",
+                },
+            ),
+        ]
+        resultado = classificar(conexoes, self._EMP_ENT, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        assert len(d.doacoes) == 2
+        # Ordenadas cronologicamente (menor data primeiro).
+        assert d.doacoes[0].data_doacao == "2022-08-10"
+        assert d.doacoes[0].valor == 1000.0
+        assert d.doacoes[0].valor_fmt == "R$ 1.0 mil"
+        assert d.doacoes[0].data_doacao_fmt == "10/08/2022"
+        assert d.doacoes[1].data_doacao == "2022-10-05"
+        assert d.doacoes[1].valor == 500.0
+        # Provenance por-doação (source_record_id da rel, não do nó).
+        assert d.doacoes[0].provenance is not None
+        assert d.doacoes[0].provenance.source_record_id == "doacao-a"
+        assert d.doacoes[1].provenance is not None
+        assert d.doacoes[1].provenance.source_record_id == "doacao-b"
+
+    def test_pessoa_lista_mantem_cpf_mascarado(self) -> None:
+        """LGPD: CPF pleno nunca aparece no ``provenance.source_record_id``
+        de :class:`DoacaoItem` de pessoa — ``drop_record_id=True`` aplica.
+        """
+        cpf_leak = "99988877766"
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="pes_1",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 100.0,
+                    "donated_at": "2022-09-15",
+                    **_PROV_FIELDS,
+                    "source_record_id": cpf_leak,
+                },
+            ),
+        ]
+        resultado = classificar(conexoes, self._PES_ENT, POLITICO_ID)
+        d = resultado.doadores_pessoa[0]
+        assert len(d.doacoes) == 1
+        item = d.doacoes[0]
+        # record_id da rel e do nó são dropados.
+        assert item.provenance is not None
+        assert item.provenance.source_record_id is None
+        # Dump serializado também não contém o CPF.
+        dump = d.model_dump_json()
+        assert cpf_leak not in dump
+        assert "CPF-LEAK-11122233344" not in dump
+
+    def test_sem_donated_at_lista_vazia(self) -> None:
+        """Rel legada sem ``donated_at`` e sem provenance completo gera
+        ``doacoes`` com o item (sem data). ``prov_block`` pode ser None."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU", target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0},  # Sem donated_at, sem provenance
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {"cnpj": "12345678000190", "name": "ACME"},
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        d = resultado.doadores_empresa[0]
+        # Item existe com data None — permite PWA mostrar "sem data" ou ocultar.
+        assert len(d.doacoes) == 1
+        assert d.doacoes[0].data_doacao is None
+        assert d.doacoes[0].valor == 100.0

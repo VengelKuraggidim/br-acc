@@ -7,7 +7,12 @@ from __future__ import annotations
 
 import pytest
 
-from bracc.services.formatacao_service import fmt_brl, mascarar_cpf, nomear_mes
+from bracc.services.formatacao_service import (
+    fmt_brl,
+    fmt_data_br,
+    mascarar_cpf,
+    nomear_mes,
+)
 
 
 class TestFmtBrl:
@@ -127,3 +132,25 @@ class TestNomearMes:
 
     def test_mes_none(self) -> None:
         assert nomear_mes(None) == ""
+
+
+class TestFmtDataBr:
+    def test_iso_data_pura(self) -> None:
+        assert fmt_data_br("2022-09-15") == "15/09/2022"
+
+    def test_iso_com_hora(self) -> None:
+        assert fmt_data_br("2022-09-15T13:45:00Z") == "15/09/2022"
+
+    def test_none(self) -> None:
+        assert fmt_data_br(None) is None
+
+    def test_vazio(self) -> None:
+        assert fmt_data_br("") is None
+
+    def test_formato_invalido_retorna_none(self) -> None:
+        assert fmt_data_br("15/09/2022") is None
+        assert fmt_data_br("2022") is None
+        assert fmt_data_br("abcdefghij") is None
+
+    def test_digitos_invalidos(self) -> None:
+        assert fmt_data_br("20XX-09-15") is None
