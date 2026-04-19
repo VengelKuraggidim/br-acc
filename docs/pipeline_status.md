@@ -68,6 +68,7 @@ Status buckets:
 | pncp | pncp | implemented_partial | partial | api_json | API payload from https://pncp.gov.br/app/editais | Freshness SLA pending |
 | pncp_go | pncp_go | implemented_loaded | loaded | api_json | API payload from https://pncp.gov.br/api/consulta/v1/ | - |
 | portal_transparencia_emendas | emendas_parlamentares_go | implemented_partial | partial | api_json | API payload from https://api.portaldatransparencia.gov.br/api-de-dados/emendas | GO-scoped parliamentary amendments per federal deputy; substitui live-call Flask buscar_emendas_transparencia (requires TRANSPARENCIA_API_KEY) |
+| propagacao_fotos_person | propagacao_fotos_person | implemented_partial | partial | derived | Graph read-only (:FederalLegislator/:StateLegislator/:Senator + :Person GO) | Copia foto_url+bloco foto_* de :FederalLegislator/:StateLegislator/:Senator pro :Person homonimo (match por name normalizado); necessario porque o fulltext entity_search da PWA so cobre :Person; idempotente; skippa em ambiguidade (>1 match); nao cria nos nem faz HTTP |
 | querido_diario_go | querido_diario_go | implemented_loaded | loaded | api_json | API payload from https://queridodiario.ok.org.br/api/ | - |
 | rais | rais | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
 | receita_dirbi | receita_dirbi | not_built | not_loaded | file_batch | data/receita_dirbi/* | Tax benefit declarations |
