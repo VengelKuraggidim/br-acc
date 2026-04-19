@@ -73,6 +73,10 @@ class CvmPipeline(Pipeline):
                 encoding="latin-1",
             )
 
+        # rows_in = total raw proceedings (denominador do funnel reportado
+        # no IngestionRun). Acusados são derivativos, não entram aqui.
+        self.rows_in = len(self._raw_processos)
+
     def transform(self) -> None:
         # Build accused lookup by NUP
         accused_by_nup: dict[str, list[dict[str, str]]] = {}
@@ -103,27 +107,33 @@ class CvmPipeline(Pipeline):
             objeto = str(row.get("Objeto", "")).strip()
             ementa = str(row.get("Ementa", "")).strip()
 
-            proceedings.append({
-                "pas_id": nup,
-                "date": date,
-                "penalty_type": "",
-                "penalty_value": 0.0,
-                "status": fase,
-                "description": ementa or objeto,
-                "numero_processo": nup,
-                "relator": "",
-                "data_instauracao": date,
-                "source": "cvm",
-            })
+            proceedings.append(self.attach_provenance(
+                {
+                    "pas_id": nup,
+                    "date": date,
+                    "penalty_type": "",
+                    "penalty_value": 0.0,
+                    "status": fase,
+                    "description": ementa or objeto,
+                    "numero_processo": nup,
+                    "relator": "",
+                    "data_instauracao": date,
+                    "source": "cvm",
+                },
+                record_id=nup,
+            ))
 
             # Link accused persons (name-based, no CPF/CNPJ in new format)
             for accused in accused_by_nup.get(nup, []):
-                entities.append({
-                    "target_key": nup,
-                    "entity_name": accused["name"],
-                    "accused_status": accused["status"],
-                    "accused_date": accused["date"],
-                })
+                entities.append(self.attach_provenance(
+                    {
+                        "target_key": nup,
+                        "entity_name": accused["name"],
+                        "accused_status": accused["status"],
+                        "accused_date": accused["date"],
+                    },
+                    record_id=nup,
+                ))
 
         self.proceedings = deduplicate_rows(proceedings, ["pas_id"])
         self.accused_entities = entities
@@ -146,10 +156,17 @@ class CvmPipeline(Pipeline):
 
         # Name-based matching: find existing Person/Company by name
         if self.accused_entities:
+            # Preserva provenance do row de acusado original pra propagar
+            # no SET da rel CVM_SANCIONADA (contrato docs/provenance.md).
             rel_rows = [
                 {
                     "target_key": e["target_key"],
                     "entity_name": e["entity_name"],
+                    "source_id": e["source_id"],
+                    "source_record_id": e["source_record_id"],
+                    "source_url": e["source_url"],
+                    "ingested_at": e["ingested_at"],
+                    "run_id": e["run_id"],
                 }
                 for e in self.accused_entities
                 if e["entity_name"]
@@ -160,8 +177,17 @@ class CvmPipeline(Pipeline):
                 "MATCH (p:CVMProceeding {pas_id: row.target_key}) "
                 "OPTIONAL MATCH (pe:Person) WHERE pe.name = row.entity_name "
                 "OPTIONAL MATCH (c:Company) WHERE c.razao_social = row.entity_name "
-                "WITH p, coalesce(pe, c) AS entity "
+                "WITH p, row, coalesce(pe, c) AS entity "
                 "WHERE entity IS NOT NULL "
-                "MERGE (entity)-[:CVM_SANCIONADA]->(p)"
+                "MERGE (entity)-[r:CVM_SANCIONADA]->(p) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
             loader.run_query(query, rel_rows)
+
+        # rows_loaded = número de CVMProceeding distintos carregados;
+        # principal output do pipeline (accused rels são derivativas).
+        self.rows_loaded = len(self.proceedings)
