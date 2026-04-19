@@ -984,3 +984,50 @@ class TestRoteamentoDespesasMunicipalGyn:
 
         verba_mock.assert_awaited_once()
         cota_mock.assert_not_awaited()
+
+
+class TestCanonicalIdPassthrough:
+    """``obter_perfil`` aceita ``canon_*`` IDs sem pré-processar.
+
+    A resolução canonical → nó-fonte mais oficial mora no Cypher
+    (``perfil_politico_connections.cypher``, via ``CALL { ... UNION ... }``).
+    O service só passa o id adiante — essa bateria de tests trava a invariante.
+    """
+
+    @pytest.mark.anyio
+    async def test_passa_canonical_id_pra_query(self) -> None:
+        driver = _build_driver()
+        senator = {
+            "name": "JORGE KAJURU REIS DA COSTA NASSER",
+            "partido": "PSB",
+            "uf": "GO",
+            "id_senado": "5895",
+            "senator_id": "senado_5895",
+            "foto_url": "http://senado/5895.jpg",
+            "element_id": "4:senator:1",
+            "labels": ["Senator"],
+            **PROV_FIELDS,
+        }
+        record = _mock_record({"politico": senator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ) as query_mock,
+            ceap_patch, emendas_patch, media_patch,
+            verba_patch, cota_gyn_patch,
+        ):
+            perfil = await obter_perfil(driver, "canon_senado_5895")
+
+        # Query recebe o id canônico sem tradução.
+        call = query_mock.await_args
+        assert call.args[1] == "perfil_politico_connections"
+        assert call.args[2] == {"entity_id": "canon_senado_5895"}
+        # E o perfil devolve o Senator (o Cypher resolveu pro source mais oficial).
+        assert perfil.politico.nome == "JORGE KAJURU REIS DA COSTA NASSER"
+        assert perfil.politico.foto_url == "http://senado/5895.jpg"
+        assert perfil.politico.partido == "PSB"
