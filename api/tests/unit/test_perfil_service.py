@@ -356,10 +356,9 @@ class TestPoliticoSemMandato:
         assert perfil.total_doacoes == 0.0
         assert perfil.fonte_emendas is None
         # Aviso explicativo presente pra não-deputado-federal — texto
-        # genérico do fallback "Ainda nao temos os dados ..." (caso
-        # vereador/outros).
-        assert "Ainda nao temos os dados" in perfil.aviso_despesas
-        assert "verba indenizatoria da ALEGO" in perfil.aviso_despesas
+        # genérico "Dados de gastos parlamentares nao disponiveis ..."
+        # (caso vereador/outros).
+        assert "Dados de gastos parlamentares nao disponiveis" in perfil.aviso_despesas
 
         # Alertas — deve ter o fallback "Avaliação indisponível" porque
         # não tem nenhum dado (ou algum alerta de rotina). No mínimo
@@ -801,7 +800,7 @@ class TestAvisoDespesasDinamico:
         assert "Assembleia Legislativa de Goias" in perfil.aviso_despesas
 
     @pytest.mark.anyio
-    async def test_aviso_sem_fonte_menciona_futuras(self) -> None:
+    async def test_aviso_sem_fonte_mostra_mensagem_generica(self) -> None:
         driver = _build_driver()
         pessoa = {
             "name": "Vereador Qualquer",
@@ -826,10 +825,7 @@ class TestAvisoDespesasDinamico:
         ):
             perfil = await obter_perfil(driver, "4:pes:10")
 
-        assert "Ainda nao temos os dados" in perfil.aviso_despesas
-        assert "ALEGO" in perfil.aviso_despesas
-        # Fallback tambem menciona CMG (Goiania) como fonte municipal.
-        assert "Camara Municipal de Goiania" in perfil.aviso_despesas
+        assert "Dados de gastos parlamentares nao disponiveis" in perfil.aviso_despesas
 
     @pytest.mark.anyio
     async def test_aviso_vereador_goiania_menciona_cmg(self) -> None:

@@ -403,8 +403,8 @@ def _build_aviso_despesas(
     * Deputado estadual GO com verba ALEGO ingerida → fonte "verba ALEGO".
     * Vereador(a) da Camara Municipal de Goiania (CMG) → cota municipal
       do portal ``goiania.go.leg.br``.
-    * Qualquer outro caso (outros municipios, sem dados, etc.) → aviso de
-      falta de dados.
+    * Qualquer outro caso (Senador, outros municipios, sem dados, etc.) →
+      mensagem curta "Dados de gastos parlamentares nao disponiveis".
 
     Quando ``despesas_gabinete`` esta vazio mas o politico tem label
     conhecida (federal/estadual GO/vereador GYN), exibimos ainda a fonte
@@ -430,13 +430,7 @@ def _build_aviso_despesas(
     if despesas_gabinete:
         # Fallback improvavel: tem despesas mas nenhum label conhecido.
         return ""
-    return (
-        "Ainda nao temos os dados de gastos dessa casa legislativa. "
-        "A cota parlamentar (CEAP) so existe na Camara Federal, a verba "
-        "indenizatoria da ALEGO cobre deputados estaduais de Goias e a "
-        "cota da Camara Municipal de Goiania (CMG) cobre vereadores da "
-        "capital — outros municipios ficam para fases futuras."
-    )
+    return "Dados de gastos parlamentares nao disponiveis pra essa casa legislativa."
 
 
 async def obter_perfil(
