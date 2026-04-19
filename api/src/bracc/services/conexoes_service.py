@@ -318,6 +318,7 @@ def classificar(
     politico_entity_id: str,
     *,
     limit_por_categoria: int = 50,
+    ano_doacao: int | None = None,
 ) -> ConexoesClassificadas:
     """Classifica ``conexoes_raw`` em 7 categorias tipadas.
 
@@ -333,6 +334,14 @@ def classificar(
     limit_por_categoria:
         Cap no tamanho de cada lista devolvida. Default 50 (compatível com
         Flask). Passe maior pra expandir sem mudar a API pública.
+    ano_doacao:
+        Quando definido, só agrega rels ``:DOOU`` cuja ``rel_props.ano``
+        bate com o valor fornecido — todas as outras doações são ignoradas
+        em ``doadores_empresa`` / ``doadores_pessoa``. Usado pra alinhar
+        ``total_doacoes`` com ``total_tse_{ano}`` declarado no Person
+        (pipeline ``tse_prestacao_contas_go`` carimba ``ano`` em cada
+        rel ``:DOOU``). ``None`` (default) preserva o comportamento
+        pré-existente — agrega todos os anos sem filtrar.
 
     Returns
     -------
@@ -406,6 +415,21 @@ def classificar(
 
         # --- 2. Doadores (DOOU inbound; político = target) ----------------
         if rel_type == "DOOU" and not politico_is_source:
+            # Filtro por ano — evita somar doações de 2014/2018 com 2022
+            # num mesmo ``valor_total``. Sem o filtro, ``total_doacoes``
+            # acaba > ``total_tse_{ano}`` quando o candidato tem
+            # múltiplas eleições ingeridas (o CSV TSE por ano gera uma
+            # rel ``:DOOU`` por linha, com ``ano`` carimbado).
+            if ano_doacao is not None:
+                rel_ano_raw = rel_props.get("ano")
+                try:
+                    rel_ano = (
+                        int(rel_ano_raw) if rel_ano_raw is not None else None
+                    )
+                except (TypeError, ValueError):
+                    rel_ano = None
+                if rel_ano != ano_doacao:
+                    continue
             valor = _valor_doacao(rel_props)
             donated_at = _donated_at_iso(rel_props)
             # Proveniência da DOAÇÃO: preferida na rel :DOOU (onde o

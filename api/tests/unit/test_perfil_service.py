@@ -193,7 +193,7 @@ class TestDeputadoFederalCompleto:
         conexoes = [
             {
                 "rel_type": "DOOU",
-                "rel_props": {"valor": 50_000.0},
+                "rel_props": {"valor": 50_000.0, "ano": 2022},
                 "source_id": "4:empresa:1",
                 "target_id": "4:abc:1",
                 "target_element_id": "4:empresa:1",
@@ -382,7 +382,7 @@ class TestLgpd:
         conexoes = [
             {
                 "rel_type": "DOOU",
-                "rel_props": {"valor": 1_000.0},
+                "rel_props": {"valor": 1_000.0, "ano": 2022},
                 "source_id": "4:pessoa:7",
                 "target_id": "4:abc:1",
                 "target_element_id": "4:pessoa:7",
@@ -471,7 +471,7 @@ class TestProvenance:
         conexoes = [
             {
                 "rel_type": "DOOU",
-                "rel_props": {"valor": 25_000.0},
+                "rel_props": {"valor": 25_000.0, "ano": 2022},
                 "source_id": "4:empresa:1",
                 "target_id": "4:abc:1",
                 "target_element_id": "4:empresa:1",
@@ -1032,3 +1032,120 @@ class TestCanonicalIdPassthrough:
         assert perfil.politico.nome == "JORGE KAJURU REIS DA COSTA NASSER"
         assert perfil.politico.foto_url == "http://senado/5895.jpg"
         assert perfil.politico.partido == "PSB"
+
+
+# --- 8. Filtro de ano nas doações (fix duplicação 201,6%) ------------------
+
+
+class TestAnoDoacaoFiltro:
+    """Travas pra garantir que ``perfil_service`` passa ``ano_doacao=2022``
+    pra ``classificar`` — senão ``total_doacoes`` soma eleições de anos
+    diferentes e diverge de ``total_tse_2022`` por múltiplos de eleições.
+
+    Débito: ``todo-list-prompts/high_priority/debitos/investigar-duplicacao-doacoes-tse.md``.
+    """
+
+    @pytest.mark.anyio
+    async def test_doacoes_de_anos_diferentes_so_agregam_2022(self) -> None:
+        """Doações de 2014/2018 vindas do grafo não entram em ``total_doacoes``."""
+        driver = _build_driver()
+        legislator = _legislator_node()
+        conexoes = [
+            # Doação 2014 — tem que ser ignorada.
+            {
+                "rel_type": "DOOU",
+                "rel_props": {"valor": 1_000_000.0, "ano": 2014},
+                "source_id": "4:empresa:1",
+                "target_id": "4:abc:1",
+                "target_element_id": "4:empresa:1",
+                "target_type": "Company",
+                "target_labels": ["Company"],
+                "target_props": {
+                    "cnpj": "11222333000181",
+                    "razao_social": "ACME LTDA",
+                },
+            },
+            # Doação 2018 — também ignorada.
+            {
+                "rel_type": "DOOU",
+                "rel_props": {"valor": 2_000_000.0, "ano": 2018},
+                "source_id": "4:empresa:1",
+                "target_id": "4:abc:1",
+                "target_element_id": "4:empresa:1",
+                "target_type": "Company",
+                "target_labels": ["Company"],
+                "target_props": {
+                    "cnpj": "11222333000181",
+                    "razao_social": "ACME LTDA",
+                },
+            },
+            # Doação 2022 — única que conta.
+            {
+                "rel_type": "DOOU",
+                "rel_props": {"valor": 100_000.0, "ano": 2022},
+                "source_id": "4:empresa:1",
+                "target_id": "4:abc:1",
+                "target_element_id": "4:empresa:1",
+                "target_type": "Company",
+                "target_labels": ["Company"],
+                "target_props": {
+                    "cnpj": "11222333000181",
+                    "razao_social": "ACME LTDA",
+                },
+            },
+        ]
+        record = _mock_record({"politico": legislator, "conexoes": conexoes})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patches[0], patches[1], patches[2], patches[3], patches[4],
+        ):
+            perfil = await obter_perfil(driver, "4:abc:1")
+
+        # Agregação do doador — só 1 doação (2022).
+        assert len(perfil.doadores_empresa) == 1
+        assert perfil.doadores_empresa[0].valor_total == 100_000.0
+        assert perfil.doadores_empresa[0].n_doacoes == 1
+        # ``total_doacoes`` bate com a rel 2022 — sem contaminar com 2014/2018.
+        assert perfil.total_doacoes == 100_000.0
+
+    @pytest.mark.anyio
+    async def test_perfil_service_passa_ano_doacao_2022_para_classificar(
+        self,
+    ) -> None:
+        """Trava direta: ``classificar`` é chamado com ``ano_doacao=2022``.
+
+        Se alguém acidentalmente remover o ``ano_doacao=2022`` do
+        ``perfil_service``, este teste falha antes de o endpoint voltar a
+        somar anos diferentes.
+        """
+        driver = _build_driver()
+        legislator = _legislator_node()
+        record = _mock_record({"politico": legislator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            patch(
+                "bracc.services.perfil_service.classificar",
+                wraps=__import__(
+                    "bracc.services.conexoes_service",
+                    fromlist=["classificar"],
+                ).classificar,
+            ) as classificar_spy,
+            patches[0], patches[1], patches[2], patches[3], patches[4],
+        ):
+            await obter_perfil(driver, "4:abc:1")
+
+        assert classificar_spy.called
+        call = classificar_spy.call_args
+        assert call.kwargs.get("ano_doacao") == 2022

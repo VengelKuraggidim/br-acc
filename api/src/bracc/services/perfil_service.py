@@ -515,11 +515,19 @@ async def obter_perfil(
     conexoes_norm, entidades_conectadas = _adapt_connections(
         raw_conexoes, politico_element_id,
     )
+    # ``ano_doacao=2022`` alinha a agregação de doadores com
+    # ``total_tse_2022`` (único ano que ``validacao_tse`` compara hoje).
+    # Sem esse filtro, ``total_doacoes`` soma 2014/2018/2022 num mesmo
+    # ``valor_total`` e diverge por múltiplos de eleições ingeridas —
+    # sintoma registrado em
+    # ``todo-list-prompts/high_priority/debitos/investigar-duplicacao-doacoes-tse.md``
+    # (divergência observada de 201,6% pra um candidato com 3 eleições).
     resultado = classificar(
         conexoes_norm,
         entidades_conectadas,
         politico_element_id,
         limit_por_categoria=limit_conexoes,
+        ano_doacao=2022,
     )
 
     # --- 3. Paralelo: despesas_gabinete + emendas ----------------------------

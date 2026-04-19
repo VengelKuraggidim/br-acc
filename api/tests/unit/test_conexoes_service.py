@@ -266,6 +266,181 @@ class TestDoadoresPessoa:
         assert doador.cpf_mascarado == "***.***.***-44"
 
 
+# --- 3.5. Filtro por ano em :DOOU (fix duplicação 201,6%) -------------------
+
+
+class TestFiltroAnoDoacao:
+    """Garante que ``classificar(..., ano_doacao=2022)`` só agrega rels ``:DOOU``
+    cuja ``rel_props.ano`` bate com 2022.
+
+    Bug original (débito ``investigar-duplicacao-doacoes-tse.md``): o endpoint
+    ``/politico`` somava doações de 2014/2018/2022 num único ``valor_total``
+    por doador, fazendo ``total_doacoes`` divergir de ``total_tse_2022`` por
+    ``N-1`` eleições ingeridas (sintoma de +201,6% pra candidato com 3
+    eleições). ``perfil_service`` agora passa ``ano_doacao=2022`` alinhando
+    a agregação com o ano declarado no Person.
+    """
+
+    def test_ano_doacao_pula_rels_de_outros_anos(self) -> None:
+        """Filtro ativo: só rels com ``rel_props.ano == 2022`` agregam."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 100_000.0, "ano": 2014},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 200_000.0, "ano": 2018},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 50_000.0, "ano": 2022},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "12345678000190",
+                    "razao_social": "Construtora ACME LTDA",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_empresa) == 1
+        d = resultado.doadores_empresa[0]
+        # Só a rel 2022 entra — 2014 e 2018 ficam fora.
+        assert d.valor_total == 50_000.0
+        assert d.n_doacoes == 1
+
+    def test_ano_doacao_none_preserva_agregacao_antiga(self) -> None:
+        """Default (``ano_doacao=None``): todas as rels ``:DOOU`` agregam
+        (compat com callers legados que ainda não passam o filtro)."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 100_000.0, "ano": 2014},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 50_000.0, "ano": 2022},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {"cnpj": "12345678000190", "name": "ACME"},
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert len(resultado.doadores_empresa) == 1
+        # Sem filtro: soma os 2 anos.
+        assert resultado.doadores_empresa[0].valor_total == 150_000.0
+        assert resultado.doadores_empresa[0].n_doacoes == 2
+
+    def test_ano_doacao_filtra_doadores_pessoa(self) -> None:
+        """Mesmo filtro vale pra rel ``:DOOU`` apontando pra ``Person``."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="p_1",
+                politico_is_source=False,
+                rel_props={"valor": 800.0, "ano": 2018},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="p_1",
+                politico_is_source=False,
+                rel_props={"valor": 200.0, "ano": 2022},
+            ),
+        ]
+        entidades = {
+            "p_1": {
+                "type": "Person",
+                "properties": {"cpf": "11122233344", "name": "Joao"},
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_pessoa) == 1
+        assert resultado.doadores_pessoa[0].valor_total == 200.0
+        assert resultado.doadores_pessoa[0].n_doacoes == 1
+
+    def test_ano_doacao_rel_sem_ano_e_ignorada_quando_filtro_ativo(self) -> None:
+        """Rels legadas (pré-``ano`` carimbado) são puladas quando
+        ``ano_doacao`` é exigido — evita contaminar o agregado com dados
+        sem proveniência de ano."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 999.0},  # sem "ano"
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 50_000.0, "ano": 2022},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {"cnpj": "12345678000190"},
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_empresa) == 1
+        # Rel sem "ano" é pulada; só a de 2022 fica.
+        assert resultado.doadores_empresa[0].valor_total == 50_000.0
+
+    def test_ano_doacao_aceita_ano_como_string_numerica(self) -> None:
+        """Neo4j às vezes devolve props numéricos como string (loader varia).
+        O filtro tenta ``int(...)`` antes de comparar — se der, bate; senão
+        a rel é pulada."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0, "ano": "2022"},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="emp_1",
+                politico_is_source=False,
+                rel_props={"valor": 200.0, "ano": "2018"},
+            ),
+        ]
+        entidades = {
+            "emp_1": {
+                "type": "Company",
+                "properties": {"cnpj": "12345678000190"},
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_empresa) == 1
+        assert resultado.doadores_empresa[0].valor_total == 100.0
+
+
 # --- 4. Sócio de empresa ----------------------------------------------------
 
 
