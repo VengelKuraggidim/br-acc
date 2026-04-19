@@ -319,21 +319,32 @@ def _consolidate_year(
             year, len(missing), missing[:10],
         )
 
-    merged: list[dict[str, Any]] = []
-    for pf in page_files:
-        try:
-            payload = json.loads(pf.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            logger.warning("  year=%d: bad JSON in %s: %s — skipping.", year, pf.name, exc)
-            continue
-        data = payload.get("data") if isinstance(payload, dict) else payload
-        if isinstance(data, list):
-            merged.extend(data)
-
-    out_file.write_text(
-        json.dumps(merged, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    # Streaming consolidation — writes records to the output file one at a
+    # time so we never hold more than one page (~1 MB) in memory. Earlier
+    # in-memory implementations OOM-killed on years with 3+ GB of page
+    # data (2025 peaked at 14 GB RSS before the kernel killed it).
+    merged_count = 0
+    with out_file.open("w", encoding="utf-8") as fh:
+        fh.write("[")
+        first = True
+        for pf in page_files:
+            try:
+                payload = json.loads(pf.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "  year=%d: bad JSON in %s: %s — skipping.", year, pf.name, exc,
+                )
+                continue
+            data = payload.get("data") if isinstance(payload, dict) else payload
+            if not isinstance(data, list):
+                continue
+            for record in data:
+                if not first:
+                    fh.write(",\n")
+                json.dump(record, fh, ensure_ascii=False)
+                first = False
+                merged_count += 1
+        fh.write("]\n")
 
     if prune_pages:
         for pf in page_files:
@@ -343,7 +354,7 @@ def _consolidate_year(
         except OSError:
             pass
 
-    return out_file, len(page_files), len(merged)
+    return out_file, len(page_files), merged_count
 
 
 def main(argv: list[str] | None = None) -> int:
