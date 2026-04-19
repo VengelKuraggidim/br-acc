@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-18",
   "full_historical_default": true,
-  "expected_implemented_count": 66,
+  "expected_implemented_count": 67,
   "core_sources": [
     "camara",
     "cnpj",
@@ -765,6 +765,13 @@
       "acquisition_mode": "derived",
       "required_inputs": [],
       "blocking_reason_if_any": "graph-dependent: copia foto_url de :FederalLegislator/:StateLegislator/:Senator pro :Person homonimo; necessario porque o fulltext entity_search da PWA so cobre :Person; deve rodar depois dos pipelines de foto (camara_politicos_go, alego_deputados_foto, senado_senadores_foto, wikidata_politicos_foto, tse_candidatos_foto); idempotente, no-op quando upstream vazio",
+      "core": false
+    },
+    {
+      "pipeline_id": "custo_mandato_br",
+      "acquisition_mode": "api_call",
+      "required_inputs": [],
+      "blocking_reason_if_any": "constants-only: valores de subsidio/CEAP/gabinete/auxilios sao constantes legais hardcoded referenciadas a Decretos/Atos/Leis publicos; archive_fetch das URLs legais por componente preserva snapshot HTML/PDF; falha de fetch nao bloqueia (componente entra sem snapshot, re-run captura quando fonte voltar); idempotente",
       "core": false
     }
   ]

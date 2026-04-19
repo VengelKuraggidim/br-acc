@@ -10,7 +10,7 @@ Cobre:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import MagicMock
 
 from bracc_etl.pipelines.propagacao_fotos_person import (
@@ -19,9 +19,6 @@ from bracc_etl.pipelines.propagacao_fotos_person import (
     PropagacaoFotosPersonPipeline,
 )
 from bracc_etl.runner import PIPELINES
-
-if TYPE_CHECKING:
-    pass
 
 
 def _mock_driver_with_records(records: list[dict[str, Any]]) -> MagicMock:

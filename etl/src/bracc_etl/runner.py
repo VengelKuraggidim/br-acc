@@ -25,6 +25,7 @@ from bracc_etl.pipelines.cepim import CepimPipeline
 from bracc_etl.pipelines.cnpj import CNPJPipeline
 from bracc_etl.pipelines.comprasnet import ComprasnetPipeline
 from bracc_etl.pipelines.cpgf import CpgfPipeline
+from bracc_etl.pipelines.custo_mandato_br import CustoMandatoBrPipeline
 from bracc_etl.pipelines.cvm import CvmPipeline
 from bracc_etl.pipelines.cvm_funds import CvmFundsPipeline
 from bracc_etl.pipelines.datajud import DatajudPipeline
@@ -50,6 +51,9 @@ from bracc_etl.pipelines.pep_cgu import PepCguPipeline
 from bracc_etl.pipelines.pgfn import PgfnPipeline
 from bracc_etl.pipelines.pncp import PncpPipeline
 from bracc_etl.pipelines.pncp_go import PncpGoPipeline
+from bracc_etl.pipelines.propagacao_fotos_person import (
+    PropagacaoFotosPersonPipeline,
+)
 from bracc_etl.pipelines.querido_diario_go import QueridoDiarioGoPipeline
 from bracc_etl.pipelines.rais import RaisPipeline
 from bracc_etl.pipelines.renuncias import RenunciasPipeline
@@ -74,9 +78,6 @@ from bracc_etl.pipelines.transferegov import TransferegovPipeline
 from bracc_etl.pipelines.transparencia import TransparenciaPipeline
 from bracc_etl.pipelines.tse import TSEPipeline
 from bracc_etl.pipelines.tse_bens import TseBensPipeline
-from bracc_etl.pipelines.propagacao_fotos_person import (
-    PropagacaoFotosPersonPipeline,
-)
 from bracc_etl.pipelines.tse_candidatos_foto import TseCandidatosFotoPipeline
 from bracc_etl.pipelines.tse_filiados import TseFiliadosPipeline
 from bracc_etl.pipelines.tse_prestacao_contas_go import TsePrestacaoContasGoPipeline
@@ -155,6 +156,7 @@ PIPELINES: dict[str, type] = {
     "tse_candidatos_foto": TseCandidatosFotoPipeline,
     "propagacao_fotos_person": PropagacaoFotosPersonPipeline,
     "entity_resolution_politicos_go": EntityResolutionPoliticosGoPipeline,
+    "custo_mandato_br": CustoMandatoBrPipeline,
 }
 
 

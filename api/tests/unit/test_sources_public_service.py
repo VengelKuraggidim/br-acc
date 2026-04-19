@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -36,7 +36,7 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("BRACC_SOURCE_REGISTRY_PATH", raising=False)
 
 
-def _write_copy(tmp_path: Path, sources: dict[str, dict]) -> Path:
+def _write_copy(tmp_path: Path, sources: dict[str, dict[str, Any]]) -> Path:
     path = tmp_path / "copy.json"
     data = {
         "category_labels": {"identity": "Cadastro de empresas", "state": "Goiás — estado"},

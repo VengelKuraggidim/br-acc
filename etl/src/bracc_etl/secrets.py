@@ -41,7 +41,7 @@ def load_secret(name: str) -> str:
 def _load_from_gcp(name: str, project_id: str) -> str:
     """Busca via ``google-cloud-secret-manager`` (dep opcional ``[gcp]``)."""
     try:
-        from google.cloud import secretmanager  # type: ignore[import-not-found]
+        from google.cloud import secretmanager
     except ImportError as exc:
         raise RuntimeError(
             "google-cloud-secret-manager nao instalado. "

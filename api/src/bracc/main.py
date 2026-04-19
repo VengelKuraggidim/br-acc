@@ -17,6 +17,7 @@ from bracc.middleware.security_headers import SecurityHeadersMiddleware
 from bracc.routers import (
     auth,
     baseline,
+    custo_mandato,
     emendas,
     entity,
     go,
@@ -115,6 +116,10 @@ app.include_router(go.router)
 # shapes expected by pwa/index.html today so the client-side migration
 # can be staged. See api/src/bracc/routers/pwa_parity.py.
 app.include_router(pwa_parity.router)
+# Custo de mandato — endpoint pedagógico que substitui o card hardcoded
+# "Quanto custa um deputado federal?" da home do PWA por dado lido do
+# grafo (pipeline ``custo_mandato_br``) com proveniência clicável.
+app.include_router(custo_mandato.router)
 
 # Gated federal-scope routers. Default OFF — Fiscal Cidadao serves Goias
 # only. Set ENABLE_FEDERAL_ROUTES=true to mount the preserved federal

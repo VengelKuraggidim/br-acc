@@ -405,7 +405,9 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                 "uf": row.get("uf"),
                 "name_normalized": _normalize_name(row.get("name")),
             }
-            node["name_stripped"] = _strip_honorifics(node["name_normalized"])
+            node["name_stripped"] = _strip_honorifics(
+                str(node["name_normalized"] or ""),
+            )
             self._nodes_by_label[primary].append(node)
 
         self.rows_in = sum(len(v) for v in self._nodes_by_label.values())
@@ -501,7 +503,7 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                 })
 
         # ---- Finaliza: materializa rows pra Neo4jBatchLoader ----
-        for canonical_id, cluster in self._clusters.items():
+        for cluster in self._clusters.values():
             self.canonical_rows.append(cluster["canonical"])
             self.represents_rels.extend(cluster["edges"])
 

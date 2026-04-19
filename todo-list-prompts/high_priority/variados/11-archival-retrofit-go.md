@@ -1,6 +1,6 @@
 # Retrofit archival nos 10 pipelines GO legados — **✅ CONCLUÍDO (2026-04-18)**
 
-> Todos os 10 pipelines GO retrofitados. Ver [`docs/archival.md`](../../docs/archival.md)
+> Todos os 10 pipelines GO retrofitados. Ver [`docs/archival.md`](../../../docs/archival.md)
 > seção "Retrofit nos 10 pipelines GO legados — CONCLUÍDO" para a tabela
 > de commits e padrões aplicados. Este arquivo fica como registro
 > histórico do plano original.
@@ -20,7 +20,7 @@ O campo `source_snapshot_uri` está no contrato de proveniência, é
 sem ele — mas linha do tempo do Fiscal Cidadão exige cópia imutável da
 fonte pra satisfazer o requisito de proveniência rastreável.
 
-Ver [`docs/archival.md`](../../docs/archival.md) para a arquitetura.
+Ver [`docs/archival.md`](../../../docs/archival.md) para a arquitetura.
 
 ## Escopo
 

@@ -1639,53 +1639,17 @@ async function carregarInicio() {
       </div>
     </div>
 
-    <div class="section fade-in">
+    <div class="section fade-in" id="quantoCustaSection">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(239,68,68,0.15);">&#128176;</span>
-          Quanto custa um deputado federal?
+          <span id="quantoCustaTitulo">Quanto custa um cargo eletivo?</span>
         </div>
       </div>
-      <div class="card" style="padding:0; overflow:hidden;">
-        <div style="display:flex; flex-direction:column; gap:0;">
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
-            <span style="font-size:12px; color:var(--text-secondary);">Subsídio mensal</span>
-            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">R$ 46.366</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
-            <span style="font-size:12px; color:var(--text-secondary);">Cota parlamentar (CEAP)</span>
-            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">até R$ 57,3 mil</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
-            <span style="font-size:12px; color:var(--text-secondary);">Verba de gabinete (25 assessores)</span>
-            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">R$ 165,8 mil</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
-            <span style="font-size:12px; color:var(--text-secondary);">Auxílio-moradia</span>
-            <span style="font-size:14px; font-weight:700; color:var(--text-primary);">R$ 4.253</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border);">
-            <span style="font-size:12px; color:var(--text-secondary);">Saúde (Demed) + encargos trabalhistas</span>
-            <span style="font-size:14px; font-weight:700; color:var(--text-dim);">não divulgado</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:14px; background:rgba(239,68,68,0.08);">
-            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">Custo real por deputado/mês</span>
-            <span style="font-size:16px; font-weight:800; color:#ef4444;">R$ 334.743</span>
-          </div>
-        </div>
+      <div id="quantoCustaSeletor" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+      <div id="quantoCustaContainer">
+        <div class="card" style="padding:14px; color:var(--text-dim); font-size:12px;">Carregando&hellip;</div>
       </div>
-      <div class="card" style="margin-top:10px; padding:10px 14px; background:var(--bg-secondary);">
-        <p style="font-size:12px; line-height:1.7; color:var(--text-dim); margin:0;">
-          O custo real inclui encargos dos assessores (13º, férias, FGTS), saúde e estrutura
-          que a Câmara não detalha por deputado. No total, os 513 deputados custam
-          <strong style="color:var(--text-secondary);">R$ 2,06 bilhões por ano</strong> &mdash;
-          equivalente ao salário de <strong style="color:var(--text-secondary);">145 trabalhadores</strong>
-          para sustentar cada um. Busque seu deputado e veja como ele gasta.
-        </p>
-      </div>
-      <p style="font-size:10px; color:var(--text-dim); margin:8px 0 0; text-align:right;">
-        Fontes: Poder360/Instituto Millenium, Câmara dos Deputados, Ato da Mesa 243/2026
-      </p>
     </div>
 
     <div class="fade-in" style="text-align:center; margin:32px 0 16px;">
@@ -1697,6 +1661,130 @@ async function carregarInicio() {
 
   document.getElementById("inicioLoading").style.display = "none";
   document.getElementById("inicioContent").style.display = "block";
+
+  // Bloco "Quanto custa" — popula via /custo-mandato/{cargo}.
+  // Default = dep_federal; usuário pode trocar pelos botões do seletor.
+  carregarCustoMandato("dep_federal");
+}
+
+// === QUANTO CUSTA UM CARGO ELETIVO ===
+// Substitui o card hardcoded da home (que vivia colado em pwa/index.html
+// linhas 1641-1688 antes desta refatoração) por dado lido do grafo.
+// Endpoint: GET /custo-mandato/{cargo} — backend bracc.routers.custo_mandato.
+// Cargos suportados (MVP): dep_federal, senador, dep_estadual_go, governador_go.
+// Componentes opacos (valor_mensal=null) renderizam "não divulgado" + chip
+// de fonte clicável (proveniência rastreável).
+const QUANTO_CUSTA_CARGOS = [
+  { id: "dep_federal", rotulo: "Dep. federal" },
+  { id: "senador", rotulo: "Senador" },
+  { id: "dep_estadual_go", rotulo: "Dep. estadual GO" },
+  { id: "governador_go", rotulo: "Governador GO" },
+];
+
+function _quantoCustaSeletorHTML(cargoAtivo) {
+  return QUANTO_CUSTA_CARGOS.map((c) => {
+    const ativo = c.id === cargoAtivo;
+    const bg = ativo ? "var(--accent)" : "var(--bg-secondary)";
+    const cor = ativo ? "#fff" : "var(--text-secondary)";
+    return (
+      `<button onclick="carregarCustoMandato('${c.id}')" ` +
+      `style="padding:6px 10px; font-size:11px; font-weight:600; ` +
+      `border:1px solid var(--border); border-radius:6px; cursor:pointer; ` +
+      `background:${bg}; color:${cor};">${escaparHTML(c.rotulo)}</button>`
+    );
+  }).join("");
+}
+
+function _quantoCustaLinhasHTML(componentes) {
+  return componentes
+    .map((c) => {
+      const valor = c.valor_mensal_fmt
+        ? `<span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escaparHTML(c.valor_mensal_fmt)}</span>`
+        : `<span style="font-size:13px; font-style:italic; color:var(--text-dim);">não divulgado</span>`;
+      const obs = c.valor_observacao
+        ? `<div style="font-size:10px; color:var(--text-dim); margin-top:2px;">${escaparHTML(c.valor_observacao)}</div>`
+        : "";
+      // Chip "Ver fonte" clicável usa fonte_url do componente (cada
+      // componente carrega sua própria fonte legal — Ato/Decreto/Lei).
+      const fonte = c.fonte_url
+        ? `<a href="${escaparHTML(c.fonte_url)}" target="_blank" rel="noopener noreferrer" ` +
+          `style="font-size:10px; color:var(--accent); text-decoration:none;">` +
+          `${escaparHTML(c.fonte_legal || "Ver fonte")} &#8599;</a>`
+        : "";
+      return (
+        `<div style="padding:12px 14px; border-bottom:1px solid var(--border);">` +
+        `  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">` +
+        `    <span style="font-size:12px; color:var(--text-secondary);">${escaparHTML(c.rotulo)}</span>` +
+        `    ${valor}` +
+        `  </div>` +
+        `  ${obs}` +
+        `  <div style="margin-top:4px;">${fonte}</div>` +
+        `</div>`
+      );
+    })
+    .join("");
+}
+
+async function carregarCustoMandato(cargo) {
+  const seletor = document.getElementById("quantoCustaSeletor");
+  const container = document.getElementById("quantoCustaContainer");
+  const titulo = document.getElementById("quantoCustaTitulo");
+  if (!container) return;
+  if (seletor) seletor.innerHTML = _quantoCustaSeletorHTML(cargo);
+  container.innerHTML = `<div class="card" style="padding:14px; color:var(--text-dim); font-size:12px;">Carregando&hellip;</div>`;
+
+  try {
+    const r = await fetch(`${API}/custo-mandato/${encodeURIComponent(cargo)}`);
+    if (!r.ok) {
+      container.innerHTML = `<div class="card" style="padding:14px; color:var(--text-dim); font-size:12px;">Dados não disponíveis (${r.status}). Rode o pipeline <code>custo_mandato_br</code>.</div>`;
+      return;
+    }
+    const d = await r.json();
+    if (titulo) titulo.textContent = `Quanto custa um(a) ${d.rotulo_humano.toLowerCase()}?`;
+
+    const totalMensal = d.custo_mensal_individual_fmt || "—";
+    const totalAnual = d.custo_anual_total_fmt || "—";
+    const equivalente = d.equivalente_trabalhadores_min || 0;
+    const nTitulares = d.n_titulares || 0;
+
+    const linhas = _quantoCustaLinhasHTML(d.componentes || []);
+    const totalBlock = d.custo_mensal_individual > 0
+      ? `<div style="display:flex; justify-content:space-between; align-items:center; padding:14px; background:rgba(239,68,68,0.08);">
+           <span style="font-size:13px; font-weight:700; color:var(--text-primary);">Custo certo por titular/mês</span>
+           <span style="font-size:16px; font-weight:800; color:#ef4444;">${escaparHTML(totalMensal)}</span>
+         </div>`
+      : `<div style="padding:14px; background:var(--bg-secondary); font-size:11px; color:var(--text-dim);">
+           Total mensal indisponível — alguns componentes ainda não foram capturados (consulte fontes acima).
+         </div>`;
+
+    const rodape = d.custo_anual_total > 0
+      ? `<div class="card" style="margin-top:10px; padding:10px 14px; background:var(--bg-secondary);">
+           <p style="font-size:12px; line-height:1.7; color:var(--text-dim); margin:0;">
+             Soma só de componentes certos. No total, ${nTitulares} titulares custam
+             <strong style="color:var(--text-secondary);">${escaparHTML(totalAnual)} por ano</strong>${equivalente ? ` &mdash; equivalente ao salário de <strong style="color:var(--text-secondary);">${equivalente} trabalhadores</strong> no salário mínimo para sustentar cada um.` : "."}
+           </p>
+         </div>`
+      : "";
+
+    // Painel de proveniência expandido (igual ao usado nos outros cards):
+    // mostra source_id, run_id, link pra fonte original e cópia preservada.
+    const proveniencia = d.provenance
+      ? renderDetalhesProveniencia(d.provenance)
+      : "";
+
+    container.innerHTML = `
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div style="display:flex; flex-direction:column; gap:0;">
+          ${linhas}
+          ${totalBlock}
+        </div>
+      </div>
+      ${rodape}
+      ${proveniencia}
+    `;
+  } catch (err) {
+    container.innerHTML = `<div class="card" style="padding:14px; color:var(--text-dim); font-size:12px;">Erro ao carregar custo do cargo: ${escaparHTML(String(err && err.message || err))}.</div>`;
+  }
 }
 
 // === BUSCA ===

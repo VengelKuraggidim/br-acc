@@ -14,9 +14,10 @@ import re
 import sys
 from pathlib import Path
 
-# source_ids isentos (pipelines file-only / operator-fed, sem HTTP externo).
+# source_ids isentos (pipelines file-only / operator-fed / derived, sem HTTP).
 # Ver docs/archival.md — adicione aqui ao introduzir pipeline GO file-only.
-EXEMPT: frozenset[str] = frozenset({"tce_go"})
+# entity_resolution_politicos_go é derived (lê puro do grafo, zero fetch).
+EXEMPT: frozenset[str] = frozenset({"tce_go", "entity_resolution_politicos_go"})
 
 _SOURCE_ID_RE = re.compile(r'source_id\s*=\s*"([a-z0-9_]+)"')
 _ARCHIVE_IMPORT_RE = re.compile(r"from\s+bracc_etl\.archival\s+import[^\n]*archive_fetch")

@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-18T21:25:02Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-19T04:52:55Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -41,13 +41,14 @@ Status buckets:
 | cnpj | cnpj | implemented_loaded | loaded | file_batch | data/cnpj/* | - |
 | comprasnet | comprasnet | implemented_partial | partial | file_batch | data/comprasnet/* | Needs freshness backfill |
 | cpgf | cpgf | implemented_loaded | loaded | file_batch | data/cpgf/* | - |
+| custo_mandato_br | custo_mandato_br | implemented_partial | partial | api_json | API payload from https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao | Materializa CustoMandato + CustoComponente por cargo (dep_federal/senador/dep_estadual_go/governador_go) com proveniencia rastreavel; valores hardcoded de Decretos/Atos/Leis publicos; archive_fetch dos URLs legais por componente; substitui card hardcoded da home Quanto custa um deputado federal |
 | cvm | cvm | implemented_loaded | loaded | file_batch | data/cvm/* | - |
 | cvm_full_ownership_chain | cvm_full_ownership_chain | not_built | not_loaded | file_batch | data/cvm_full_ownership_chain/* | Shareholder graph expansion |
 | cvm_funds | cvm_funds | implemented_loaded | loaded | file_batch | data/cvm_funds/* | - |
 | datajud | datajud | blocked_external | not_loaded | api_json | API payload from https://api-publica.datajud.cnj.jus.br/ | Credentials not fully operational in prod |
 | datasus | datasus | implemented_loaded | loaded | file_batch | data/datasus/* | - |
 | dou | dou | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
-| entity_resolution_politicos_go | entity_resolution_politicos_go | implemented_partial | partial | derived | Graph read-only (:Senator/:FederalLegislator/:StateLegislator + :Person GO) | Liga :Senator/:FederalLegislator/:StateLegislator a :Person GO via regras determinsticas; cria :CanonicalPerson + :REPRESENTS; zero fetch externo; preserva proveniencia por pipeline-fonte; audit log JSONL pra ambiguidades |
+| entity_resolution_politicos_go | entity_resolution_politicos_go | implemented_partial | partial | unknown | source-specific contract required | Liga :Senator/:FederalLegislator/:StateLegislator a :Person GO via regras determinsticas; cria :CanonicalPerson + :REPRESENTS; zero fetch externo; preserva proveniencia por pipeline-fonte; audit log JSONL pra ambiguidades |
 | estban | estban | not_built | not_loaded | file_batch | data/estban/* | Banking aggregates |
 | eu_sanctions | eu_sanctions | implemented_loaded | loaded | file_batch | data/eu_sanctions/* | - |
 | folha_go | folha_go | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.go.gov.br/ | - |
@@ -68,7 +69,7 @@ Status buckets:
 | pncp | pncp | implemented_partial | partial | api_json | API payload from https://pncp.gov.br/app/editais | Freshness SLA pending |
 | pncp_go | pncp_go | implemented_loaded | loaded | api_json | API payload from https://pncp.gov.br/api/consulta/v1/ | - |
 | portal_transparencia_emendas | emendas_parlamentares_go | implemented_partial | partial | api_json | API payload from https://api.portaldatransparencia.gov.br/api-de-dados/emendas | GO-scoped parliamentary amendments per federal deputy; substitui live-call Flask buscar_emendas_transparencia (requires TRANSPARENCIA_API_KEY) |
-| propagacao_fotos_person | propagacao_fotos_person | implemented_partial | partial | derived | Graph read-only (:FederalLegislator/:StateLegislator/:Senator + :Person GO) | Copia foto_url+bloco foto_* de :FederalLegislator/:StateLegislator/:Senator pro :Person homonimo (match por name normalizado); necessario porque o fulltext entity_search da PWA so cobre :Person; idempotente; skippa em ambiguidade (>1 match); nao cria nos nem faz HTTP |
+| propagacao_fotos_person | propagacao_fotos_person | implemented_partial | partial | unknown | source-specific contract required | Copia foto_url+bloco foto_* de :FederalLegislator/:StateLegislator/:Senator pro :Person homonimo (match por name normalizado); necessario porque o fulltext entity_search da PWA so cobre :Person; idempotente; skippa em ambiguidade (>1 match); nao cria nos nem faz HTTP |
 | querido_diario_go | querido_diario_go | implemented_loaded | loaded | api_json | API payload from https://queridodiario.ok.org.br/api/ | - |
 | rais | rais | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
 | receita_dirbi | receita_dirbi | not_built | not_loaded | file_batch | data/receita_dirbi/* | Tax benefit declarations |

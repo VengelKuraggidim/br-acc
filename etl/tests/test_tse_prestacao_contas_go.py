@@ -25,7 +25,7 @@ from __future__ import annotations
 import csv as _csv
 import io
 import zipfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import httpx

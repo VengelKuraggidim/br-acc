@@ -1029,6 +1029,7 @@ class TestCanonicalIdPassthrough:
 
         # Query recebe o id canônico sem tradução.
         call = query_mock.await_args
+        assert call is not None
         assert call.args[1] == "perfil_politico_connections"
         assert call.args[2] == {"entity_id": "canon_senado_5895"}
         # E o perfil devolve o Senator (o Cypher resolveu pro source mais oficial).

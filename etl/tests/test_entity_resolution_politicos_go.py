@@ -16,11 +16,13 @@ Cobre:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from bracc_etl.pipelines.entity_resolution_politicos_go import (
     _SOURCE_ID,
@@ -98,7 +100,9 @@ def _make_pipeline(
     return pipeline, driver, calls
 
 
-def _senator(element_id: str, name: str, partido: str = "PSB", id_senado: str = "5895") -> dict[str, Any]:
+def _senator(
+    element_id: str, name: str, partido: str = "PSB", id_senado: str = "5895",
+) -> dict[str, Any]:
     return {
         "labels": ["Senator"],
         "element_id": element_id,
