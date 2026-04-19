@@ -29,9 +29,9 @@
     "tax": "Benefícios fiscais",
     "social": "Programas sociais",
     "international": "Listas internacionais",
-    "state": "Goiás — estado e tribunais",
-    "municipal": "Goiás — municípios",
-    "procurement": "Goiás — compras públicas",
+    "state": "Tribunais e portais estaduais",
+    "municipal": "Dados municipais",
+    "procurement": "Compras públicas estaduais",
     "enrichment": "Enriquecimento de dados",
     "audit": "Tribunais de contas"
   },
@@ -959,6 +959,345 @@
       "por_que_importa": "Garante que o cidadão veja o rosto do político mesmo quando ele já saiu do cargo.",
       "arquivos_exemplo": [
         "JPG com foto de ex-político goiano"
+      ]
+    },
+    "tce_sp": {
+      "sigla_full": "Tribunal de Contas do Estado de São Paulo",
+      "o_que_e": "Órgão que fiscaliza as contas do governo paulista. Confere gastos do estado e das prefeituras.",
+      "o_que_pegamos": "Baixamos a lista de gestores sancionados e contratos públicos. Também pegamos pareceres de contas anuais.",
+      "por_que_importa": "Um político de Goiás pode ter empresa ou contrato em São Paulo.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados pelo tribunal",
+        "JSON com contratos publicados por prefeituras"
+      ]
+    },
+    "tce_pe": {
+      "sigla_full": "Tribunal de Contas do Estado de Pernambuco",
+      "o_que_e": "Tribunal que confere como o dinheiro público é gasto em Pernambuco. Olha estado e cidades.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e decisões sobre contas. Pegamos também lista de contratos.",
+      "por_que_importa": "Empresas ligadas a políticos goianos podem aparecer fiscalizadas lá.",
+      "arquivos_exemplo": [
+        "CSV com gestores bloqueados pelo tribunal",
+        "JSON com julgamentos de contas municipais"
+      ]
+    },
+    "tce_rj": {
+      "sigla_full": "Tribunal de Contas do Estado do Rio de Janeiro",
+      "o_que_e": "Órgão que fiscaliza as contas do governo fluminense. Acompanha gastos do estado e municípios.",
+      "o_que_pegamos": "Pegamos dados abertos de contratos e gestores sancionados. Também baixamos relatórios de contas.",
+      "por_que_importa": "Conexões de goianos com empresas cariocas ficam visíveis.",
+      "arquivos_exemplo": [
+        "CSV com lista de pessoas sancionadas",
+        "JSON com contratos estaduais declarados"
+      ]
+    },
+    "tce_rs": {
+      "sigla_full": "Tribunal de Contas do Estado do Rio Grande do Sul",
+      "o_que_e": "Tribunal que confere as contas do governo gaúcho. Olha estado e prefeituras do RS.",
+      "o_que_pegamos": "Baixamos gestores sancionados e decisões publicadas. Também pegamos dados de contratos.",
+      "por_que_importa": "Empresas gaúchas podem ter dono ou sócio político de Goiás.",
+      "arquivos_exemplo": [
+        "CSV com cadastro de gestores sancionados",
+        "PDF com pareceres de contas anuais"
+      ]
+    },
+    "tce_mg": {
+      "sigla_full": "Tribunal de Contas do Estado de Minas Gerais",
+      "o_que_e": "Órgão que fiscaliza contas do governo mineiro e das prefeituras. Confere onde o dinheiro público vai.",
+      "o_que_pegamos": "Baixamos lista de gestores bloqueados e contratos. Também pegamos decisões do tribunal.",
+      "por_que_importa": "Minas faz divisa com Goiás e troca muitos negócios com políticos daqui.",
+      "arquivos_exemplo": [
+        "CSV com gestores bloqueados publicados",
+        "JSON com contratos de prefeituras mineiras"
+      ]
+    },
+    "tce_ba": {
+      "sigla_full": "Tribunal de Contas do Estado da Bahia",
+      "o_que_e": "Tribunal que fiscaliza gastos do governo baiano. Acompanha estado e cidades da Bahia.",
+      "o_que_pegamos": "Pegamos cadastro de gestores sancionados e contratos públicos. Também baixamos pareceres de contas.",
+      "por_que_importa": "Empresas baianas podem ter ligação declarada com políticos goianos.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados do estado",
+        "JSON com contratos municipais publicados"
+      ]
+    },
+    "tce_ce": {
+      "sigla_full": "Tribunal de Contas do Estado do Ceará",
+      "o_que_e": "Órgão que confere como o governo cearense gasta dinheiro público. Olha estado e prefeituras.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e lista de contratos. Também pegamos decisões do tribunal.",
+      "por_que_importa": "Um gestor sancionado no Ceará pode atuar em empresa goiana.",
+      "arquivos_exemplo": [
+        "CSV com cadastro de gestores bloqueados",
+        "JSON com contratos de órgãos estaduais"
+      ]
+    },
+    "tce_pr": {
+      "sigla_full": "Tribunal de Contas do Estado do Paraná",
+      "o_que_e": "Tribunal que fiscaliza as contas do governo paranaense. Confere estado e cidades do PR.",
+      "o_que_pegamos": "Pegamos lista de gestores sancionados e contratos. Também baixamos pareceres publicados.",
+      "por_que_importa": "Político de Goiás pode ter sócio ou contrato no Paraná.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados do tribunal",
+        "JSON com contratos publicados no portal"
+      ]
+    },
+    "tce_sc": {
+      "sigla_full": "Tribunal de Contas do Estado de Santa Catarina",
+      "o_que_e": "Órgão que fiscaliza contas do governo catarinense. Acompanha estado e municípios de SC.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e contratos públicos. Também pegamos decisões divulgadas.",
+      "por_que_importa": "Empresas catarinenses podem aparecer ligadas a políticos goianos.",
+      "arquivos_exemplo": [
+        "CSV com lista de gestores bloqueados",
+        "JSON com contratos de prefeituras"
+      ]
+    },
+    "tce_es": {
+      "sigla_full": "Tribunal de Contas do Estado do Espírito Santo",
+      "o_que_e": "Tribunal que confere os gastos do governo capixaba. Olha estado e prefeituras do ES.",
+      "o_que_pegamos": "Pegamos cadastro de gestores sancionados e contratos. Também baixamos pareceres de contas.",
+      "por_que_importa": "Conexões entre políticos goianos e empresas capixabas ficam registradas.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados publicados",
+        "JSON com contratos do estado"
+      ]
+    },
+    "tce_mt": {
+      "sigla_full": "Tribunal de Contas do Estado de Mato Grosso",
+      "o_que_e": "Órgão que fiscaliza contas do governo mato-grossense. Confere estado e cidades do MT.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e lista de contratos. Também pegamos decisões do tribunal.",
+      "por_que_importa": "Mato Grosso faz divisa com Goiás e compartilha muitos negócios agropecuários.",
+      "arquivos_exemplo": [
+        "CSV com gestores bloqueados pelo tribunal",
+        "JSON com contratos publicados em portal"
+      ]
+    },
+    "tce_ms": {
+      "sigla_full": "Tribunal de Contas do Estado de Mato Grosso do Sul",
+      "o_que_e": "Tribunal que fiscaliza gastos do governo sul-mato-grossense. Acompanha estado e prefeituras.",
+      "o_que_pegamos": "Pegamos lista de gestores sancionados e contratos. Também baixamos pareceres publicados.",
+      "por_que_importa": "MS faz divisa com Goiás e tem empresas ligadas a políticos daqui.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados do estado",
+        "JSON com contratos municipais declarados"
+      ]
+    },
+    "tce_am": {
+      "sigla_full": "Tribunal de Contas do Estado do Amazonas",
+      "o_que_e": "Órgão que confere como o governo amazonense gasta dinheiro. Olha estado e municípios do AM.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e contratos públicos. Também pegamos decisões do tribunal.",
+      "por_que_importa": "Um gestor sancionado no Amazonas pode aparecer em empresa goiana.",
+      "arquivos_exemplo": [
+        "CSV com cadastro de gestores bloqueados",
+        "JSON com contratos estaduais publicados"
+      ]
+    },
+    "tce_pa": {
+      "sigla_full": "Tribunal de Contas do Estado do Pará",
+      "o_que_e": "Tribunal que fiscaliza contas do governo paraense. Confere estado e prefeituras do PA.",
+      "o_que_pegamos": "Pegamos cadastro de gestores sancionados e contratos. Também baixamos pareceres divulgados.",
+      "por_que_importa": "Empresas paraenses podem ter sócio político de Goiás.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados pelo tribunal",
+        "JSON com contratos de órgãos do estado"
+      ]
+    },
+    "tce_ro": {
+      "sigla_full": "Tribunal de Contas do Estado de Rondônia",
+      "o_que_e": "Órgão que fiscaliza gastos do governo rondoniense. Acompanha estado e cidades de RO.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e lista de contratos. Também pegamos decisões publicadas.",
+      "por_que_importa": "Conexões entre políticos goianos e empresas de Rondônia ficam visíveis.",
+      "arquivos_exemplo": [
+        "CSV com cadastro de gestores bloqueados",
+        "JSON com contratos de prefeituras"
+      ]
+    },
+    "tce_rr": {
+      "sigla_full": "Tribunal de Contas do Estado de Roraima",
+      "o_que_e": "Tribunal que confere as contas do governo roraimense. Olha estado e municípios de RR.",
+      "o_que_pegamos": "Pegamos lista de gestores sancionados e contratos. Também baixamos pareceres de contas.",
+      "por_que_importa": "Um político goiano pode ter negócios declarados em Roraima.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados publicados",
+        "JSON com contratos estaduais abertos"
+      ]
+    },
+    "tce_ap": {
+      "sigla_full": "Tribunal de Contas do Estado do Amapá",
+      "o_que_e": "Órgão que fiscaliza como o governo amapaense gasta dinheiro. Acompanha estado e prefeituras.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e contratos do portal. Também pegamos decisões divulgadas.",
+      "por_que_importa": "Empresas do Amapá podem aparecer ligadas a políticos goianos.",
+      "arquivos_exemplo": [
+        "CSV com lista de gestores bloqueados",
+        "JSON com contratos do governo estadual"
+      ]
+    },
+    "tce_to": {
+      "sigla_full": "Tribunal de Contas do Estado do Tocantins",
+      "o_que_e": "Tribunal que fiscaliza contas do governo tocantinense. Confere estado e cidades de TO.",
+      "o_que_pegamos": "Pegamos cadastro de gestores sancionados e contratos. Também baixamos pareceres publicados.",
+      "por_que_importa": "Tocantins faz divisa com Goiás e partilha muitos contratos e famílias políticas.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados do estado",
+        "JSON com contratos municipais declarados"
+      ]
+    },
+    "tce_ma": {
+      "sigla_full": "Tribunal de Contas do Estado do Maranhão",
+      "o_que_e": "Órgão que fiscaliza gastos do governo maranhense. Olha estado e prefeituras do MA.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e lista de contratos. Também pegamos decisões do tribunal.",
+      "por_que_importa": "Empresas maranhenses podem ter ligação com políticos goianos.",
+      "arquivos_exemplo": [
+        "CSV com cadastro de gestores bloqueados",
+        "JSON com contratos publicados no portal"
+      ]
+    },
+    "tce_pi": {
+      "sigla_full": "Tribunal de Contas do Estado do Piauí",
+      "o_que_e": "Tribunal que confere como o governo piauiense gasta dinheiro. Acompanha estado e cidades.",
+      "o_que_pegamos": "Pegamos lista de gestores sancionados e contratos. Também baixamos pareceres de contas.",
+      "por_que_importa": "Um gestor sancionado no Piauí pode atuar em empresa de Goiás.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados publicados",
+        "JSON com contratos do governo estadual"
+      ]
+    },
+    "tce_rn": {
+      "sigla_full": "Tribunal de Contas do Estado do Rio Grande do Norte",
+      "o_que_e": "Órgão que fiscaliza contas do governo potiguar. Confere estado e municípios do RN.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e contratos publicados. Também pegamos decisões do tribunal.",
+      "por_que_importa": "Empresas do RN podem ter sócio ligado a políticos goianos.",
+      "arquivos_exemplo": [
+        "CSV com lista de gestores bloqueados",
+        "JSON com contratos de prefeituras"
+      ]
+    },
+    "tce_pb": {
+      "sigla_full": "Tribunal de Contas do Estado da Paraíba",
+      "o_que_e": "Tribunal que fiscaliza gastos do governo paraibano. Olha estado e cidades da PB.",
+      "o_que_pegamos": "Pegamos cadastro de gestores sancionados e contratos. Também baixamos pareceres divulgados.",
+      "por_que_importa": "Conexões entre políticos de Goiás e empresas paraibanas ficam registradas.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados do estado",
+        "JSON com contratos estaduais declarados"
+      ]
+    },
+    "tce_al": {
+      "sigla_full": "Tribunal de Contas do Estado de Alagoas",
+      "o_que_e": "Órgão que confere as contas do governo alagoano. Acompanha estado e prefeituras de AL.",
+      "o_que_pegamos": "Baixamos gestores bloqueados e lista de contratos. Também pegamos decisões publicadas.",
+      "por_que_importa": "Um político goiano pode ter empresa ou contrato em Alagoas.",
+      "arquivos_exemplo": [
+        "CSV com cadastro de gestores bloqueados",
+        "JSON com contratos municipais publicados"
+      ]
+    },
+    "tce_se": {
+      "sigla_full": "Tribunal de Contas do Estado de Sergipe",
+      "o_que_e": "Tribunal que fiscaliza gastos do governo sergipano. Confere estado e municípios de SE.",
+      "o_que_pegamos": "Pegamos lista de gestores sancionados e contratos. Também baixamos pareceres de contas anuais.",
+      "por_que_importa": "Empresas sergipanas podem aparecer ligadas a políticos de Goiás.",
+      "arquivos_exemplo": [
+        "CSV com gestores sancionados publicados",
+        "JSON com contratos do governo estadual"
+      ]
+    },
+    "state_portal_sp": {
+      "sigla_full": "Portal de Transparência do Estado de São Paulo",
+      "o_que_e": "Site oficial do governo paulista. Mostra gastos, contratos e servidores do estado.",
+      "o_que_pegamos": "Baixamos contratos, pagamentos, convênios e folha de servidores. Também registros de fornecedores sancionados.",
+      "por_que_importa": "Empresa goiana ou ligada a político de Goiás pode ganhar contrato em São Paulo.",
+      "arquivos_exemplo": [
+        "CSV com lista de contratos estaduais",
+        "CSV com pagamentos a fornecedores",
+        "CSV com folha de servidores do estado"
+      ]
+    },
+    "state_portal_mg": {
+      "sigla_full": "Portal de Transparência do Estado de Minas Gerais",
+      "o_que_e": "Site oficial do governo mineiro. Publica gastos, compras e contratos do estado.",
+      "o_que_pegamos": "Baixamos contratos, convênios, pagamentos e lista de servidores. Também empresas sancionadas pelo estado.",
+      "por_que_importa": "Fornecedor de Goiás pode aparecer em obra ou compra registrada em Minas.",
+      "arquivos_exemplo": [
+        "CSV com contratos do governo mineiro",
+        "CSV com despesas pagas no estado",
+        "CSV com convênios firmados"
+      ]
+    },
+    "state_portal_ba": {
+      "sigla_full": "Portal de Transparência do Estado da Bahia",
+      "o_que_e": "Site oficial do governo baiano. Mostra em que o dinheiro público do estado é gasto.",
+      "o_que_pegamos": "Baixamos contratos, pagamentos, convênios e folha. Também empresas impedidas de contratar.",
+      "por_que_importa": "Empresa ligada a político goiano pode ter contrato declarado na Bahia.",
+      "arquivos_exemplo": [
+        "CSV com contratos estaduais baianos",
+        "CSV com pagamentos a empresas",
+        "CSV com servidores do estado"
+      ]
+    },
+    "state_portal_ce": {
+      "sigla_full": "Portal de Transparência do Estado do Ceará",
+      "o_que_e": "Site oficial do governo cearense. Mostra gastos, compras e pessoal do estado.",
+      "o_que_pegamos": "Baixamos contratos, convênios, pagamentos e folha de servidores. Também lista de fornecedores sancionados.",
+      "por_que_importa": "Empresa de Goiás pode ter contrato registrado no Ceará e aparecer ligada a político.",
+      "arquivos_exemplo": [
+        "CSV com contratos do estado",
+        "CSV com despesas pagas pelo governo",
+        "CSV com convênios firmados"
+      ]
+    },
+    "state_portal_pr": {
+      "sigla_full": "Portal de Transparência do Estado do Paraná",
+      "o_que_e": "Site oficial do governo paranaense. Publica contratos, gastos e folha do estado.",
+      "o_que_pegamos": "Baixamos contratos, pagamentos, convênios e servidores. Também empresas sancionadas.",
+      "por_que_importa": "Político de Goiás pode ter parente ou sócio ligado a contrato no Paraná.",
+      "arquivos_exemplo": [
+        "CSV com contratos do governo do Paraná",
+        "CSV com pagamentos a fornecedores",
+        "CSV com lista de servidores"
+      ]
+    },
+    "state_portal_sc": {
+      "sigla_full": "Portal de Transparência do Estado de Santa Catarina",
+      "o_que_e": "Site oficial do governo catarinense. Mostra gastos e contratos do estado.",
+      "o_que_pegamos": "Baixamos contratos, convênios, pagamentos e folha. Também fornecedores impedidos de contratar.",
+      "por_que_importa": "Empresa goiana pode ganhar contrato declarado em Santa Catarina.",
+      "arquivos_exemplo": [
+        "CSV com contratos estaduais",
+        "CSV com despesas pagas",
+        "CSV com convênios do estado"
+      ]
+    },
+    "state_portal_rs": {
+      "sigla_full": "Portal de Transparência do Estado do Rio Grande do Sul",
+      "o_que_e": "Site oficial do governo gaúcho. Publica dados de gastos, contratos e servidores.",
+      "o_que_pegamos": "Baixamos contratos, pagamentos, convênios e folha. Também lista de empresas sancionadas.",
+      "por_que_importa": "Fornecedor ligado a político goiano pode aparecer em contrato no Rio Grande do Sul.",
+      "arquivos_exemplo": [
+        "CSV com contratos do governo gaúcho",
+        "CSV com pagamentos a empresas",
+        "CSV com servidores estaduais"
+      ]
+    },
+    "state_portal_pe": {
+      "sigla_full": "Portal de Transparência do Estado de Pernambuco",
+      "o_que_e": "Site oficial do governo pernambucano. Mostra gastos, contratos e pessoal do estado.",
+      "o_que_pegamos": "Baixamos contratos, convênios, pagamentos e folha de servidores. Também empresas sancionadas.",
+      "por_que_importa": "Empresa de Goiás pode ter contrato registrado em Pernambuco e aparecer ligada a político.",
+      "arquivos_exemplo": [
+        "CSV com contratos estaduais",
+        "CSV com despesas pagas pelo estado",
+        "CSV com convênios firmados"
+      ]
+    },
+    "state_portal_rj": {
+      "sigla_full": "Portal de Transparência do Estado do Rio de Janeiro",
+      "o_que_e": "Site oficial do governo fluminense. Publica contratos, gastos e folha do estado.",
+      "o_que_pegamos": "Baixamos contratos, pagamentos, convênios e servidores. Também empresas impedidas de contratar.",
+      "por_que_importa": "Político goiano pode ter sócio ou parente ligado a contrato declarado no Rio.",
+      "arquivos_exemplo": [
+        "CSV com contratos do governo fluminense",
+        "CSV com pagamentos a fornecedores",
+        "CSV com lista de servidores"
       ]
     }
   }

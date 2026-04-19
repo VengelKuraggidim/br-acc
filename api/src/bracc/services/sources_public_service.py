@@ -49,16 +49,15 @@ def load_public_copy() -> dict[str, Any]:
 def _exclude_source(entry: SourceRegistryEntry) -> bool:
     """Fontes que não devem aparecer na aba pública 'Fontes'.
 
-    - TCEs de outros estados (escopo Fiscal Cidadão é GO; só tce_go entra).
-    - Portais de transparência de outros estados (só state_portal_go entra).
-    - Pipelines de enriquecimento interno (derivações, não fontes externas).
+    Só exclui pipelines de **derivação interna** (não são fontes externas,
+    são processamento local que deriva de outros nodes já no grafo).
+
+    TCEs e portais de outros estados ENTRAM na lista — o grafo ingere dados
+    nacionais de propósito pra descobrir conexões cross-estado de políticos
+    goianos (ver `project_go_scope_policy` na memória). A aba Fontes mostra
+    todas as fontes do registry, não só as GO-específicas.
     """
-    sid = entry.id
-    if sid.startswith("tce_") and sid != "tce_go":
-        return True
-    if sid.startswith("state_portal_") and sid != "state_portal_go":
-        return True
-    return sid in {"entity_resolution_politicos_go", "propagacao_fotos_person"}
+    return entry.id in {"entity_resolution_politicos_go", "propagacao_fotos_person"}
 
 
 def _merge_entry(

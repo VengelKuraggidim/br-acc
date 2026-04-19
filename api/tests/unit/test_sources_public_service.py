@@ -104,9 +104,15 @@ class TestBuildPublicSources:
         assert result[0]["copy_disponivel"] is True
         assert result[0]["arquivos_exemplo"] == ["ZIP"]
 
-    def test_exclui_tces_fora_de_go(
+    def test_inclui_tces_e_portais_de_outros_estados(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """TCEs/portais não-GO entram no grafo pra cruzar conexões cross-estado.
+
+        Ver memória project_go_scope_policy: escopo GO é das entidades-alvo,
+        não do grafo. Políticos goianos podem ter contratos/sócios em outros
+        estados — filtrar aqui perderia as conexões.
+        """
         registry = _write_registry(
             tmp_path,
             [
@@ -124,7 +130,7 @@ class TestBuildPublicSources:
         monkeypatch.setenv("BRACC_SOURCE_REGISTRY_PATH", str(registry))
         monkeypatch.setenv("BRACC_SOURCES_COPY_PATH", str(copy))
         ids = {s["id"] for s in build_public_sources()}
-        assert ids == {"tce_go", "state_portal_go"}
+        assert ids == {"tce_go", "tce_sp", "state_portal_sp", "state_portal_go"}
 
     def test_exclui_pipelines_de_enriquecimento(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
