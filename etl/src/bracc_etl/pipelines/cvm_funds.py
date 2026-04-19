@@ -67,6 +67,9 @@ class CvmFundsPipeline(Pipeline):
             encoding="latin-1",
         )
 
+        # rows_in = total raw do cad_fi.csv (denominador do funnel); transforms
+        # filtram CNPJs inválidos e deduplicam, então rows_loaded <= rows_in.
+        self.rows_in = len(self._raw)
         logger.info("[cvm_funds] Extracted %d rows from cad_fi.csv", len(self._raw))
 
     def transform(self) -> None:
@@ -105,33 +108,42 @@ class CvmFundsPipeline(Pipeline):
                 manager_cnpj = format_cnpj(manager_digits)
             manager_name = normalize_name(str(row.get("GESTOR", "")))
 
-            funds.append({
-                "fund_cnpj": fund_cnpj,
-                "fund_name": fund_name,
-                "fund_type": fund_type,
-                "administrator_cnpj": admin_cnpj,
-                "administrator_name": admin_name,
-                "manager_cnpj": manager_cnpj,
-                "manager_name": manager_name,
-                "status": status,
-                "source": "cvm_funds",
-            })
+            funds.append(self.attach_provenance(
+                {
+                    "fund_cnpj": fund_cnpj,
+                    "fund_name": fund_name,
+                    "fund_type": fund_type,
+                    "administrator_cnpj": admin_cnpj,
+                    "administrator_name": admin_name,
+                    "manager_cnpj": manager_cnpj,
+                    "manager_name": manager_name,
+                    "status": status,
+                    "source": "cvm_funds",
+                },
+                record_id=fund_cnpj,
+            ))
 
             # ADMINISTRA relationship
             if admin_cnpj:
-                admin_rels.append({
-                    "source_key": admin_cnpj,
-                    "target_key": fund_cnpj,
-                    "admin_name": admin_name,
-                })
+                admin_rels.append(self.attach_provenance(
+                    {
+                        "source_key": admin_cnpj,
+                        "target_key": fund_cnpj,
+                        "admin_name": admin_name,
+                    },
+                    record_id=fund_cnpj,
+                ))
 
             # GERE relationship
             if manager_cnpj:
-                manager_rels.append({
-                    "source_key": manager_cnpj,
-                    "target_key": fund_cnpj,
-                    "manager_name": manager_name,
-                })
+                manager_rels.append(self.attach_provenance(
+                    {
+                        "source_key": manager_cnpj,
+                        "target_key": fund_cnpj,
+                        "manager_name": manager_name,
+                    },
+                    record_id=fund_cnpj,
+                ))
 
         self.funds = deduplicate_rows(funds, ["fund_cnpj"])
 
@@ -178,7 +190,12 @@ class CvmFundsPipeline(Pipeline):
                 "ON CREATE SET c.razao_social = row.admin_name, c.name = row.admin_name "
                 "WITH c, row "
                 "MATCH (f:Fund {fund_cnpj: row.target_key}) "
-                "MERGE (c)-[:ADMINISTRA]->(f)"
+                "MERGE (c)-[r:ADMINISTRA]->(f) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
             loaded = loader.run_query_with_retry(query, self.admin_rels, batch_size=500)
             logger.info("[cvm_funds] Loaded %d ADMINISTRA relationships", loaded)
@@ -190,7 +207,15 @@ class CvmFundsPipeline(Pipeline):
                 "ON CREATE SET c.razao_social = row.manager_name, c.name = row.manager_name "
                 "WITH c, row "
                 "MATCH (f:Fund {fund_cnpj: row.target_key}) "
-                "MERGE (c)-[:GERE]->(f)"
+                "MERGE (c)-[r:GERE]->(f) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
             loaded = loader.run_query_with_retry(query, self.manager_rels, batch_size=500)
             logger.info("[cvm_funds] Loaded %d GERE relationships", loaded)
+
+        # rows_loaded = número de Fund nodes carregados (output primário).
+        self.rows_loaded = len(self.funds)
