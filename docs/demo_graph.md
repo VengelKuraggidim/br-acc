@@ -81,23 +81,22 @@ uv run python ../scripts/build_demo_graph.py \
   --dry-run-only
 ```
 
-Imprime tabela tipo:
+Imprime tabela tipo (números reais do grafo atual):
 
 ```
 cutoff   nodes        rels         nodes %    rels %     status
-2025     46,922       65,287       29.3%      20.4%      fits
-2024     55,356       73,078       34.6%      22.8%      fits
-2023     63,574       80,747       39.7%      25.2%      fits
-2022    117,908       82,543       73.7%      25.8%      fits  ← salto CampaignExpense 2022
-2021    122,222       86,376       76.4%      27.0%      fits
-2020    124,487       88,167       77.8%      27.6%      fits
-2019    126,675       89,882       79.2%      28.1%      fits
-2018    127,780       90,527       79.9%      28.3%      fits
+2025     46,992       65,357       29.4%      20.4%      fits
+2024     55,426       73,148       34.6%      22.9%      fits
+2023     63,644       80,817       39.8%      25.3%      fits
+2022     81,213       93,765       50.8%      29.3%      fits  ← inclui Campaign 2022
+2018    124,167      127,379       77.6%      39.8%      fits
 → Melhor cutoff: 2018 (mais antigo que ainda coube)
 ```
 
-O "salto" típico em 2022 é do volume de CampaignExpense/CampaignDonation
-da eleição 2022.
+O "salto" em 2022 é do volume de CampaignExpense/CampaignDonation da
+eleição 2022 (filtrado por valor ≥ R$ 1.5k por default — ver
+`--campaign-min-value`). Baixar pra R$ 1k sobe pra 93%, subir pra
+R$ 10k reduz pra ~54%.
 
 ### 4. Build completo
 
@@ -145,6 +144,7 @@ ORDER BY emendas DESC LIMIT 10;
 | `--rel-budget` | 320000 | Limite de rels (80% Aura Free) |
 | `--start-year` | 2025 | Janela começa aqui (só último ano) |
 | `--min-year` | 2018 | Não recua além disso |
+| `--campaign-min-value` | 1500.0 | R$ mínimo pra incluir CampaignExpense/Donation |
 | `--source-uri` | `bolt://localhost:7687` | Grafo fonte |
 | `--target-uri` | `bolt://localhost:7688` | Grafo destino |
 | `--dry-run-only` | — | Só mede, não copia |

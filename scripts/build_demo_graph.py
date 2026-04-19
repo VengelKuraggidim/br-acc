@@ -160,17 +160,23 @@ RETURN collect(DISTINCT elementId(e)) AS ids
 
 # --- Dados eleitorais GO (Campaign*) — label inteiro é GO-scoped ---
 
-# Gastos de campanha GO por ano
+# Gastos de campanha GO por ano — filtrado por valor mínimo pra cortar
+# despesas micro. Mediana do grafo é R$ 600 / p90 R$ 3k; default R$ 1.5k
+# preserva ~20% do volume com os gastos mais significativos.
 CAMPAIGN_EXPENSE_QUERY = """
 MATCH (c:CampaignExpense)
-WHERE c.uf = 'GO' AND coalesce(toInteger(c.ano), 0) >= $year
+WHERE c.uf = 'GO'
+  AND coalesce(toInteger(c.ano), 0) >= $year
+  AND coalesce(toFloat(c.valor), 0) >= $min_value
 RETURN collect(DISTINCT elementId(c)) AS ids
 """
 
-# Doações eleitorais GO por ano
+# Doações eleitorais GO — mesmo filtro de valor
 CAMPAIGN_DONATION_QUERY = """
 MATCH (c:CampaignDonation)
-WHERE c.uf = 'GO' AND coalesce(toInteger(c.ano), 0) >= $year
+WHERE c.uf = 'GO'
+  AND coalesce(toInteger(c.ano), 0) >= $year
+  AND coalesce(toFloat(c.valor), 0) >= $min_value
 RETURN collect(DISTINCT elementId(c)) AS ids
 """
 
@@ -302,6 +308,7 @@ class TierResult:
 class _Args:
     node_budget: int = DEFAULT_NODE_BUDGET
     rel_budget: int = DEFAULT_REL_BUDGET
+    campaign_min_value: float = 1_500.0
 
 
 ARGS = _Args()
@@ -411,10 +418,16 @@ def build_for_cutoff(session: Session, cutoff_year: int) -> TierResult:
 
     # --- Dados eleitorais GO (Campaign*) ---
     campaign_expense = run_ids(
-        session, CAMPAIGN_EXPENSE_QUERY, year=cutoff_year
+        session,
+        CAMPAIGN_EXPENSE_QUERY,
+        year=cutoff_year,
+        min_value=ARGS.campaign_min_value,
     )
     campaign_donation = run_ids(
-        session, CAMPAIGN_DONATION_QUERY, year=cutoff_year
+        session,
+        CAMPAIGN_DONATION_QUERY,
+        year=cutoff_year,
+        min_value=ARGS.campaign_min_value,
     )
     campaign_donors = run_ids(session, CAMPAIGN_DONOR_QUERY)
     tier_campaign = campaign_expense | campaign_donation | campaign_donors
@@ -746,6 +759,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--start-year", type=int, default=2025)
     p.add_argument("--min-year", type=int, default=2018)
     p.add_argument(
+        "--campaign-min-value",
+        type=float,
+        default=1_500.0,
+        help=(
+            "Valor mínimo (R$) pra incluir CampaignExpense/Donation. "
+            "Default R$ 1500 (p90 do grafo); cortar mais baixo adiciona "
+            "ruído; R$ 10k reduz pra ~60%% do orçamento."
+        ),
+    )
+    p.add_argument(
         "--dry-run-only",
         action="store_true",
         help="Só mede. Não conecta no destino nem copia.",
@@ -763,6 +786,7 @@ def main() -> int:
     args = parse_args()
     ARGS.node_budget = args.node_budget
     ARGS.rel_budget = args.rel_budget
+    ARGS.campaign_min_value = args.campaign_min_value
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
