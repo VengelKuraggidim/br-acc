@@ -76,6 +76,7 @@ class TSEPipeline(Pipeline):
             doacoes_path, encoding="latin-1", dtype=str,
             nrows=self.limit,
         )
+        self.rows_in = len(self._raw_candidatos) + len(self._raw_doacoes)
 
     def transform(self) -> None:
         self._transform_candidates()
@@ -159,11 +160,21 @@ class TSEPipeline(Pipeline):
         # Merge by CPF, also store sq_candidato as a list for cross-referencing
         if cpf_candidates:
             cpf_deduped = deduplicate_rows(cpf_candidates, ["cpf"])
+            cpf_deduped = [
+                self.attach_provenance(c, record_id=c.get("sq_candidato", c["cpf"]),
+                                       record_url=_TSE_DATASET_URL)
+                for c in cpf_deduped
+            ]
             loader.load_nodes("Person", cpf_deduped, key_field="cpf")
 
         # For candidates without CPF, merge by sq_candidato
         if nocpf_candidates:
-            loader.load_nodes("Person", nocpf_candidates, key_field="sq_candidato")
+            nocpf_stamped = [
+                self.attach_provenance(c, record_id=c["sq_candidato"],
+                                       record_url=_TSE_DATASET_URL)
+                for c in nocpf_candidates
+            ]
+            loader.load_nodes("Person", nocpf_stamped, key_field="sq_candidato")
 
         # Build sq_candidato→cpf lookup for linking
         sq_to_cpf: dict[str, str] = {}
@@ -241,10 +252,22 @@ class TSEPipeline(Pipeline):
         ]
 
         if person_donors:
-            loader.load_nodes("Person", deduplicate_rows(person_donors, ["cpf"]), key_field="cpf")
+            person_donors_deduped = deduplicate_rows(person_donors, ["cpf"])
+            person_donors_deduped = [
+                self.attach_provenance(p, record_id=p["cpf"],
+                                       record_url=_TSE_DATASET_URL)
+                for p in person_donors_deduped
+            ]
+            loader.load_nodes("Person", person_donors_deduped, key_field="cpf")
         if company_donors:
+            company_donors_deduped = deduplicate_rows(company_donors, ["cnpj"])
+            company_donors_deduped = [
+                self.attach_provenance(c, record_id=c["cnpj"],
+                                       record_url=_TSE_DATASET_URL)
+                for c in company_donors_deduped
+            ]
             loader.load_nodes(
-                "Company", deduplicate_rows(company_donors, ["cnpj"]), key_field="cnpj"
+                "Company", company_donors_deduped, key_field="cnpj",
             )
 
         # DOOU from Person donors → candidate
@@ -322,6 +345,10 @@ class TSEPipeline(Pipeline):
                 "    r.run_id = row.run_id",
                 company_donation_rels,
             )
+
+        self.rows_loaded = (
+            len(self.candidates) + len(self.elections) + len(self.donations)
+        )
 
 
 # ────────────────────────────────────────────────────────────────────
