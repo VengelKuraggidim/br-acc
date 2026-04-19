@@ -1741,12 +1741,33 @@ async function carregarCustoMandato(cargo) {
     const d = await r.json();
     if (titulo) titulo.textContent = `Quanto custa um(a) ${d.rotulo_humano.toLowerCase()}?`;
 
+    // Empty-state: cargo sem nenhum componente com valor numérico
+    // (ex.: governador GO antes da Lei estadual ser capturada). Renderiza
+    // mensagem compacta com link pra fonte ao invés do card-tabela vazio.
+    const componentes = d.componentes || [];
+    const semDados = componentes.length === 0
+      || componentes.every((c) => c.valor_mensal === null);
+    if (semDados) {
+      const fonteLink = componentes[0] && componentes[0].fonte_url
+        ? `<a href="${escaparHTML(componentes[0].fonte_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent); text-decoration:none;">${escaparHTML(componentes[0].fonte_legal || "fonte oficial")} &#8599;</a>`
+        : "";
+      container.innerHTML = `
+        <div class="card" style="padding:14px;">
+          <p style="font-size:12px; line-height:1.7; color:var(--text-dim); margin:0;">
+            Sem valores publicados em formato consolidado para este cargo.
+            ${fonteLink ? `Consulte ${fonteLink} para o valor vigente.` : ""}
+          </p>
+        </div>
+      `;
+      return;
+    }
+
     const totalMensal = d.custo_mensal_individual_fmt || "—";
     const totalAnual = d.custo_anual_total_fmt || "—";
     const equivalente = d.equivalente_trabalhadores_min || 0;
     const nTitulares = d.n_titulares || 0;
 
-    const linhas = _quantoCustaLinhasHTML(d.componentes || []);
+    const linhas = _quantoCustaLinhasHTML(componentes);
     const totalBlock = d.custo_mensal_individual > 0
       ? `<div style="display:flex; justify-content:space-between; align-items:center; padding:14px; background:rgba(239,68,68,0.08);">
            <span style="font-size:13px; font-weight:700; color:var(--text-primary);">Custo certo por titular/mês</span>

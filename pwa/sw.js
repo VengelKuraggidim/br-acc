@@ -1,4 +1,4 @@
-const CACHE_NAME = "fiscal-cidadao-v2";
+const CACHE_NAME = "fiscal-cidadao-v3";
 const ASSETS = ["/", "/index.html"];
 
 self.addEventListener("install", (e) => {
