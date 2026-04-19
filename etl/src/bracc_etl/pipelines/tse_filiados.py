@@ -73,6 +73,7 @@ class TseFiliadosPipeline(Pipeline):
         if self.limit:
             self._raw = self._raw.head(self.limit)
 
+        self.rows_in = len(self._raw)
         logger.info("[tse_filiados] Extracted %d raw rows", len(self._raw))
 
     def transform(self) -> None:
@@ -236,6 +237,8 @@ class TseFiliadosPipeline(Pipeline):
         )
         loaded = loader.run_query_with_retry(query, all_rels)
         logger.info("[tse_filiados] Low-confidence FILIADO_A: %d", loaded)
+
+        self.rows_loaded = len(self.memberships)
 
 
 # ────────────────────────────────────────────────────────────────────
