@@ -487,6 +487,22 @@ CREATE FULLTEXT INDEX entity_search IF NOT EXISTS
   FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|OffshoreEntity|OffshoreOfficer|GlobalPEP|CVMProceeding|Expense|PEPRecord|Expulsion|LeniencyAgreement|GovCardExpense|GovTravel|TaxWaiver|LegalCase|DeclaredAsset|InternationalSanction|Bid|Fund|DOUAct|MunicipalFinance|PartyMembership|BarredNGO|BCBPenalty|LaborMovement|CPI|Inquiry|InquiryRequirement|InquirySession|MunicipalBid|MunicipalContract|MunicipalGazetteAct|JudicialCase|SourceDocument|StateEmployee|StateAgency|GoMunicipality|GoProcurement|GoAppointment|GoGazetteAct|GoVereador|GoCouncilExpense|GoLegislativeProposal|StateLegislator|LegislativeExpense|LegislativeProposition|GoSecurityStat|TceGoDecision|TceGoIrregularAccount|TceGoAudit|TcmGoImpedido|TcmGoRejectedAccount)
   ON EACH [n.name, n.razao_social, n.cpf, n.cnpj, n.doc_partial, n.doc_raw, n.cnes_code, n.object, n.contracting_org, n.convenente, n.infraction, n.org, n.function, n.jurisdiction, n.penalty_type, n.description, n.institution_name, n.subject, n.text, n.topic, n.case_number, n.url, n.agency_name, n.agency, n.person_name, n.territory_name, n.role, n.party, n.municipality, n.motivo, n.ementa, n.titulo];
 
+// ── Campaign Donations / Expenses Indexes ──────────────
+// Usados pelo pipeline `tse_prestacao_contas_go` durante MERGE em massa.
+// Sem esses índices, re-ingestão vira O(n²) e trava (~30 min → ~25 s
+// com índice). Sempre criar antes do primeiro load dessas labels.
+CREATE INDEX campaign_donation_id_node IF NOT EXISTS
+  FOR (n:CampaignDonation) ON (n.donation_id);
+
+CREATE INDEX campaign_expense_id_node IF NOT EXISTS
+  FOR (n:CampaignExpense) ON (n.expense_id);
+
+CREATE INDEX campaign_donor_id_node IF NOT EXISTS
+  FOR (n:CampaignDonor) ON (n.doador_id);
+
+CREATE INDEX doou_donation_id_rel IF NOT EXISTS
+  FOR ()-[r:DOOU]-() ON (r.donation_id);
+
 // ── User Constraints ────────────────────────────────────
 CREATE CONSTRAINT user_email_unique IF NOT EXISTS
   FOR (u:User) REQUIRE u.email IS UNIQUE;
