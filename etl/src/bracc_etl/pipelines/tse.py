@@ -27,11 +27,11 @@ logger = logging.getLogger(__name__)
 # We use SQ_CANDIDATO (unique sequential ID per candidate per election) instead.
 _MASKED_CPF_SENTINEL = "-4"
 
-# URL canônica do dataset TSE pro attach_provenance. O source_id deste
-# pipeline (``tribunal_superior_eleitoral``) não está no registry; sem URL
-# explícita, ``attach_provenance`` levantaria ValueError. Mantemos a URL
-# hardcoded aqui em vez de aliasar source_id pra não mexer em 674k+ nós já
-# no grafo com o id atual.
+# URL canônica do dataset TSE pro attach_provenance. Pipeline-wide
+# constante porque o TSE não expõe deep-link estável por registro
+# individual — todo row carimba o mesmo ``source_url`` (página agregada
+# de dados abertos). ``source_id`` é canônico (``tse``, alinhado com
+# ``docs/source_registry_br_v1.csv``).
 _TSE_DATASET_URL = "https://dadosabertos.tse.jus.br/"
 
 
@@ -39,7 +39,7 @@ class TSEPipeline(Pipeline):
     """Electoral data pipeline — candidates and campaign donations."""
 
     name = "tse"
-    source_id = "tribunal_superior_eleitoral"
+    source_id = "tse"
 
     def __init__(
         self,

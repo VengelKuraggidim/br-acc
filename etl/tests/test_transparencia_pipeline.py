@@ -45,7 +45,7 @@ def _extract_from_fixtures(pipeline: TransparenciaPipeline) -> None:
 def test_pipeline_name_and_source_id() -> None:
     pipeline = _make_pipeline()
     assert pipeline.name == "transparencia"
-    assert pipeline.source_id == "portal_transparencia"
+    assert pipeline.source_id == "transparencia"
 
 
 def test_transform_produces_correct_contracts() -> None:

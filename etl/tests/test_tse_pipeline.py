@@ -30,7 +30,7 @@ def _extract_from_fixtures(pipeline: TSEPipeline) -> None:
 def test_pipeline_metadata() -> None:
     pipeline = _make_pipeline()
     assert pipeline.name == "tse"
-    assert pipeline.source_id == "tribunal_superior_eleitoral"
+    assert pipeline.source_id == "tse"
 
 
 def test_transform_produces_candidates_keyed_by_sq() -> None:
@@ -230,11 +230,11 @@ def test_load_doou_person_rel_carries_provenance() -> None:
     rows = call_kwargs.get("rows") or call[0][1]["rows"]
     assert len(rows) == 1
     row = rows[0]
-    assert row["source_id"] == "tribunal_superior_eleitoral"
+    assert row["source_id"] == "tse"
     assert row["source_url"] == "https://dadosabertos.tse.jus.br/"
     assert row["source_record_id"].startswith("2022:")
     assert row["ingested_at"]
-    assert row["run_id"].startswith("tribunal_superior_eleitoral_")
+    assert row["run_id"].startswith("tse_")
 
 
 def test_load_doou_company_rel_carries_provenance() -> None:

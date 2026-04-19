@@ -28,12 +28,10 @@ logger = logging.getLogger(__name__)
 _SIGILOSO_CNPJ = "-11"
 
 # Base URL canônica do Portal da Transparência. Usada como ``record_url``
-# pra ``attach_provenance`` porque o ``source_id`` interno do pipeline é
-# ``portal_transparencia`` (divergente do registry ``transparencia``;
-# normalização do alias fica no prompt 06, fora de escopo aqui) e o
-# ``primary_url_for(source_id)`` retornaria vazio. Pipeline-wide constante:
-# todo row carimba o mesmo URL porque o Portal não expõe deep-links
-# estáveis por contrato individual — a página agrega o bulk download.
+# pra ``attach_provenance`` — pipeline-wide constante, porque o Portal não
+# expõe deep-links estáveis por contrato individual (a página agrega o
+# bulk download). ``source_id`` é canônico (``transparencia``, alinhado com
+# ``docs/source_registry_br_v1.csv``).
 _TRANSPARENCIA_SOURCE_URL = "https://portaldatransparencia.gov.br/download-de-dados"
 
 
@@ -61,7 +59,7 @@ class TransparenciaPipeline(Pipeline):
     """ETL pipeline for Portal da Transparencia federal spending data."""
 
     name = "transparencia"
-    source_id = "portal_transparencia"
+    source_id = "transparencia"
 
     def __init__(
         self,
@@ -207,11 +205,9 @@ class TransparenciaPipeline(Pipeline):
         """Shorthand pra ``attach_provenance`` com URL canônica embutida.
 
         Portal da Transparência não expõe deep-link por registro — todo
-        row carimba o mesmo ``source_url`` (bulk download page). O
-        ``record_url`` explícito evita o lookup ``primary_url_for`` que
-        retornaria vazio porque ``source_id='portal_transparencia'``
-        diverge do registry (``transparencia``); normalização canônica
-        fica no prompt 06.
+        row carimba o mesmo ``source_url`` (bulk download page), por isso
+        passamos ``record_url`` explicitamente em vez de confiar em
+        ``primary_url_for(source_id)``.
         """
         return self.attach_provenance(
             row,
@@ -302,7 +298,7 @@ class TransparenciaPipeline(Pipeline):
                 "UNWIND $rows AS row "
                 "MERGE (p:Person {servidor_id: row.servidor_id}) "
                 "SET p.cpf_partial = row.cpf_partial, p.name = row.name, "
-                "p.source = 'portal_transparencia', "
+                "p.source = 'transparencia', "
                 "p.source_id = row.source_id, p.source_url = row.source_url, "
                 "p.source_record_id = row.source_record_id, "
                 "p.ingested_at = row.ingested_at, p.run_id = row.run_id"

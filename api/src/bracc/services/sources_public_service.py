@@ -24,14 +24,6 @@ from bracc.services.source_registry import SourceRegistryEntry, load_source_regi
 if TYPE_CHECKING:
     from neo4j import AsyncSession
 
-# IngestionRun escreve source_id canônico do pipeline. Alguns pipelines
-# antigos usaram nome estendido em vez do slug do registry — aqui
-# normalizamos pro slug da CSV.
-_GRAPH_TO_REGISTRY_ALIAS: dict[str, str] = {
-    "portal_transparencia": "transparencia",
-    "tribunal_superior_eleitoral": "tse",
-}
-
 # Cache process-wide do live status (5min TTL). Evita bater no Neo4j a
 # cada abertura da aba Fontes.
 _LIVE_STATUS_CACHE: dict[str, Any] | None = None
@@ -99,8 +91,8 @@ def _derive_live_badge(statuses: list[str], total_rows: int) -> str:
 async def load_live_source_status(session: AsyncSession) -> dict[str, dict[str, Any]]:
     """Consulta Neo4j por IngestionRun agregado e retorna por source_id.
 
-    Aliases de source_id graph→registry aplicados (ex:
-    ``portal_transparencia`` vira ``transparencia``). Cache 5min.
+    ``source_id`` usado no grafo é o slug canônico do registry (ver
+    ``docs/source_registry_br_v1.csv``). Cache 5min.
     """
     global _LIVE_STATUS_CACHE, _LIVE_STATUS_CACHE_TIME  # noqa: PLW0603
     if (
@@ -118,8 +110,7 @@ async def load_live_source_status(session: AsyncSession) -> dict[str, dict[str, 
         return {}
 
     for record in records:
-        raw_sid = record["source_id"]
-        sid = _GRAPH_TO_REGISTRY_ALIAS.get(raw_sid, raw_sid)
+        sid = record["source_id"]
         statuses = list(record["statuses"] or [])
         total_rows = int(record["total_rows"] or 0)
         result[sid] = {

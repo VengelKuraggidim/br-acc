@@ -1184,7 +1184,7 @@ class TestProvenanceSubRows:
                     "object": "Contrato Legado",
                     "value": 100.0,
                     # Falta source_url/ingested_at/run_id.
-                    "source_id": "portal_transparencia",
+                    "source_id": "transparencia",
                 },
             },
         }
