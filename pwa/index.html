@@ -1532,7 +1532,7 @@ function renderListaDoacoes(doacoes) {
   const linhas = doacoes.map(d => {
     const data = d.data_doacao_fmt
       ? escaparHTML(d.data_doacao_fmt)
-      : "<span style=\"color:var(--text-muted);\">sem data</span>";
+      : "<span style=\"color:var(--text-muted);\">Data não disponível</span>";
     const valor = escaparHTML(d.valor_fmt || "");
     const srcUrl = d && d.provenance && d.provenance.source_url;
     const snapUrl = d && d.provenance && d.provenance.snapshot_url;
@@ -1792,7 +1792,11 @@ async function carregarCustoMandato(cargo) {
   try {
     const r = await fetch(`${API}/custo-mandato/${encodeURIComponent(cargo)}`);
     if (!r.ok) {
-      container.innerHTML = `<div class="card" style="padding:14px; color:var(--text-dim); font-size:12px;">Dados não disponíveis (${r.status}). Rode o pipeline <code>custo_mandato_br</code>.</div>`;
+      // Dados não ingeridos pra este cargo — esconde a seção inteira pra
+      // não exibir mensagem técnica ao usuário final. Mostrar de novo
+      // requer re-ingestão do pipeline custo_mandato_br.
+      const section = document.getElementById("quantoCustaSection");
+      if (section) section.style.display = "none";
       return;
     }
     const d = await r.json();

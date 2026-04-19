@@ -224,6 +224,14 @@ MATCH (a:StateAgency)
 RETURN collect(DISTINCT elementId(a)) AS ids
 """
 
+# Custo de mandato (pipeline custo_mandato_br) — ~4 nodes + 12 componentes.
+# Volume trivial; sempre incluir pra home page mostrar "Quanto custa um cargo".
+CUSTO_MANDATO_QUERY = """
+MATCH (n)
+WHERE n:CustoMandato OR n:CustoComponente
+RETURN collect(DISTINCT elementId(n)) AS ids
+"""
+
 # Gastos municipais GO (MunicipalExpenditure → GoMunicipality via GASTOU)
 MUNICIPAL_EXPENDITURE_QUERY = """
 MATCH (m:MunicipalExpenditure)-[:GASTOU]->(gm:GoMunicipality)
@@ -467,6 +475,11 @@ def build_for_cutoff(session: Session, cutoff_year: int) -> TierResult:
     tier_state = employees | agencies
     accumulated |= tier_state
     result.tier_breakdown["comissionados+agencias"] = len(tier_state)
+
+    # --- Custo de mandato (home page) ---
+    custo_mandato = run_ids(session, CUSTO_MANDATO_QUERY)
+    accumulated |= custo_mandato
+    result.tier_breakdown["custo_mandato"] = len(custo_mandato)
 
     # --- Consolidação final ---
     result.node_ids = accumulated
