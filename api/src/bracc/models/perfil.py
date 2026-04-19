@@ -9,6 +9,8 @@ existe. Quando o pipeline voltar, reintroduzir os campos sem breaking change
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 from bracc.models.entity import ProvenanceBlock  # noqa: TC001 (pydantic runtime annotation)
@@ -218,7 +220,20 @@ class FamiliarConectado(BaseModel):
 
 
 class ValidacaoTSE(BaseModel):
-    """Cross-check entre o valor declarado ao TSE e o que BRACC ingeriu."""
+    """Cross-check entre o valor declarado ao TSE e o que BRACC ingeriu.
+
+    ``direcao`` distingue os dois modos de divergência para o PWA escolher
+    a mensagem correta:
+
+    * ``gap_ingestao``      — ``declarado > ingerido`` (faltaram doações
+      no nosso banco; valor oficial é o do TSE).
+    * ``excesso_ingestao``  — ``ingerido >= declarado`` (agregamos mais
+      que o TSE declarou; provável duplicação nossa, não acusação).
+
+    ``divergencia_valor`` preserva o sinal (positivo em gap, negativo em
+    excesso); ``divergencia_valor_fmt`` sempre mostra o módulo pra
+    display. ``divergencia_pct`` é magnitude (sempre >= 0).
+    """
 
     model_config = _PERFIL_MODEL_CONFIG
 
@@ -232,6 +247,48 @@ class ValidacaoTSE(BaseModel):
     divergencia_pct: float
     breakdown_tse: list[dict[str, str]]
     status: str  # "ok" (<5%), "atencao" (5-20%), "divergente" (>=20%)
+    direcao: Literal["gap_ingestao", "excesso_ingestao"]
+
+
+class ComparacaoContas(BaseModel):
+    """Cross-check TSE-interno: receitas declaradas vs despesas pagas declaradas.
+
+    Fase 1 do roadmap "cross-check de perspectivas TSE" — compara duas
+    declarações do próprio candidato (``total_tse_{ano}`` vs
+    ``total_despesas_tse_{ano}``) vindas do mesmo ``:Person`` no grafo.
+
+    ``direcao`` indica qual lado ficou maior:
+
+    * ``despesas_excedem`` — candidato declarou ter gasto mais do que
+      arrecadou (pode ter explicação legítima: empréstimo, doação
+      posterior, recursos próprios).
+    * ``receitas_excedem`` — candidato declarou ter arrecadado mais do
+      que gastou (sobra tem destino regulamentado: devolução ao TSE ou
+      transferência ao partido).
+
+    ``status`` segue a severidade:
+
+    * ``ok``         — divergência < 5%
+    * ``atencao``    — 5% <= divergência < 20%
+    * ``divergente`` — divergência >= 20%
+
+    ``divergencia_valor`` preserva sinal (positivo → sobra; negativo →
+    estouro); ``divergencia_valor_fmt`` é o valor absoluto formatado
+    pra exibição.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    ano_eleicao: int
+    total_receitas: float
+    total_receitas_fmt: str
+    total_despesas: float
+    total_despesas_fmt: str
+    divergencia_valor: float
+    divergencia_valor_fmt: str
+    divergencia_pct: float
+    direcao: Literal["despesas_excedem", "receitas_excedem"]
+    status: Literal["ok", "atencao", "divergente"]
 
 
 class ContratoConectado(BaseModel):
@@ -342,4 +399,5 @@ class PerfilPolitico(BaseModel):
     familia: list[FamiliarConectado] = []
     aviso_despesas: str = ""
     validacao_tse: ValidacaoTSE | None = None
+    contas_campanha: ComparacaoContas | None = None
     teto_gastos: TetoGastos | None = None

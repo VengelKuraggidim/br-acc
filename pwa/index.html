@@ -2271,8 +2271,12 @@ function renderPerfil(d) {
         </div>
       </div>`;
     if (v.status !== 'ok') {
+      const linkTse = `<a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener" style="color:var(--text-accent); text-decoration:underline;">portal de prestação de contas TSE</a>`;
+      const msgDivergencia = v.direcao === 'gap_ingestao'
+        ? `&#9432; <strong>Por que a diferença?</strong> Nosso banco ingeriu menos doações que o TSE declarou. Alguns repasses (fundo partidário, FEFC) podem não ter sido carregados no grafo. O valor <strong>oficial é o do TSE</strong> — verifique a fonte no ${linkTse}.`
+        : `&#9432; <strong>Por que a diferença?</strong> Estranho: nosso sistema mostra mais doações agregadas que o TSE declarou. Como nossa fonte primária é o próprio TSE, isso provavelmente indica duplicação na nossa agregação (débito aberto: investigar-duplicacao-doacoes-tse). Verifique as fontes oficiais no ${linkTse} — não estamos acusando ninguém.`;
       html += `<div style="font-size:12px; color:var(--text-secondary); line-height:1.55; padding:8px 10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:10px;">
-        &#9432; <strong>Por que a diferença?</strong> Os dados no painel vêm da ingestão pública do TSE — algumas doações podem não ter sido carregadas no nosso banco (especialmente repasses do fundo partidário). O valor <strong>oficial é o do TSE</strong>. Estamos trabalhando pra fechar essa diferença.
+        ${msgDivergencia}
       </div>`;
     }
     if (v.breakdown_tse && v.breakdown_tse.length) {
@@ -2286,6 +2290,44 @@ function renderPerfil(d) {
         </div>`;
       });
       html += `</div></details>`;
+    }
+    html += `</div>`;
+  }
+
+  // Cross-check TSE-interno: receitas declaradas vs despesas pagas declaradas
+  // (Fase 1 do roadmap cross-check perspectivas TSE).
+  if (d.contas_campanha) {
+    const c = d.contas_campanha;
+    const corBorda = c.status === 'ok' ? '#10b981' : c.status === 'atencao' ? '#f59e0b' : '#ef4444';
+    const corFundo = c.status === 'ok' ? 'rgba(16,185,129,0.08)' : c.status === 'atencao' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+    const icone = c.status === 'ok' ? '&#10004;' : c.status === 'atencao' ? '&#9888;' : '&#128680;';
+    const txtStatus = c.status === 'ok'
+      ? `Receitas e despesas batem (diferença de ${c.divergencia_pct}%)`
+      : c.status === 'atencao'
+        ? `Divergência moderada de ${c.divergencia_pct}%`
+        : `Divergência grande de ${c.divergencia_pct}%`;
+    html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+        <span style="font-size:20px;">${icone}</span>
+        <div style="font-weight:700; font-size:14px;">Contas batem? Despesas vs Receitas TSE ${c.ano_eleicao} &mdash; ${txtStatus}</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+        <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Receitas declaradas ao TSE</div>
+          <div style="font-size:16px; font-weight:700;">${c.total_receitas_fmt}</div>
+        </div>
+        <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Despesas pagas declaradas</div>
+          <div style="font-size:16px; font-weight:700;">${c.total_despesas_fmt}</div>
+        </div>
+      </div>`;
+    if (c.status !== 'ok') {
+      const msg = c.direcao === 'despesas_excedem'
+        ? `O candidato declarou ter gasto MAIS do que arrecadou. Pode ter explicação legítima (empréstimo declarado, doação posterior, gastos próprios). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`
+        : `O candidato declarou ter arrecadado MAIS do que gastou. Sobra de campanha pode ter destino regulamentado (devolução ao TSE, transferência ao partido). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`;
+      html += `<div style="font-size:12px; color:var(--text-secondary); line-height:1.55; padding:8px 10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:4px;">
+        &#9432; ${msg}
+      </div>`;
     }
     html += `</div>`;
   }

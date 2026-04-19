@@ -15,7 +15,7 @@ Status:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from bracc.models.perfil import ValidacaoTSE
 from bracc.services.formatacao_service import fmt_brl
@@ -49,6 +49,10 @@ def gerar_validacao_tse(
     else:
         status = "divergente"
 
+    direcao: Literal["gap_ingestao", "excesso_ingestao"] = (
+        "gap_ingestao" if declarado > ingerido else "excesso_ingestao"
+    )
+
     breakdown: list[dict[str, str]] = []
     for label, key in _BREAKDOWN_LABELS:
         v = props.get(key)
@@ -66,4 +70,5 @@ def gerar_validacao_tse(
         divergencia_pct=round(pct, 1),
         breakdown_tse=breakdown,
         status=status,
+        direcao=direcao,
     )

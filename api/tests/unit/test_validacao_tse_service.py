@@ -81,3 +81,39 @@ class TestGerarValidacaoTse:
         assert resultado.total_declarado_tse_fmt.startswith("R$")
         assert resultado.total_ingerido_fmt.startswith("R$")
         assert resultado.divergencia_valor_fmt.startswith("R$")
+
+    def test_direcao_gap_ingestao(self) -> None:
+        """Declarado > ingerido — faltaram doações no nosso banco."""
+        props = {"total_tse_2022": 100}
+        resultado = gerar_validacao_tse(props, total_doacoes=50)
+        assert resultado is not None
+        assert resultado.direcao == "gap_ingestao"
+        # Sinal preservado: declarado - ingerido = 100 - 50 = 50 (positivo).
+        assert resultado.divergencia_valor == 50
+        # _fmt usa abs() — sempre positivo no texto.
+        assert resultado.divergencia_valor_fmt.startswith("R$")
+        assert "-" not in resultado.divergencia_valor_fmt
+        # pct é magnitude (sempre >= 0).
+        assert resultado.divergencia_pct >= 0
+
+    def test_direcao_excesso_ingestao(self) -> None:
+        """Ingerido > declarado — provável duplicação na nossa agregação."""
+        props = {"total_tse_2022": 100}
+        resultado = gerar_validacao_tse(props, total_doacoes=300)
+        assert resultado is not None
+        assert resultado.direcao == "excesso_ingestao"
+        # Sinal preservado: declarado - ingerido = 100 - 300 = -200 (negativo).
+        assert resultado.divergencia_valor == -200
+        # _fmt usa abs() — sempre positivo no texto.
+        assert resultado.divergencia_valor_fmt.startswith("R$")
+        assert "-" not in resultado.divergencia_valor_fmt
+        # pct é magnitude (sempre >= 0), mesmo com sinal negativo em div.
+        assert resultado.divergencia_pct >= 0
+
+    def test_direcao_excesso_quando_iguais(self) -> None:
+        """Empate vira excesso_ingestao (condição ``declarado > ingerido``)."""
+        props = {"total_tse_2022": 1_000_000}
+        resultado = gerar_validacao_tse(props, total_doacoes=1_000_000)
+        assert resultado is not None
+        assert resultado.direcao == "excesso_ingestao"
+        assert resultado.divergencia_valor == 0
