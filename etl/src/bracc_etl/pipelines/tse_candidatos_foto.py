@@ -108,8 +108,10 @@ _HTTP_TIMEOUT = 30.0
 _THROTTLE_SECONDS = 1.0
 
 # Cap defensivo no batch — políticos GO com sq_candidato são finitos
-# (~milhares no histórico), mas o cap ajuda smoke tests e abortos cedo.
-_DEFAULT_BATCH_SIZE = 200
+# (~4k no histórico). 500 × 1s de throttle = ~8min por run, balanço
+# razoável entre cobertura por execução e risco de banimento do TSE.
+# Pra cobrir a cauda toda, use `refresh_photos.py --tse-iterations N`.
+_DEFAULT_BATCH_SIZE = 500
 
 # Content-types aceitos pro binário da imagem (mesma lista de
 # camara_politicos_go pra consistência).

@@ -64,6 +64,7 @@ import csv
 import hashlib
 import io
 import logging
+import os
 import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -264,6 +265,7 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         # Buffers preenchidos em extract():
         self._receitas_raw: list[dict[str, str]] = []
         self._despesas_raw: list[dict[str, str]] = []
+        self._despesas_contratadas_raw: list[dict[str, str]] = []
         self._bens_raw: list[dict[str, str]] = []
         # Snapshot URI do ZIP baixado — carimbado em TODO row.
         self._snapshot_uri: str = ""
@@ -326,6 +328,15 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 break
 
         # --- Despesas (despesas_pagas) ---
+        # A CSV ``despesas_pagas_candidatos_{year}_BRASIL.csv`` do TSE 2022+
+        # NÃO contém CPF/nome/SQ_CANDIDATO/cargo do candidato nem
+        # CPF/CNPJ/nome do fornecedor — apenas ``SQ_PRESTADOR_CONTAS``,
+        # ``NR_DOCUMENTO``, ``SQ_DESPESA`` e o valor pago. A resolução
+        # ocorre no ``transform`` via mapa ``SQ_PRESTADOR_CONTAS → candidato``
+        # construído a partir de receitas e ``despesas_contratadas`` (que
+        # carregam os metadados completos). Schemas mais velhos (2018/2020)
+        # e fixtures minimais que incluem ``NR_CPF_CANDIDATO`` continuam
+        # sendo resolvidos direto pelas colunas — fallback preservado.
         for row in _iter_csv_rows(
             zip_bytes, filename_prefix="despesas_pagas_candidatos", year=self.year,
         ):
@@ -333,6 +344,23 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 continue
             self._despesas_raw.append(row)
             if self.limit and len(self._despesas_raw) >= self.limit:
+                break
+
+        # --- Despesas contratadas (enriquecimento de fornecedor + CPF candidato) ---
+        # Irmã da ``despesas_pagas``, mas com schema completo: CPF candidato,
+        # CPF/CNPJ do fornecedor, nome do fornecedor, DS_CARGO. Usada em
+        # ``transform`` pra construir (a) o mapa ``SQ_PRESTADOR_CONTAS →
+        # candidato`` como fallback quando receitas não cobre o prestador
+        # e (b) o mapa ``(SQ_PRESTADOR_CONTAS, SQ_DESPESA) → fornecedor``
+        # pra hidratar os nós ``:CampaignExpense`` com fornecedor legível.
+        for row in _iter_csv_rows(
+            zip_bytes, filename_prefix="despesas_contratadas_candidatos",
+            year=self.year,
+        ):
+            if (row.get("SG_UF") or row.get("UF_ELEICAO") or "").strip().upper() != uf:
+                continue
+            self._despesas_contratadas_raw.append(row)
+            if self.limit and len(self._despesas_contratadas_raw) >= self.limit:
                 break
 
         # --- Bens ---
@@ -346,12 +374,17 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 break
 
         self.rows_in = (
-            len(self._receitas_raw) + len(self._despesas_raw) + len(self._bens_raw)
+            len(self._receitas_raw)
+            + len(self._despesas_raw)
+            + len(self._despesas_contratadas_raw)
+            + len(self._bens_raw)
         )
         logger.info(
-            "[tse_prestacao_contas_go] uf=%s year=%d receitas=%d despesas=%d bens=%d",
+            "[tse_prestacao_contas_go] uf=%s year=%d receitas=%d despesas_pagas=%d "
+            "despesas_contratadas=%d bens=%d",
             uf, self.year, len(self._receitas_raw),
-            len(self._despesas_raw), len(self._bens_raw),
+            len(self._despesas_raw), len(self._despesas_contratadas_raw),
+            len(self._bens_raw),
         )
 
     # ------------------------------------------------------------------
@@ -360,11 +393,24 @@ class TsePrestacaoContasGoPipeline(Pipeline):
 
     def transform(self) -> None:
         year = self.year
-        # Indexa candidatos encontrados em qualquer uma das 3 CSVs —
+        # Indexa candidatos encontrados em qualquer uma das 4 CSVs —
         # chave primária é o CPF formatado (11 dígitos). ``SQ_CANDIDATO``
         # vira ``numero_candidato`` secundário pra debugging.
         # Agregados por CPF:
         by_cpf: dict[str, dict[str, Any]] = {}
+
+        # Mapa auxiliar: ``SQ_PRESTADOR_CONTAS`` → metadados do candidato.
+        # Construído a partir de receitas (primário) e contratadas
+        # (fallback). Usado pra resolver o candidato em ``despesas_pagas``,
+        # que no schema TSE 2022+ não traz CPF/nome diretamente. Sem esse
+        # mapa, 100% das despesas seriam descartadas pelo filtro
+        # ``len(cpf_digits) != 11``.
+        prestador_map: dict[str, dict[str, str]] = {}
+
+        # Mapa auxiliar pra enriquecer fornecedor da despesa paga quando
+        # o schema da CSV pagas não trazer os campos (TSE 2022+). Chave:
+        # ``(SQ_PRESTADOR_CONTAS, SQ_DESPESA)``.
+        fornecedor_map: dict[tuple[str, str], dict[str, str]] = {}
 
         def _ensure(cpf_formatted: str, cpf_digits: str, nome: str, sq: str) -> dict[str, Any]:
             entry = by_cpf.get(cpf_formatted)
@@ -433,6 +479,19 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             if cargo_raw and not entry["cargo"]:
                 entry["cargo"] = cargo_raw
 
+            # Popula o mapa SQ_PRESTADOR_CONTAS → candidato, usado em
+            # seguida pra resolver o CPF em ``despesas_pagas`` (TSE 2022+
+            # não publica CPF na CSV de pagas — só SQ_PRESTADOR_CONTAS).
+            sq_prestador = (row.get("SQ_PRESTADOR_CONTAS") or "").strip()
+            if sq_prestador and sq_prestador not in prestador_map:
+                prestador_map[sq_prestador] = {
+                    "cpf_formatted": cpf_formatted,
+                    "cpf_digits": cpf_digits,
+                    "name": nome,
+                    "sq_candidato": sq,
+                    "cargo": cargo_raw,
+                }
+
             # Node :CampaignDonation (opcional — mantido pra phase-2 tie-in).
             cpf_cnpj_doador_raw = (
                 row.get("NR_CPF_CNPJ_DOADOR")
@@ -494,7 +553,78 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             )
             self.donation_rels.append(rel_row)
 
-        # --- Despesas ---
+        # --- Despesas contratadas (enriquecimento) ---
+        # Percorremos antes de ``despesas_pagas`` pra:
+        #   1. Cobrir prestadores que não apareceram em receitas (raro mas
+        #      possível — candidato que contratou sem declarar receita).
+        #   2. Construir o mapa ``(SQ_PRESTADOR_CONTAS, SQ_DESPESA) →
+        #      fornecedor`` usado pra hidratar as pagas.
+        # Não somamos ``VR_DESPESA_CONTRATADA`` em ``total_despesas`` —
+        # seguimos o contrato de ``total_despesas_tse_{year}`` como "pago".
+        for row in self._despesas_contratadas_raw:
+            cpf_raw = (
+                row.get("NR_CPF_CANDIDATO")
+                or row.get("CPF_CANDIDATO")
+                or ""
+            )
+            cpf_digits = strip_document(cpf_raw)
+            nome = normalize_name(
+                row.get("NM_CANDIDATO") or row.get("NOME_CANDIDATO") or "",
+            )
+            sq_candidato = (row.get("SQ_CANDIDATO") or "").strip()
+            sq_prestador = (row.get("SQ_PRESTADOR_CONTAS") or "").strip()
+            cargo_raw = (
+                row.get("DS_CARGO") or row.get("CARGO") or ""
+            ).strip()
+
+            # Preenche ``prestador_map`` se receitas não cobriu (fallback).
+            if (
+                sq_prestador
+                and len(cpf_digits) == 11
+                and sq_prestador not in prestador_map
+            ):
+                prestador_map[sq_prestador] = {
+                    "cpf_formatted": format_cpf(cpf_raw),
+                    "cpf_digits": cpf_digits,
+                    "name": nome,
+                    "sq_candidato": sq_candidato,
+                    "cargo": cargo_raw,
+                }
+
+            # Mapa de fornecedor por (prestador, SQ_DESPESA).
+            sq_despesa = (row.get("SQ_DESPESA") or "").strip()
+            if sq_prestador and sq_despesa:
+                fornecedor_raw = (
+                    row.get("NR_CPF_CNPJ_FORNECEDOR")
+                    or row.get("CPF_CNPJ_FORNECEDOR")
+                    or ""
+                )
+                fornecedor_digits = strip_document(fornecedor_raw)
+                fornecedor_nome = normalize_name(
+                    row.get("NM_FORNECEDOR") or row.get("NOME_FORNECEDOR") or "",
+                )
+                tipo_despesa = (
+                    row.get("DS_DESPESA")
+                    or row.get("DS_NATUREZA_DESPESA")
+                    or row.get("DS_ORIGEM_DESPESA")
+                    or row.get("DS_TIPO_DESPESA")
+                    or ""
+                ).strip()
+                fornecedor_map.setdefault(
+                    (sq_prestador, sq_despesa),
+                    {
+                        "fornecedor_digits": fornecedor_digits,
+                        "fornecedor_nome": fornecedor_nome,
+                        "tipo_despesa": tipo_despesa,
+                    },
+                )
+
+        # --- Despesas (despesas_pagas) ---
+        # Resolução de candidato: tenta CPF direto primeiro (schemas antigos
+        # + fixtures minimais), depois cai no ``prestador_map`` via
+        # ``SQ_PRESTADOR_CONTAS`` (schema TSE 2022+). Fornecedor idem —
+        # direto, com fallback no ``fornecedor_map`` via
+        # ``(SQ_PRESTADOR_CONTAS, SQ_DESPESA)``.
         for idx, row in enumerate(self._despesas_raw):
             cpf_raw = (
                 row.get("NR_CPF_CANDIDATO")
@@ -502,11 +632,29 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 or ""
             )
             cpf_digits = strip_document(cpf_raw)
-            if len(cpf_digits) != 11:
-                continue
-            cpf_formatted = format_cpf(cpf_raw)
             nome = normalize_name(row.get("NM_CANDIDATO") or row.get("NOME_CANDIDATO") or "")
             sq = (row.get("SQ_CANDIDATO") or "").strip()
+            cargo_desp = (
+                row.get("DS_CARGO") or row.get("CARGO") or ""
+            ).strip()
+
+            if len(cpf_digits) != 11:
+                # Schema TSE 2022+: resolve via SQ_PRESTADOR_CONTAS.
+                sq_prestador = (row.get("SQ_PRESTADOR_CONTAS") or "").strip()
+                resolved = prestador_map.get(sq_prestador)
+                if resolved is None:
+                    continue
+                cpf_formatted = resolved["cpf_formatted"]
+                cpf_digits = resolved["cpf_digits"]
+                if not nome:
+                    nome = resolved["name"]
+                if not sq:
+                    sq = resolved["sq_candidato"]
+                if not cargo_desp:
+                    cargo_desp = resolved["cargo"]
+            else:
+                cpf_formatted = format_cpf(cpf_raw)
+
             valor_raw = row.get("VR_PAGTO_DESPESA") or row.get("VR_DESPESA_CONTRATADA") or "0"
             valor = parse_numeric_comma(valor_raw)
             if valor <= 0:
@@ -517,11 +665,6 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             # (caso raro — candidato com despesa paga mas sem receita
             # registrada, provavelmente financiou do próprio bolso antes
             # da declaração).
-            cargo_desp = (
-                row.get("DS_CARGO")
-                or row.get("CARGO")
-                or ""
-            ).strip()
             if cargo_desp and not entry["cargo"]:
                 entry["cargo"] = cargo_desp
             cnpj_cpf_fornecedor_raw = (
@@ -535,9 +678,22 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             )
             tipo_despesa = (
                 row.get("DS_TIPO_DESPESA")
+                or row.get("DS_NATUREZA_DESPESA")
+                or row.get("DS_DESPESA")
                 or row.get("DESC_DESPESA")
                 or ""
             ).strip()
+
+            # Fallback de fornecedor via contratadas quando pagas não traz.
+            if not fornecedor_digits and not fornecedor_nome:
+                sq_prestador = (row.get("SQ_PRESTADOR_CONTAS") or "").strip()
+                sq_despesa = (row.get("SQ_DESPESA") or "").strip()
+                fornecedor_info = fornecedor_map.get((sq_prestador, sq_despesa))
+                if fornecedor_info is not None:
+                    fornecedor_digits = fornecedor_info["fornecedor_digits"]
+                    fornecedor_nome = fornecedor_info["fornecedor_nome"]
+                    if not tipo_despesa:
+                        tipo_despesa = fornecedor_info["tipo_despesa"]
             eid = _expense_id(sq, year, fornecedor_digits or "sem_doc", f"{valor:.2f}", idx)
             expense_node = self.attach_provenance(
                 {
@@ -644,6 +800,35 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             len(self.expenses),
             len(self.donation_rels) + len(self.expense_rels),
         )
+
+        # Guard contra falha silenciosa de schema — se o extract trouxe
+        # linhas de despesas mas nenhuma sobreviveu ao transform, algum
+        # mapeamento de coluna quebrou (ex.: TSE renomeou campos). Sem
+        # esse guard, ``total_despesas_tse_{year}`` fica 0.0 e o
+        # ``teto_service`` reporta "0% do teto utilizado" pra todo
+        # candidato — o que é um claim factualmente errado. Prefere falhar
+        # explicitamente em prod (``BRACC_STRICT_TRANSFORM=1``) a deixar
+        # o dado errado vazar pro grafo.
+        if self._despesas_raw and not self.expenses:
+            msg = (
+                f"[tse_prestacao_contas_go] extracted {len(self._despesas_raw)} "
+                "despesas rows but transform produced 0 expenses — schema "
+                "drift suspeito (colunas CPF/valor/SQ_PRESTADOR_CONTAS mudaram)"
+            )
+            logger.error(msg)
+            if os.environ.get("BRACC_STRICT_TRANSFORM") == "1":
+                raise RuntimeError(msg)
+        # Análogo pra receitas — se 100% das linhas foram descartadas,
+        # algum campo-chave (NR_CPF_CANDIDATO / VR_RECEITA) quebrou.
+        if self._receitas_raw and not self.donations:
+            msg = (
+                f"[tse_prestacao_contas_go] extracted {len(self._receitas_raw)} "
+                "receitas rows but transform produced 0 donations — schema "
+                "drift suspeito"
+            )
+            logger.error(msg)
+            if os.environ.get("BRACC_STRICT_TRANSFORM") == "1":
+                raise RuntimeError(msg)
 
     # ------------------------------------------------------------------
     # load

@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Roda os 4 pipelines de foto de politicos GO em sequencia.
+"""Roda os pipelines de foto de politicos GO em sequencia.
 
 Ordem canonica:
-    1. senado_senadores_foto  (cria/MERGE :Senator)
-    2. alego_deputados_foto   (MERGE em :StateLegislator existente)
+    1. senado_senadores_foto   (cria/MERGE :Senator)
+    2. alego_deputados_foto    (MERGE em :StateLegislator existente)
     3. wikidata_politicos_foto (enriquece nodes existentes)
-    4. tse_candidatos_foto    (enriquece :Person GO existente)
+    4. tse_candidatos_foto     (enriquece :Person GO existente)
+    5. propagacao_fotos_person (costura foto_url cross-label pro :Person)
 
-Os 2 primeiros podem CRIAR nodes; os 2 ultimos so atualizam. Por isso
+Os 2 primeiros podem CRIAR nodes; os seguintes so atualizam. Por isso
 a ordem importa — wikidata/tse so funcionam depois que os nodes existem.
+O passo final (``propagacao_fotos_person``) copia foto_url de labels
+de cargo (:FederalLegislator, :StateLegislator, :Senator) pro :Person
+homonimo pra que a busca da PWA (que so le :Person via fulltext
+``entity_search``) tambem exiba a foto nos cards de resultado.
+
+Cauda do TSE
+------------
+O ``tse_candidatos_foto`` processa por batch (default 500/run).
+Pra cobrir os ~4k candidatos GO na cauda, use ``--tse-iterations N``
+(re-roda o pipeline N vezes — cada iter pega um batch novo, ja que
+o discovery filtra por ``foto_url`` ainda vazia).
 
 Lendo Neo4j via .env (NEO4J_URI/USER/PASSWORD/DATABASE). Senha local
 canonica vive no .env (gitignored); se sumir, recupere com
@@ -28,12 +40,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ETL_DIR = REPO_ROOT / "etl"
 
-# Ordem de execucao matters — primeiros 2 criam nodes, ultimos 2 enriquecem
+# Ordem de execucao matters — primeiros 2 criam nodes, 3-4 enriquecem,
+# o ultimo costura cross-label pro :Person (onde a busca da PWA le).
 PHOTO_PIPELINES: tuple[str, ...] = (
     "senado_senadores_foto",
     "alego_deputados_foto",
     "wikidata_politicos_foto",
     "tse_candidatos_foto",
+    "propagacao_fotos_person",
 )
 
 
@@ -72,7 +86,7 @@ def resolve_neo4j_password() -> str | None:
     return None
 
 
-def run_pipeline(source: str, neo4j_args: list[str], limit: int | None, dry_run: bool) -> int:
+def run_pipeline(source: str, neo4j_args: list[str], limit: int | None, dry_run: bool, *, tag: str | None = None) -> int:
     cmd = ["uv", "run", "bracc-etl", "run", "--source", source, *neo4j_args]
     if limit is not None and source == "tse_candidatos_foto":
         # tse e' o unico que pode ser pesado (4k+ candidatos)
@@ -87,22 +101,24 @@ def run_pipeline(source: str, neo4j_args: list[str], limit: int | None, dry_run:
         if tok == "--neo4j-password":
             skip_next = True
         safe_cmd.append(tok)
-    print(f"\n{'='*70}\n>>> {source}\n{'='*70}", flush=True)
+    header = tag or source
+    print(f"\n{'='*70}\n>>> {header}\n{'='*70}", flush=True)
     print(f"$ {' '.join(safe_cmd)}", flush=True)
     if dry_run:
         print("(dry-run, nao executando)", flush=True)
         return 0
     start = time.time()
     rc = subprocess.run(cmd, cwd=ETL_DIR).returncode
-    print(f"<<< {source} exit={rc} ({time.time()-start:.1f}s)", flush=True)
+    print(f"<<< {header} exit={rc} ({time.time()-start:.1f}s)", flush=True)
     return rc
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--only", help="CSV de pipelines pra rodar (default: todos os 4)")
+    ap.add_argument("--only", help=f"CSV de pipelines pra rodar (default: todos os {len(PHOTO_PIPELINES)})")
     ap.add_argument("--skip", help="CSV de pipelines pra pular")
     ap.add_argument("--limit", type=int, help="Limite de candidatos pro tse_candidatos_foto (ignored pelos outros)")
+    ap.add_argument("--tse-iterations", type=int, default=1, help="Quantas vezes re-rodar tse_candidatos_foto pra cobrir a cauda (default 1, cada iter pega batch_size=500 novos)")
     ap.add_argument("--dry-run", action="store_true", help="Imprime comandos sem executar")
     ap.add_argument("--continue-on-error", action="store_true", help="Nao para se um pipeline falha")
     args = ap.parse_args()
@@ -143,14 +159,24 @@ def main() -> int:
     if args.limit:
         print(f"Limit pro tse_candidatos_foto: {args.limit}")
 
+    tse_iterations = max(1, args.tse_iterations)
+    if tse_iterations > 1:
+        print(f"TSE vai rodar {tse_iterations}x (cauda de ex-candidatos)")
+
     failures: list[tuple[str, int]] = []
     for source in selected:
-        rc = run_pipeline(source, neo4j_args, args.limit, args.dry_run)
-        if rc != 0:
-            failures.append((source, rc))
-            if not args.continue_on_error:
-                print(f"\nABORTADO em {source} (exit {rc}). Use --continue-on-error pra ignorar.", file=sys.stderr)
-                break
+        runs = tse_iterations if source == "tse_candidatos_foto" else 1
+        for iter_idx in range(runs):
+            tag = f"{source} (iter {iter_idx + 1}/{runs})" if runs > 1 else source
+            rc = run_pipeline(source, neo4j_args, args.limit, args.dry_run, tag=tag)
+            if rc != 0:
+                failures.append((tag, rc))
+                if not args.continue_on_error:
+                    print(f"\nABORTADO em {tag} (exit {rc}). Use --continue-on-error pra ignorar.", file=sys.stderr)
+                    break
+        else:
+            continue
+        break
 
     print(f"\n{'='*70}\nResumo: {len(selected) - len(failures)}/{len(selected)} pipelines OK")
     if failures:

@@ -2,14 +2,18 @@
 
 Covers:
 
-* ZIP fixture built em memória com as 3 CSVs mínimas (receitas, despesas,
-  bens) pra não depender de network.
+* ZIP fixture built em memória com as 4 CSVs (receitas, despesas_pagas,
+  despesas_contratadas, bens) usando o **schema real TSE 2022** — não
+  sintético. Despesas pagas só trazem ``SQ_PRESTADOR_CONTAS`` (sem
+  CPF/nome candidato nem fornecedor), exercitando o lookup via mapa
+  construído em ``transform``. Sem isso, a regressão de 2026-04-18
+  (113k rows extraídas → 0 sobreviviam) não é capturada.
 * Archival retrofit — ZIP inteiro vira snapshot content-addressed e toda
   row carimba ``source_snapshot_uri`` apontando pra ele.
 * Propriedades atualizadas em ``:Person`` com o shape esperado pelo Flask
   (``gerar_validacao_tse``): ``total_tse_2022``, ``tse_2022_partido``,
   ``tse_2022_pessoa_fisica``, ``tse_2022_proprios``, ``tse_2022_fin_coletivo``
-  + ``patrimonio_declarado`` / ``patrimonio_ano``.
+  + ``patrimonio_declarado`` / ``patrimonio_ano`` + ``total_despesas_tse_2022``.
 * Filtro UF=GO — rows de outras UFs são descartadas antes do load.
 * LGPD — CPF de doador pessoa física é mascarado em todas as
   estruturas expostas.
@@ -18,6 +22,7 @@ Covers:
 
 from __future__ import annotations
 
+import csv as _csv
 import io
 import zipfile
 from typing import TYPE_CHECKING, Any
@@ -39,109 +44,430 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Fixture ZIP — 3 candidatos GO + 1 candidato SP (pra testar filtro UF).
+# Fixture ZIP — 3 candidatos GO + 1 candidato SP (pra testar filtro UF),
+# usando o schema REAL publicado pelo TSE 2022 (headers completos, CPF
+# só em receitas/contratadas/bens; pagas trazem apenas SQ_PRESTADOR_CONTAS).
 # ---------------------------------------------------------------------------
 
 _YEAR = 2022
 
-# Header + rows de receitas_candidatos_2022_BRASIL.csv (TSE usa ; + latin-1).
-_RECEITAS_HEADER = (
-    "ANO_ELEICAO;SG_UF;SQ_CANDIDATO;NR_CPF_CANDIDATO;NM_CANDIDATO;"
-    "DS_ORIGEM_RECEITA;VR_RECEITA;NR_CPF_CNPJ_DOADOR;NM_DOADOR"
-)
+# Identificação dos candidatos — as mesmas constantes são reaproveitadas
+# nos rows de receitas/contratadas/bens e nos asserts. Os CPFs são
+# sintéticos (dígitos verificadores válidos pra passar em qualquer
+# validador, porém os titulares não existem na RFB).
+_C1 = {
+    "sq_prestador": "3000000001",
+    "sq_candidato": "GO0001",
+    "nr_candidato": "55001",
+    "cpf": "11144477735",
+    "nome": "CANDIDATO UM",
+    "cargo": "Deputado Estadual",
+    "cd_cargo": "7",
+    "partido": "18",
+    "sg_partido": "REDE",
+    "nm_partido": "Rede Sustentabilidade",
+    "cnpj_prestador": "47574422000134",
+}
+_C2 = {
+    "sq_prestador": "3000000002",
+    "sq_candidato": "GO0002",
+    "nr_candidato": "55002",
+    "cpf": "52998224725",
+    "nome": "CANDIDATA DOIS",
+    "cargo": "Deputado Estadual",
+    "cd_cargo": "7",
+    "partido": "55",
+    "sg_partido": "PSD",
+    "nm_partido": "Partido Social Democrático",
+    "cnpj_prestador": "47574723000168",
+}
+_C3 = {
+    "sq_prestador": "3000000003",
+    "sq_candidato": "GO0003",
+    "nr_candidato": "55003",
+    "cpf": "22233344456",
+    "nome": "CANDIDATO TRES",
+    "cargo": "Deputado Estadual",
+    "cd_cargo": "7",
+    "partido": "11",
+    "sg_partido": "PP",
+    "nm_partido": "Progressistas",
+    "cnpj_prestador": "47574999000199",
+}
+_SP = {
+    "sq_prestador": "4000000001",
+    "sq_candidato": "SP0001",
+    "nr_candidato": "22001",
+    "cpf": "99988877766",
+    "nome": "CANDIDATO SP",
+    "cargo": "Deputado Estadual",
+    "cd_cargo": "7",
+    "partido": "13",
+    "sg_partido": "PT",
+    "nm_partido": "Partido dos Trabalhadores",
+    "cnpj_prestador": "47574555000155",
+}
+
+_RECEITAS_FIELDS = [
+    "DT_GERACAO", "HH_GERACAO", "AA_ELEICAO", "CD_TIPO_ELEICAO",
+    "NM_TIPO_ELEICAO", "CD_ELEICAO", "DS_ELEICAO", "DT_ELEICAO",
+    "ST_TURNO", "TP_PRESTACAO_CONTAS", "DT_PRESTACAO_CONTAS",
+    "SQ_PRESTADOR_CONTAS", "SG_UF", "SG_UE", "NM_UE",
+    "NR_CNPJ_PRESTADOR_CONTA", "CD_CARGO", "DS_CARGO", "SQ_CANDIDATO",
+    "NR_CANDIDATO", "NM_CANDIDATO", "NR_CPF_CANDIDATO",
+    "NR_CPF_VICE_CANDIDATO", "NR_PARTIDO", "SG_PARTIDO", "NM_PARTIDO",
+    "CD_FONTE_RECEITA", "DS_FONTE_RECEITA", "CD_ORIGEM_RECEITA",
+    "DS_ORIGEM_RECEITA", "CD_NATUREZA_RECEITA", "DS_NATUREZA_RECEITA",
+    "CD_ESPECIE_RECEITA", "DS_ESPECIE_RECEITA", "CD_CNAE_DOADOR",
+    "DS_CNAE_DOADOR", "NR_CPF_CNPJ_DOADOR", "NM_DOADOR", "NM_DOADOR_RFB",
+    "CD_ESFERA_PARTIDARIA_DOADOR", "DS_ESFERA_PARTIDARIA_DOADOR",
+    "SG_UF_DOADOR", "CD_MUNICIPIO_DOADOR", "NM_MUNICIPIO_DOADOR",
+    "SQ_CANDIDATO_DOADOR", "NR_CANDIDATO_DOADOR",
+    "CD_CARGO_CANDIDATO_DOADOR", "DS_CARGO_CANDIDATO_DOADOR",
+    "NR_PARTIDO_DOADOR", "SG_PARTIDO_DOADOR", "NM_PARTIDO_DOADOR",
+    "NR_RECIBO_DOACAO", "NR_DOCUMENTO_DOACAO", "SQ_RECEITA", "DT_RECEITA",
+    "DS_RECEITA", "VR_RECEITA", "DS_NATUREZA_RECURSO_ESTIMAVEL",
+    "DS_GENERO", "DS_COR_RACA",
+]
+
+# Schema REAL TSE 2022: ``despesas_pagas`` NÃO tem NR_CPF_CANDIDATO,
+# SQ_CANDIDATO, NM_CANDIDATO, DS_CARGO nem fornecedor. Só SQ_PRESTADOR_CONTAS
+# como chave de candidato + SQ_DESPESA pra joinar com contratadas.
+_DESPESAS_PAGAS_FIELDS = [
+    "DT_GERACAO", "HH_GERACAO", "AA_ELEICAO", "CD_TIPO_ELEICAO",
+    "NM_TIPO_ELEICAO", "CD_ELEICAO", "DS_ELEICAO", "DT_ELEICAO",
+    "ST_TURNO", "TP_PRESTACAO_CONTAS", "DT_PRESTACAO_CONTAS",
+    "SQ_PRESTADOR_CONTAS", "SG_UF", "DS_TIPO_DOCUMENTO", "NR_DOCUMENTO",
+    "CD_FONTE_DESPESA", "DS_FONTE_DESPESA", "CD_ORIGEM_DESPESA",
+    "DS_ORIGEM_DESPESA", "CD_NATUREZA_DESPESA", "DS_NATUREZA_DESPESA",
+    "CD_ESPECIE_RECURSO", "DS_ESPECIE_RECURSO", "SQ_DESPESA",
+    "SQ_PARCELAMENTO_DESPESA", "DT_PAGTO_DESPESA", "DS_DESPESA",
+    "VR_PAGTO_DESPESA",
+]
+
+_DESPESAS_CONTRATADAS_FIELDS = [
+    "DT_GERACAO", "HH_GERACAO", "AA_ELEICAO", "CD_TIPO_ELEICAO",
+    "NM_TIPO_ELEICAO", "CD_ELEICAO", "DS_ELEICAO", "DT_ELEICAO",
+    "ST_TURNO", "TP_PRESTACAO_CONTAS", "DT_PRESTACAO_CONTAS",
+    "SQ_PRESTADOR_CONTAS", "SG_UF", "SG_UE", "NM_UE",
+    "NR_CNPJ_PRESTADOR_CONTA", "CD_CARGO", "DS_CARGO", "SQ_CANDIDATO",
+    "NR_CANDIDATO", "NM_CANDIDATO", "NR_CPF_CANDIDATO",
+    "NR_CPF_VICE_CANDIDATO", "NR_PARTIDO", "SG_PARTIDO", "NM_PARTIDO",
+    "CD_TIPO_FORNECEDOR", "DS_TIPO_FORNECEDOR", "CD_CNAE_FORNECEDOR",
+    "DS_CNAE_FORNECEDOR", "NR_CPF_CNPJ_FORNECEDOR", "NM_FORNECEDOR",
+    "NM_FORNECEDOR_RFB", "CD_ESFERA_PART_FORNECEDOR",
+    "DS_ESFERA_PART_FORNECEDOR", "SG_UF_FORNECEDOR",
+    "CD_MUNICIPIO_FORNECEDOR", "NM_MUNICIPIO_FORNECEDOR",
+    "SQ_CANDIDATO_FORNECEDOR", "NR_CANDIDATO_FORNECEDOR",
+    "CD_CARGO_FORNECEDOR", "DS_CARGO_FORNECEDOR", "NR_PARTIDO_FORNECEDOR",
+    "SG_PARTIDO_FORNECEDOR", "NM_PARTIDO_FORNECEDOR", "DS_TIPO_DOCUMENTO",
+    "NR_DOCUMENTO", "CD_ORIGEM_DESPESA", "DS_ORIGEM_DESPESA", "SQ_DESPESA",
+    "DT_DESPESA", "DS_DESPESA", "VR_DESPESA_CONTRATADA",
+]
+
+# Bens — o pipeline lê NR_CPF_CANDIDATO + VR_BEM_CANDIDATO + filtro UF.
+# O arquivo real vive em ``bem_candidato_{year}.zip`` irmão, mas o
+# pipeline localiza dentro do ZIP principal se presente (fixture OK).
+_BENS_FIELDS = [
+    "ANO_ELEICAO", "SG_UF", "SQ_CANDIDATO", "NR_CPF_CANDIDATO",
+    "NM_CANDIDATO", "DS_TIPO_BEM_CANDIDATO", "DS_BEM_CANDIDATO",
+    "VR_BEM_CANDIDATO",
+]
+
+_FIXED_META_RECEITA = {
+    "DT_GERACAO": "12/04/2026",
+    "HH_GERACAO": "15:00:11",
+    "AA_ELEICAO": str(_YEAR),
+    "CD_TIPO_ELEICAO": "2",
+    "NM_TIPO_ELEICAO": "ORDINÁRIA",
+    "CD_ELEICAO": "546",
+    "DS_ELEICAO": "Eleições Gerais Estaduais 2022",
+    "DT_ELEICAO": "02/10/2022",
+    "ST_TURNO": "1",
+    "TP_PRESTACAO_CONTAS": "FINAL",
+    "DT_PRESTACAO_CONTAS": "16/11/2022",
+}
+
+_FIXED_META_PAGAS = {
+    "DT_GERACAO": "12/04/2026",
+    "HH_GERACAO": "15:00:31",
+    "AA_ELEICAO": str(_YEAR),
+    "CD_TIPO_ELEICAO": "2",
+    "NM_TIPO_ELEICAO": "Ordinária",
+    "CD_ELEICAO": "546",
+    "DS_ELEICAO": "Eleições Gerais Estaduais 2022",
+    "DT_ELEICAO": "02/10/2022",
+    "ST_TURNO": "1",
+    "TP_PRESTACAO_CONTAS": "Final",
+    "DT_PRESTACAO_CONTAS": "05/12/2022",
+}
+
+
+def _receita_row(cand: dict[str, str], *, ue: str, sq_receita: str,
+                 origem: str, valor: str, doador_cpf_cnpj: str,
+                 doador_nome: str, dt_receita: str = "15/09/2022",
+                 ds_receita: str = "Doação",
+                 ds_genero: str = "Masculino",
+                 ds_cor: str = "Parda") -> dict[str, str]:
+    return {
+        **_FIXED_META_RECEITA,
+        "SQ_PRESTADOR_CONTAS": cand["sq_prestador"],
+        "SG_UF": cand.get("uf", ue),
+        "SG_UE": ue,
+        "NM_UE": {"GO": "GOIÁS", "SP": "SÃO PAULO"}.get(ue, ue),
+        "NR_CNPJ_PRESTADOR_CONTA": cand["cnpj_prestador"],
+        "CD_CARGO": cand["cd_cargo"],
+        "DS_CARGO": cand["cargo"],
+        "SQ_CANDIDATO": cand["sq_candidato"],
+        "NR_CANDIDATO": cand["nr_candidato"],
+        "NM_CANDIDATO": cand["nome"],
+        "NR_CPF_CANDIDATO": cand["cpf"],
+        "NR_CPF_VICE_CANDIDATO": "",
+        "NR_PARTIDO": cand["partido"],
+        "SG_PARTIDO": cand["sg_partido"],
+        "NM_PARTIDO": cand["nm_partido"],
+        "CD_FONTE_RECEITA": "1",
+        "DS_FONTE_RECEITA": "OUTROS RECURSOS",
+        "CD_ORIGEM_RECEITA": "10010200",
+        "DS_ORIGEM_RECEITA": origem,
+        "CD_NATUREZA_RECEITA": "1",
+        "DS_NATUREZA_RECEITA": "Financeiro",
+        "CD_ESPECIE_RECEITA": "0",
+        "DS_ESPECIE_RECEITA": "Dinheiro",
+        "CD_CNAE_DOADOR": "-1",
+        "DS_CNAE_DOADOR": "#NULO",
+        "NR_CPF_CNPJ_DOADOR": doador_cpf_cnpj,
+        "NM_DOADOR": doador_nome,
+        "NM_DOADOR_RFB": doador_nome,
+        "CD_ESFERA_PARTIDARIA_DOADOR": "-1",
+        "DS_ESFERA_PARTIDARIA_DOADOR": "#NULO",
+        "SG_UF_DOADOR": "#NULO#",
+        "CD_MUNICIPIO_DOADOR": "-1",
+        "NM_MUNICIPIO_DOADOR": "#NULO",
+        "SQ_CANDIDATO_DOADOR": "-1",
+        "NR_CANDIDATO_DOADOR": "-1",
+        "CD_CARGO_CANDIDATO_DOADOR": "-1",
+        "DS_CARGO_CANDIDATO_DOADOR": "#NULO",
+        "NR_PARTIDO_DOADOR": "-1",
+        "SG_PARTIDO_DOADOR": "#NULO",
+        "NM_PARTIDO_DOADOR": "#NULO",
+        "NR_RECIBO_DOACAO": "#NULO#",
+        "NR_DOCUMENTO_DOACAO": "#NULO#",
+        "SQ_RECEITA": sq_receita,
+        "DT_RECEITA": dt_receita,
+        "DS_RECEITA": ds_receita,
+        "VR_RECEITA": valor,
+        "DS_NATUREZA_RECURSO_ESTIMAVEL": "",
+        "DS_GENERO": ds_genero,
+        "DS_COR_RACA": ds_cor,
+    }
+
+
+def _pagas_row(cand: dict[str, str], *, sq_despesa: str, nr_documento: str,
+               valor: str, ds_despesa: str = "Serviços gerais",
+               dt_pagto: str = "30/09/2022") -> dict[str, str]:
+    return {
+        **_FIXED_META_PAGAS,
+        "SQ_PRESTADOR_CONTAS": cand["sq_prestador"],
+        "SG_UF": cand.get("uf", "GO" if cand is not _SP else "SP"),
+        "DS_TIPO_DOCUMENTO": "Nota Fiscal",
+        "NR_DOCUMENTO": nr_documento,
+        "CD_FONTE_DESPESA": "1",
+        "DS_FONTE_DESPESA": "Outros Recursos",
+        "CD_ORIGEM_DESPESA": "20010000",
+        "DS_ORIGEM_DESPESA": "Despesas diversas",
+        "CD_NATUREZA_DESPESA": "1",
+        "DS_NATUREZA_DESPESA": "Financeiro",
+        "CD_ESPECIE_RECURSO": "0",
+        "DS_ESPECIE_RECURSO": "Dinheiro",
+        "SQ_DESPESA": sq_despesa,
+        "SQ_PARCELAMENTO_DESPESA": "0",
+        "DT_PAGTO_DESPESA": dt_pagto,
+        "DS_DESPESA": ds_despesa,
+        "VR_PAGTO_DESPESA": valor,
+    }
+
+
+def _contratada_row(cand: dict[str, str], *, sq_despesa: str,
+                    nr_documento: str, valor: str,
+                    fornecedor_doc: str, fornecedor_nome: str,
+                    ds_despesa: str = "Serviços gerais",
+                    ue: str = "GO") -> dict[str, str]:
+    return {
+        **_FIXED_META_PAGAS,
+        "SQ_PRESTADOR_CONTAS": cand["sq_prestador"],
+        "SG_UF": cand.get("uf", ue),
+        "SG_UE": ue,
+        "NM_UE": {"GO": "GOIÁS", "SP": "SÃO PAULO"}.get(ue, ue),
+        "NR_CNPJ_PRESTADOR_CONTA": cand["cnpj_prestador"],
+        "CD_CARGO": cand["cd_cargo"],
+        "DS_CARGO": cand["cargo"],
+        "SQ_CANDIDATO": cand["sq_candidato"],
+        "NR_CANDIDATO": cand["nr_candidato"],
+        "NM_CANDIDATO": cand["nome"],
+        "NR_CPF_CANDIDATO": cand["cpf"],
+        "NR_CPF_VICE_CANDIDATO": "",
+        "NR_PARTIDO": cand["partido"],
+        "SG_PARTIDO": cand["sg_partido"],
+        "NM_PARTIDO": cand["nm_partido"],
+        "CD_TIPO_FORNECEDOR": "1",
+        "DS_TIPO_FORNECEDOR": "PESSOA JURÍDICA",
+        "CD_CNAE_FORNECEDOR": "18130",
+        "DS_CNAE_FORNECEDOR": "Impressão",
+        "NR_CPF_CNPJ_FORNECEDOR": fornecedor_doc,
+        "NM_FORNECEDOR": fornecedor_nome,
+        "NM_FORNECEDOR_RFB": fornecedor_nome,
+        "CD_ESFERA_PART_FORNECEDOR": "-1",
+        "DS_ESFERA_PART_FORNECEDOR": "#NULO",
+        "SG_UF_FORNECEDOR": "#NULO#",
+        "CD_MUNICIPIO_FORNECEDOR": "-1",
+        "NM_MUNICIPIO_FORNECEDOR": "#NULO",
+        "SQ_CANDIDATO_FORNECEDOR": "-1",
+        "NR_CANDIDATO_FORNECEDOR": "-1",
+        "CD_CARGO_FORNECEDOR": "-1",
+        "DS_CARGO_FORNECEDOR": "#NULO",
+        "NR_PARTIDO_FORNECEDOR": "-1",
+        "SG_PARTIDO_FORNECEDOR": "#NULO",
+        "NM_PARTIDO_FORNECEDOR": "#NULO",
+        "DS_TIPO_DOCUMENTO": "Nota Fiscal",
+        "NR_DOCUMENTO": nr_documento,
+        "CD_ORIGEM_DESPESA": "20010000",
+        "DS_ORIGEM_DESPESA": "Despesas diversas",
+        "SQ_DESPESA": sq_despesa,
+        "DT_DESPESA": "05/09/2022",
+        "DS_DESPESA": ds_despesa,
+        "VR_DESPESA_CONTRATADA": valor,
+    }
+
+
+def _bem_row(cand: dict[str, str], *, ue: str, tipo: str, ds: str,
+             valor: str) -> dict[str, str]:
+    return {
+        "ANO_ELEICAO": str(_YEAR),
+        "SG_UF": ue,
+        "SQ_CANDIDATO": cand["sq_candidato"],
+        "NR_CPF_CANDIDATO": cand["cpf"],
+        "NM_CANDIDATO": cand["nome"],
+        "DS_TIPO_BEM_CANDIDATO": tipo,
+        "DS_BEM_CANDIDATO": ds,
+        "VR_BEM_CANDIDATO": valor,
+    }
+
 
 # 3 candidatos GO com 5 doações cada + 1 candidato SP (5 linhas pra
 # garantir que o filtro UF=GO exclui o SP inteiro).
-# Candidato 1 (GO): cpf 11144477735 — 5 doações (5 buckets distintos).
-# Candidato 2 (GO): cpf 52998224725 — 5 doações PF.
-# Candidato 3 (GO): cpf 22233344456 — 5 doações próprio.
-# Candidato 4 (SP, descartado): cpf 99988877766.
 _RECEITAS_ROWS_GO_C1 = [
-    # partido
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Recursos de partido político", "1000,00", "12345678000100", "PARTIDO X"),
-    # proprios
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Recursos próprios", "500,50", "11144477735", "CANDIDATO UM"),
-    # pessoa_fisica
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Recursos de pessoas físicas", "200,00", "22233344456", "ZE DA SILVA"),
-    # fin_coletivo
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Recursos de financiamento coletivo", "300,00", "", ""),
-    # outros (linha com origem vazia)
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "", "50,00", "", ""),
+    _receita_row(_C1, ue="GO", sq_receita="RC1001",
+                 origem="Recursos de partido político",
+                 valor="1000,00", doador_cpf_cnpj="12345678000100",
+                 doador_nome="PARTIDO X"),
+    _receita_row(_C1, ue="GO", sq_receita="RC1002",
+                 origem="Recursos próprios",
+                 valor="500,50", doador_cpf_cnpj="11144477735",
+                 doador_nome="CANDIDATO UM"),
+    _receita_row(_C1, ue="GO", sq_receita="RC1003",
+                 origem="Recursos de pessoas físicas",
+                 valor="200,00", doador_cpf_cnpj="22233344456",
+                 doador_nome="ZE DA SILVA"),
+    _receita_row(_C1, ue="GO", sq_receita="RC1004",
+                 origem="Recursos de financiamento coletivo",
+                 valor="300,00", doador_cpf_cnpj="", doador_nome=""),
+    _receita_row(_C1, ue="GO", sq_receita="RC1005",
+                 origem="", valor="50,00",
+                 doador_cpf_cnpj="", doador_nome=""),
 ]
 _RECEITAS_ROWS_GO_C2 = [
-    (_YEAR, "GO", "GO0002", "52998224725", "CANDIDATA DOIS",
-     "Recursos de pessoas físicas", "100,00", f"555666777{n:02d}", f"DOADOR {n}")
+    _receita_row(
+        _C2, ue="GO", sq_receita=f"RC200{n}",
+        origem="Recursos de pessoas físicas", valor="100,00",
+        doador_cpf_cnpj=f"555666777{n:02d}", doador_nome=f"DOADOR {n}",
+    )
     for n in range(88, 93)
 ]
 _RECEITAS_ROWS_GO_C3 = [
-    (_YEAR, "GO", "GO0003", "22233344456", "CANDIDATO TRES",
-     "Recursos próprios", "400,00", "22233344456", "CANDIDATO TRES")
-    for _ in range(5)
+    _receita_row(_C3, ue="GO", sq_receita=f"RC300{i}",
+                 origem="Recursos próprios", valor="400,00",
+                 doador_cpf_cnpj="22233344456",
+                 doador_nome="CANDIDATO TRES")
+    for i in range(5)
 ]
 _RECEITAS_ROWS_SP = [
-    (_YEAR, "SP", "SP0001", "99988877766", "CANDIDATO SP",
-     "Recursos de pessoas físicas", "9999,00", "11122233344", "DOADOR SP")
-    for _ in range(5)
+    _receita_row(_SP, ue="SP", sq_receita=f"RS100{i}",
+                 origem="Recursos de pessoas físicas", valor="9999,00",
+                 doador_cpf_cnpj="11122233344",
+                 doador_nome="DOADOR SP")
+    for i in range(5)
 ]
 
+# Despesas pagas — schema TSE 2022 REAL: SEM CPF candidato, SEM fornecedor.
+# C1: 1 despesa de R$300 (prestador 3000000001, SQ_DESPESA 500001)
+# C2: 1 despesa de R$150 (prestador 3000000002, SQ_DESPESA 500002)
+# SP: 1 despesa R$5000 (descartada por filtro UF)
+_DESPESAS_PAGAS_ROWS = [
+    _pagas_row(_C1, sq_despesa="500001", nr_documento="NF001",
+               valor="300,00", ds_despesa="Publicidade"),
+    _pagas_row(_C2, sq_despesa="500002", nr_documento="NF002",
+               valor="150,00", ds_despesa="Combustível"),
+    _pagas_row(_SP, sq_despesa="500099", nr_documento="NF099",
+               valor="5000,00", ds_despesa="Aluguel"),
+]
+# Os rows SP precisam de SG_UF='SP' — o helper detecta via `cand is _SP`
+# (os dicts C1/C2/C3 caem no default 'GO').
+_DESPESAS_PAGAS_ROWS[-1]["SG_UF"] = "SP"
 
-def _rows_to_csv(header: str, rows: list[tuple[Any, ...]]) -> bytes:
-    lines = [header]
-    for r in rows:
-        lines.append(";".join(str(x) for x in r))
-    return ("\n".join(lines) + "\n").encode("latin-1")
-
-
-_DESPESAS_HEADER = (
-    "ANO_ELEICAO;SG_UF;SQ_CANDIDATO;NR_CPF_CANDIDATO;NM_CANDIDATO;"
-    "DS_TIPO_DESPESA;VR_PAGTO_DESPESA;NR_CPF_CNPJ_FORNECEDOR;NM_FORNECEDOR"
-)
-_DESPESAS_ROWS = [
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Publicidade", "300,00", "22222222000100", "GRAFICA GO"),
-    (_YEAR, "GO", "GO0002", "52998224725", "CANDIDATA DOIS",
-     "Combustível", "150,00", "33333333000100", "POSTO GO"),
-    (_YEAR, "SP", "SP0001", "99988877766", "CANDIDATO SP",
-     "Aluguel", "5000,00", "44444444000100", "IMOBILIARIA SP"),
+# Despesas contratadas — parear (SQ_PRESTADOR_CONTAS, SQ_DESPESA) com
+# pagas pra testar o enriquecimento de fornecedor.
+_DESPESAS_CONTRATADAS_ROWS = [
+    _contratada_row(_C1, sq_despesa="500001", nr_documento="NF001",
+                    valor="300,00", fornecedor_doc="22222222000100",
+                    fornecedor_nome="GRAFICA GO", ds_despesa="Publicidade"),
+    _contratada_row(_C2, sq_despesa="500002", nr_documento="NF002",
+                    valor="150,00", fornecedor_doc="33333333000100",
+                    fornecedor_nome="POSTO GO", ds_despesa="Combustível"),
+    _contratada_row(_SP, sq_despesa="500099", nr_documento="NF099",
+                    valor="5000,00", fornecedor_doc="44444444000100",
+                    fornecedor_nome="IMOBILIARIA SP", ue="SP"),
 ]
 
-_BENS_HEADER = (
-    "ANO_ELEICAO;SG_UF;SQ_CANDIDATO;NR_CPF_CANDIDATO;NM_CANDIDATO;"
-    "DS_TIPO_BEM_CANDIDATO;DS_BEM_CANDIDATO;VR_BEM_CANDIDATO"
-)
 _BENS_ROWS = [
-    # 2 bens por candidato GO (3 candidatos × 2).
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Apartamento", "Apartamento em Goiânia", "250000,00"),
-    (_YEAR, "GO", "GO0001", "11144477735", "CANDIDATO UM",
-     "Veículo", "Carro popular", "30000,00"),
-    (_YEAR, "GO", "GO0002", "52998224725", "CANDIDATA DOIS",
-     "Casa", "Residência principal", "450000,00"),
-    (_YEAR, "GO", "GO0002", "52998224725", "CANDIDATA DOIS",
-     "Quotas", "Quotas empresa", "50000,00"),
-    (_YEAR, "GO", "GO0003", "22233344456", "CANDIDATO TRES",
-     "Terreno", "Terreno rural", "100000,00"),
-    (_YEAR, "GO", "GO0003", "22233344456", "CANDIDATO TRES",
-     "Veículo", "Motocicleta", "15000,00"),
-    # SP — descartado por filtro
-    (_YEAR, "SP", "SP0001", "99988877766", "CANDIDATO SP",
-     "Imóvel", "Mansão em SP", "9999999,00"),
+    _bem_row(_C1, ue="GO", tipo="Apartamento",
+             ds="Apartamento em Goiânia", valor="250000,00"),
+    _bem_row(_C1, ue="GO", tipo="Veículo",
+             ds="Carro popular", valor="30000,00"),
+    _bem_row(_C2, ue="GO", tipo="Casa",
+             ds="Residência principal", valor="450000,00"),
+    _bem_row(_C2, ue="GO", tipo="Quotas",
+             ds="Quotas empresa", valor="50000,00"),
+    _bem_row(_C3, ue="GO", tipo="Terreno",
+             ds="Terreno rural", valor="100000,00"),
+    _bem_row(_C3, ue="GO", tipo="Veículo",
+             ds="Motocicleta", valor="15000,00"),
+    _bem_row(_SP, ue="SP", tipo="Imóvel",
+             ds="Mansão em SP", valor="9999999,00"),
 ]
+
+
+def _dicts_to_csv(fields: list[str], rows: list[dict[str, str]]) -> bytes:
+    """Serialize rows to CSV bytes em latin-1/; (como TSE publica)."""
+    buf = io.StringIO(newline="")
+    writer = _csv.DictWriter(
+        buf, fieldnames=fields, delimiter=";",
+        extrasaction="ignore", lineterminator="\n",
+    )
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return buf.getvalue().encode("latin-1")
 
 
 def _build_zip_bytes() -> bytes:
-    """Monta ZIP mínimo compatível com o layout do TSE."""
+    """Monta ZIP mínimo usando o **schema real** TSE 2022."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(
             f"receitas_candidatos_{_YEAR}_BRASIL.csv",
-            _rows_to_csv(
-                _RECEITAS_HEADER,
+            _dicts_to_csv(
+                _RECEITAS_FIELDS,
                 _RECEITAS_ROWS_GO_C1
                 + _RECEITAS_ROWS_GO_C2
                 + _RECEITAS_ROWS_GO_C3
@@ -150,11 +476,17 @@ def _build_zip_bytes() -> bytes:
         )
         zf.writestr(
             f"despesas_pagas_candidatos_{_YEAR}_BRASIL.csv",
-            _rows_to_csv(_DESPESAS_HEADER, _DESPESAS_ROWS),
+            _dicts_to_csv(_DESPESAS_PAGAS_FIELDS, _DESPESAS_PAGAS_ROWS),
+        )
+        zf.writestr(
+            f"despesas_contratadas_candidatos_{_YEAR}_BRASIL.csv",
+            _dicts_to_csv(
+                _DESPESAS_CONTRATADAS_FIELDS, _DESPESAS_CONTRATADAS_ROWS,
+            ),
         )
         zf.writestr(
             f"bens_candidato_{_YEAR}_BRASIL.csv",
-            _rows_to_csv(_BENS_HEADER, _BENS_ROWS),
+            _dicts_to_csv(_BENS_FIELDS, _BENS_ROWS),
         )
     return buf.getvalue()
 
@@ -271,6 +603,10 @@ class TestExtract:
         )
         assert all(
             (r.get("SG_UF") or "").upper() == "GO"
+            for r in pipeline._despesas_contratadas_raw
+        )
+        assert all(
+            (r.get("SG_UF") or "").upper() == "GO"
             for r in pipeline._bens_raw
         )
 
@@ -280,8 +616,10 @@ class TestExtract:
         pipeline.extract()
         # 3 candidatos × 5 receitas cada = 15
         assert len(pipeline._receitas_raw) == 15
-        # 2 despesas GO
+        # 2 despesas pagas GO (SP filtrado)
         assert len(pipeline._despesas_raw) == 2
+        # 2 despesas contratadas GO (SP filtrado)
+        assert len(pipeline._despesas_contratadas_raw) == 2
         # 3 candidatos × 2 bens cada = 6
         assert len(pipeline._bens_raw) == 6
 
@@ -368,6 +706,8 @@ class TestTransform:
         assert c1["tse_2022_pessoa_fisica"] == pytest.approx(200.00)
         assert c1["tse_2022_fin_coletivo"] == pytest.approx(300.00)
         assert c1["tse_2022_outros"] == pytest.approx(50.00)
+        # Despesa paga (resolvida via SQ_PRESTADOR_CONTAS=3000000001)
+        assert c1["total_despesas_tse_2022"] == pytest.approx(300.00)
         # Patrimônio = 250000 + 30000 = 280000
         assert c1["patrimonio_declarado"] == pytest.approx(280000.00)
         assert c1["patrimonio_ano"] == 2022
@@ -493,6 +833,177 @@ class TestTransform:
             # source_key é CPF formatado do candidato.
             assert "." in rel["source_key"]
             assert "-" in rel["source_key"]
+
+    def test_despesas_resolve_candidate_via_sq_prestador_contas(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        """Regressão bug 2026-04-18.
+
+        O schema TSE 2022+ de ``despesas_pagas_candidatos_{year}_BRASIL.csv``
+        **não publica** ``NR_CPF_CANDIDATO`` — só ``SQ_PRESTADOR_CONTAS``.
+        A fixture atual reflete esse schema real (sem CPF nas pagas); se o
+        transform quebrar e voltar a filtrar por ``len(cpf_digits) != 11``
+        direto na row da pagas, todas as despesas são descartadas e
+        ``total_despesas_tse_2022`` vira 0.0 pra todo candidato.
+        """
+        pipeline.extract()
+        pipeline.transform()
+        # Confirma que nenhuma row de despesas pagas tem CPF explícito
+        # (garantia do schema real).
+        for row in pipeline._despesas_raw:
+            assert not row.get("NR_CPF_CANDIDATO")
+            assert not row.get("CPF_CANDIDATO")
+            # SQ_PRESTADOR_CONTAS é o único link pro candidato.
+            assert row.get("SQ_PRESTADOR_CONTAS")
+        # Resolução bem-sucedida: os CPFs dos candidatos GO aparecem nos
+        # rels mesmo sem estar na row.
+        cpfs_nas_rels = {r["source_key"] for r in pipeline.expense_rels}
+        assert "111.444.777-35" in cpfs_nas_rels
+        assert "529.982.247-25" in cpfs_nas_rels
+        # total_despesas_tse_2022 > 0 no Person correspondente.
+        c1 = next(p for p in pipeline.persons if p["cpf"] == "111.444.777-35")
+        c2 = next(p for p in pipeline.persons if p["cpf"] == "529.982.247-25")
+        assert c1["total_despesas_tse_2022"] > 0
+        assert c2["total_despesas_tse_2022"] > 0
+
+    def test_fornecedor_enriched_from_contratadas(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        """Despesas pagas não trazem fornecedor em 2022+; transform hidrata
+        via mapa (SQ_PRESTADOR_CONTAS, SQ_DESPESA) construído a partir de
+        ``despesas_contratadas_candidatos_{year}_BRASIL.csv``."""
+        pipeline.extract()
+        pipeline.transform()
+        fornecedores = {
+            (e["fornecedor_documento"], e["fornecedor_nome"])
+            for e in pipeline.expenses
+        }
+        assert ("22222222000100", "GRAFICA GO") in fornecedores
+        assert ("33333333000100", "POSTO GO") in fornecedores
+
+    def test_guard_raises_when_strict_and_zero_expenses(
+        self,
+        archival_root: Path,  # noqa: ARG002
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Se ``BRACC_STRICT_TRANSFORM=1`` e 100% das despesas são
+        descartadas (schema drift), transform levanta ``RuntimeError``.
+
+        Protege contra o gap silencioso que deixou o teto_service
+        reportando "0% utilizado" em 2026-04-18.
+        """
+        monkeypatch.setenv("BRACC_STRICT_TRANSFORM", "1")
+
+        # Build fixture com schema que NÃO bate: remove SQ_PRESTADOR_CONTAS
+        # da row de despesas pagas (simula coluna renomeada).
+        pagas_quebradas = [dict(r) for r in _DESPESAS_PAGAS_ROWS[:2]]
+        for r in pagas_quebradas:
+            r["SQ_PRESTADOR_CONTAS"] = ""  # rompe o lookup
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                f"receitas_candidatos_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(
+                    _RECEITAS_FIELDS,
+                    _RECEITAS_ROWS_GO_C1 + _RECEITAS_ROWS_GO_C2,
+                ),
+            )
+            zf.writestr(
+                f"despesas_pagas_candidatos_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(_DESPESAS_PAGAS_FIELDS, pagas_quebradas),
+            )
+            zf.writestr(
+                f"despesas_contratadas_candidatos_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(
+                    _DESPESAS_CONTRATADAS_FIELDS,
+                    [],  # também vazio pra não salvar via fallback
+                ),
+            )
+            zf.writestr(
+                f"bens_candidato_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(_BENS_FIELDS, _BENS_ROWS[:2]),
+            )
+        zip_bytes = buf.getvalue()
+
+        def factory() -> httpx.Client:
+            return httpx.Client(transport=httpx.MockTransport(
+                lambda _req: httpx.Response(
+                    200, content=zip_bytes,
+                    headers={"content-type": "application/zip"},
+                ),
+            ))
+
+        p = TsePrestacaoContasGoPipeline(
+            driver=MagicMock(),
+            data_dir=str(tmp_path),
+            http_client_factory=factory,
+            year=_YEAR,
+            uf="GO",
+        )
+        p.extract()
+        with pytest.raises(RuntimeError, match="0 expenses"):
+            p.transform()
+
+    def test_guard_logs_without_strict_env(
+        self,
+        archival_root: Path,  # noqa: ARG002
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Sem ``BRACC_STRICT_TRANSFORM=1``, o guard apenas loga ERROR —
+        não quebra o pipeline (comportamento default, preserva UX dev)."""
+        monkeypatch.delenv("BRACC_STRICT_TRANSFORM", raising=False)
+
+        # Zip com despesas pagas órfãs de SQ_PRESTADOR_CONTAS.
+        pagas_quebradas = [dict(r) for r in _DESPESAS_PAGAS_ROWS[:1]]
+        pagas_quebradas[0]["SQ_PRESTADOR_CONTAS"] = ""
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                f"receitas_candidatos_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(_RECEITAS_FIELDS, _RECEITAS_ROWS_GO_C1),
+            )
+            zf.writestr(
+                f"despesas_pagas_candidatos_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(_DESPESAS_PAGAS_FIELDS, pagas_quebradas),
+            )
+            zf.writestr(
+                f"despesas_contratadas_candidatos_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(_DESPESAS_CONTRATADAS_FIELDS, []),
+            )
+            zf.writestr(
+                f"bens_candidato_{_YEAR}_BRASIL.csv",
+                _dicts_to_csv(_BENS_FIELDS, _BENS_ROWS[:1]),
+            )
+        zip_bytes = buf.getvalue()
+
+        def factory() -> httpx.Client:
+            return httpx.Client(transport=httpx.MockTransport(
+                lambda _req: httpx.Response(
+                    200, content=zip_bytes,
+                    headers={"content-type": "application/zip"},
+                ),
+            ))
+
+        p = TsePrestacaoContasGoPipeline(
+            driver=MagicMock(),
+            data_dir=str(tmp_path),
+            http_client_factory=factory,
+            year=_YEAR,
+            uf="GO",
+        )
+        p.extract()
+        import logging as _logging
+        with caplog.at_level(_logging.ERROR):
+            p.transform()  # não levanta
+        assert any(
+            "0 expenses" in rec.message and rec.levelname == "ERROR"
+            for rec in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------

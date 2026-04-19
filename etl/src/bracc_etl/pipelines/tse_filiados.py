@@ -174,7 +174,7 @@ class TseFiliadosPipeline(Pipeline):
         )
 
         # Provenance carimbado em todos os tiers (contrato em docs/provenance.md).
-        _PROV_SET = (
+        prov_set = (
             "    r.source_id = row.source_id, "
             "    r.source_record_id = row.source_record_id, "
             "    r.source_url = row.source_url, "
@@ -194,7 +194,7 @@ class TseFiliadosPipeline(Pipeline):
                 "SET r.party = row.party, "
                 "    r.affiliation_date = row.affiliation_date, "
                 "    r.status = row.status, "
-                f"{_PROV_SET}"
+                f"{prov_set}"
                 "    r.match_confidence = 'high'"
             )
             loaded = loader.run_query_with_retry(query, tier_high)
@@ -213,7 +213,7 @@ class TseFiliadosPipeline(Pipeline):
                 "SET r.party = row.party, "
                 "    r.affiliation_date = row.affiliation_date, "
                 "    r.status = row.status, "
-                f"{_PROV_SET}"
+                f"{prov_set}"
                 "    r.match_confidence = 'medium'"
             )
             loaded = loader.run_query_with_retry(query, tier_medium)
@@ -231,7 +231,7 @@ class TseFiliadosPipeline(Pipeline):
             "SET r.party = row.party, "
             "    r.affiliation_date = row.affiliation_date, "
             "    r.status = row.status, "
-            f"{_PROV_SET}"
+            f"{prov_set}"
             "    r.match_confidence = 'low'"
         )
         loaded = loader.run_query_with_retry(query, all_rels)
