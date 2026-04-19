@@ -1521,6 +1521,58 @@ function renderDetalhesProveniencia(provenance, extras) {
   return `<div class="detalhes-proveniencia">${linhas}${botoesHtml}${explicacao}</div>`;
 }
 
+// Renderiza tabela compacta com cada doação individual (data + valor +
+// link da fonte). Usado no expand do card de doador. Fallback silencioso
+// pra string vazia quando a lista é vazia (legado pré-DT_RECEITA).
+function renderListaDoacoes(doacoes) {
+  if (!Array.isArray(doacoes) || !doacoes.length) return "";
+  const linhas = doacoes.map(d => {
+    const data = d.data_doacao_fmt
+      ? escaparHTML(d.data_doacao_fmt)
+      : "<span style=\"color:var(--text-muted);\">sem data</span>";
+    const valor = escaparHTML(d.valor_fmt || "");
+    const srcUrl = d && d.provenance && d.provenance.source_url;
+    const snapUrl = d && d.provenance && d.provenance.snapshot_url;
+    const links = [];
+    if (srcUrl) {
+      links.push(
+        `<a href="${escaparHTML(srcUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir fonte original">&#128279; fonte</a>`,
+      );
+    }
+    if (snapUrl) {
+      links.push(
+        `<a href="${escaparHTML(snapUrl)}" target="_blank" rel="noopener noreferrer" title="Cópia preservada">&#128247; cópia</a>`,
+      );
+    }
+    const linksHtml = links.length
+      ? `<span style="margin-left:8px;">${links.join(" &middot; ")}</span>`
+      : "";
+    return `<div class="doacao-item" style="display:flex; gap:8px; padding:4px 0; font-size:12px; align-items:baseline;">
+      <span style="min-width:92px; color:var(--text-secondary);">${data}</span>
+      <span style="font-weight:600;">${valor}</span>
+      ${linksHtml}
+    </div>`;
+  }).join("");
+  return `<div class="detalhes-lista-doacoes" style="padding:8px 12px; border-top:1px solid var(--border); margin-top:6px;">
+    <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px;">Doações individuais (${doacoes.length})</div>
+    ${linhas}
+  </div>`;
+}
+
+// Formata o par data_primeira_doacao / data_ultima_doacao vindo do
+// DoadorEmpresa/DoadorPessoa como fragmento " &middot; em DD/MM/YYYY" ou
+// " &middot; entre DD/MM/YYYY e DD/MM/YYYY". Fica vazio quando nenhuma
+// data chegou da API (legado pré-DT_RECEITA).
+function renderDatasDoacao(doador) {
+  const primeira = doador && doador.data_primeira_doacao_fmt;
+  const ultima = doador && doador.data_ultima_doacao_fmt;
+  if (!primeira && !ultima) return '';
+  if (primeira && ultima && primeira !== ultima) {
+    return ` &middot; entre ${escaparHTML(primeira)} e ${escaparHTML(ultima)}`;
+  }
+  return ` &middot; em ${escaparHTML(primeira || ultima)}`;
+}
+
 function renderChipFonte(provenance, variant) {
   // variant: undefined (default, card principal) | "sub" (sub-cards compactos).
   if (!provenance) return "";
@@ -1530,10 +1582,12 @@ function renderChipFonte(provenance, variant) {
   const srcUrl = provenance.source_url || "";
   const snapUrl = provenance.snapshot_url || "";
 
+  // Nota: ``ingested_at`` foi removido do chip compacto porque confundia
+  // com a data do fato (doação, contrato, etc.). Continua acessível no
+  // painel expandido via ``renderDetalhesProveniencia`` pra auditoria.
   const partes = [];
   if (sid) partes.push(sid);
   if (recId) partes.push(recId);
-  if (ingDate) partes.push(`ingerido ${ingDate}`);
   const metaTxt = partes.length ? `Fonte: ${partes.join(" &middot; ")}` : "Fonte";
 
   const cls = variant === "sub" ? "chip-fonte chip-fonte-sub" : "chip-fonte";
@@ -2282,19 +2336,22 @@ function renderPerfil(d) {
       arr.forEach(e => {
         const cnpjStr = e.cnpj ? ` &middot; CNPJ ${e.cnpj}` : '';
         const nStr = e.n_doacoes > 1 ? ` &middot; ${e.n_doacoes} doações` : '';
+        const dataStr = renderDatasDoacao(e);
         const chip = renderChipFonte(e.provenance, "sub");
         const inner = `<div class="conexao-icon empresa">${icone}</div>
           <div class="conexao-info">
             <div class="conexao-nome">${e.nome}</div>
-            <div class="conexao-rel">Repassou valor à campanha${cnpjStr}${nStr}</div>
+            <div class="conexao-rel">Repassou valor à campanha${cnpjStr}${nStr}${dataStr}</div>
           </div>
           <div class="conexao-valor">${e.valor_total_fmt}</div>
           ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
         if (e.provenance) {
           const extras = e.n_doacoes > 1 ? { n_ocorrencias: e.n_doacoes } : null;
+          const lista = renderListaDoacoes(e.doacoes);
           h += `<details class="conexao-card card-expandable">
             <summary>${inner}</summary>
             ${renderDetalhesProveniencia(e.provenance, extras)}
+            ${lista}
           </details>`;
         } else {
           h += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
@@ -2317,19 +2374,22 @@ function renderPerfil(d) {
       d.doadores_pessoa.forEach(p => {
         const cpfStr = p.cpf_mascarado ? ` &middot; CPF ${p.cpf_mascarado}` : '';
         const nStr = p.n_doacoes > 1 ? ` &middot; ${p.n_doacoes} doações` : '';
+        const dataStr = renderDatasDoacao(p);
         const chip = renderChipFonte(p.provenance, "sub");
         const inner = `<div class="conexao-icon pessoa">&#128100;</div>
           <div class="conexao-info">
             <div class="conexao-nome">${p.nome}</div>
-            <div class="conexao-rel">Doou para campanha${cpfStr}${nStr}</div>
+            <div class="conexao-rel">Doou para campanha${cpfStr}${nStr}${dataStr}</div>
           </div>
           <div class="conexao-valor">${p.valor_total_fmt}</div>
           ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
         if (p.provenance) {
           const extras = p.n_doacoes > 1 ? { n_ocorrencias: p.n_doacoes } : null;
+          const lista = renderListaDoacoes(p.doacoes);
           html += `<details class="conexao-card card-expandable">
             <summary>${inner}</summary>
             ${renderDetalhesProveniencia(p.provenance, extras)}
+            ${lista}
           </details>`;
         } else {
           html += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
