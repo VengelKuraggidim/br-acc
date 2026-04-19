@@ -124,6 +124,7 @@ class SiopPipeline(Pipeline):
             frames.append(df)
 
         self._raw = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        self.rows_in = len(self._raw)
 
     @staticmethod
     def _resolve_col(row: Any, *candidates: str) -> str:
@@ -251,7 +252,10 @@ class SiopPipeline(Pipeline):
 
         # 1. Amendment nodes
         if self.amendments:
-            loader.load_nodes("Amendment", self.amendments, key_field="amendment_id")
+            loaded = loader.load_nodes(
+                "Amendment", self.amendments, key_field="amendment_id",
+            )
+            self.rows_loaded += loaded
 
         # 2. Person nodes for authors with CPF
         if self.authors:

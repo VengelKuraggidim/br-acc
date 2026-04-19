@@ -91,6 +91,7 @@ class ComprasnetPipeline(Pipeline):
 
         logger.info("Total raw records: %d", len(all_records))
         self._raw_records = all_records
+        self.rows_in = len(all_records)
 
     def transform(self) -> None:
         if not hasattr(self, "_raw_records"):
@@ -209,6 +210,7 @@ class ComprasnetPipeline(Pipeline):
         count = loader.load_nodes(
             "Contract", contract_nodes, key_field="contract_id",
         )
+        self.rows_loaded += count
         logger.info("Loaded %d Contract nodes", count)
 
         # Ensure Company nodes exist for suppliers

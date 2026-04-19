@@ -243,6 +243,7 @@ class TesouroEmendasPipeline(Pipeline):
             sep=";",
             keep_default_na=False,
         )
+        self.rows_in = len(self._raw)
         logger.info(
             "[tesouro_emendas] Extracted %d records", len(self._raw),
         )
@@ -318,9 +319,10 @@ class TesouroEmendasPipeline(Pipeline):
         loader = Neo4jBatchLoader(self.driver)
 
         if self.transfers:
-            loader.load_nodes(
+            loaded = loader.load_nodes(
                 "Payment", self.transfers, key_field="transfer_id",
             )
+            self.rows_loaded += loaded
 
         if self.companies:
             loader.load_nodes(

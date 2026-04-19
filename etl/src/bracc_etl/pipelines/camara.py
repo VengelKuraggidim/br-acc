@@ -422,6 +422,7 @@ class CamaraPipeline(Pipeline):
             logger.info("  Loaded %d rows from %s", len(df), f.name)
 
         self._raw = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        self.rows_in = len(self._raw)
         logger.info("Total raw rows: %d", len(self._raw))
 
     def transform(self) -> None:
@@ -569,6 +570,7 @@ class CamaraPipeline(Pipeline):
             for e in self.expenses
         ]
         count = loader.load_nodes("Expense", expense_nodes, key_field="expense_id")
+        self.rows_loaded += count
         logger.info("Loaded %d Expense nodes", count)
 
         # Load/merge Person nodes for deputies (CPF-based)

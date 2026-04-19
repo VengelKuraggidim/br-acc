@@ -64,6 +64,7 @@ class PgfnPipeline(Pipeline):
         skipped_corresponsavel = 0
         skipped_bad_cnpj = 0
         seen_inscricoes: set[str] = set()
+        total_rows_scanned = 0
 
         for csv_file in self._csv_files:
             logger.info("[pgfn] Processing %s", csv_file.name)
@@ -76,6 +77,7 @@ class PgfnPipeline(Pipeline):
                 keep_default_na=False,
                 chunksize=100_000,
             ):
+                total_rows_scanned += len(chunk)
                 # Filter to company principal debtors using vectorized ops
                 mask_pj = chunk["TIPO_PESSOA"].str.contains("jur", case=False, na=False)
                 mask_principal = chunk["TIPO_DEVEDOR"] == "PRINCIPAL"
@@ -134,6 +136,7 @@ class PgfnPipeline(Pipeline):
 
         self.finances = finances
         self.relationships = relationships
+        self.rows_in = total_rows_scanned
 
         logger.info(
             "[pgfn] Transformed %d Finance nodes, %d relationships",
@@ -152,6 +155,7 @@ class PgfnPipeline(Pipeline):
 
         if self.finances:
             loaded = loader.load_nodes("Finance", self.finances, key_field="finance_id")
+            self.rows_loaded += loaded
             logger.info("[pgfn] Loaded %d Finance nodes", loaded)
 
         if self.relationships:
