@@ -47,6 +47,7 @@ Status buckets:
 | datajud | datajud | blocked_external | not_loaded | api_json | API payload from https://api-publica.datajud.cnj.jus.br/ | Credentials not fully operational in prod |
 | datasus | datasus | implemented_loaded | loaded | file_batch | data/datasus/* | - |
 | dou | dou | implemented_loaded | loaded | bigquery_table | BigQuery query/export result | - |
+| entity_resolution_politicos_go | entity_resolution_politicos_go | implemented_partial | partial | derived | Graph read-only (:Senator/:FederalLegislator/:StateLegislator + :Person GO) | Liga :Senator/:FederalLegislator/:StateLegislator a :Person GO via regras determinsticas; cria :CanonicalPerson + :REPRESENTS; zero fetch externo; preserva proveniencia por pipeline-fonte; audit log JSONL pra ambiguidades |
 | estban | estban | not_built | not_loaded | file_batch | data/estban/* | Banking aggregates |
 | eu_sanctions | eu_sanctions | implemented_loaded | loaded | file_batch | data/eu_sanctions/* | - |
 | folha_go | folha_go | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.go.gov.br/ | - |

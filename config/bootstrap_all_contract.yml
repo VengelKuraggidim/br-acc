@@ -1,7 +1,7 @@
 {
   "contract_version": "2026-04-18",
   "full_historical_default": true,
-  "expected_implemented_count": 64,
+  "expected_implemented_count": 65,
   "core_sources": [
     "camara",
     "cnpj",
@@ -751,6 +751,13 @@
         "data/tse_candidatos_foto/*"
       ],
       "blocking_reason_if_any": "graph-dependent: needs :Person GO with sq_candidato (output of tse pipeline) populated first; throttled 1s/req; biennial cadence aligned with election calendar (2018/2020/2022/2024 supported, add 2026+ post-pleito)",
+      "core": false
+    },
+    {
+      "pipeline_id": "entity_resolution_politicos_go",
+      "acquisition_mode": "derived",
+      "required_inputs": [],
+      "blocking_reason_if_any": "graph-dependent: leitura pura do grafo (Senator/FederalLegislator/StateLegislator + Person GO + shadow); sem fetch externo; deve rodar depois dos pipelines-fonte (tse, camara_politicos_go, senado_senadores_foto, alego); idempotente",
       "core": false
     }
   ]
