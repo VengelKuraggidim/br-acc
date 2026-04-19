@@ -79,6 +79,7 @@ from bracc_etl.transforms import (
     format_cpf,
     mask_cpf,
     normalize_name,
+    parse_date,
     parse_numeric_comma,
     strip_document,
 )
@@ -510,12 +511,17 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             doador_nome = normalize_name(
                 row.get("NM_DOADOR") or row.get("NOME_DOADOR") or "",
             )
+            # DT_RECEITA do TSE chega como DD/MM/YYYY; ``parse_date``
+            # devolve "" quando ausente/inválida (Neo4j aceita string
+            # vazia na rel).
+            donated_at = parse_date((row.get("DT_RECEITA") or "").strip())
             did = _donation_id(sq, year, doador_id or "anon", f"{valor:.2f}", idx)
             donation_node = self.attach_provenance(
                 {
                     "donation_id": did,
                     "valor": valor,
                     "ano": year,
+                    "donated_at": donated_at,
                     "origem_receita": origem.strip(),
                     "bucket": bucket,
                     "doador_id": doador_id,
@@ -541,6 +547,7 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                     "target_key": cpf_formatted,
                     "valor": valor,
                     "ano": year,
+                    "donated_at": donated_at,
                     "donation_id": did,
                     "doador_tipo": (
                         "pf" if doador_is_cpf
@@ -868,6 +875,7 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 "   d.doador_tipo = row.doador_tipo "
                 "SET r.valor = row.valor, "
                 "    r.ano = row.ano, "
+                "    r.donated_at = row.donated_at, "
                 "    r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
                 "    r.source_url = row.source_url, "

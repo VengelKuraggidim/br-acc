@@ -260,6 +260,133 @@ def test_load_doou_company_rel_carries_provenance() -> None:
             assert field in row, f"Row sem {field}: {row}"
 
 
+def test_transform_parses_data_doacao_when_present() -> None:
+    """DT_RECEITA no formato BR (DD/MM/YYYY) vira ISO na donation dict.
+
+    Regressão pra evitar surfar "ingerido hoje" como data da doação no PWA.
+    """
+    import pandas as pd
+
+    pipeline = _make_pipeline()
+    pipeline._raw_candidatos = pd.read_csv(
+        FIXTURES / "tse_candidatos.csv", encoding="latin-1", dtype=str,
+    )
+    pipeline._raw_doacoes = pd.DataFrame([
+        {
+            "sq_candidato": "100001",
+            "cpf_cnpj_doador": "111.222.333-44",
+            "nome_doador": "Pedro Oliveira",
+            "valor": "1500.50",
+            "ano": "2022",
+            "data_doacao": "15/09/2022",
+        },
+        {
+            "sq_candidato": "100001",
+            "cpf_cnpj_doador": "222.333.444-55",
+            "nome_doador": "Data Invalida",
+            "valor": "100.00",
+            "ano": "2022",
+            "data_doacao": "31/02/2022",  # 31 fev não existe → ""
+        },
+        {
+            "sq_candidato": "100001",
+            "cpf_cnpj_doador": "333.444.555-66",
+            "nome_doador": "Sem Data",
+            "valor": "50.00",
+            "ano": "2022",
+            "data_doacao": "",
+        },
+    ])
+    pipeline.transform()
+
+    by_donor = {d["donor_doc"]: d for d in pipeline.donations}
+    assert by_donor["111.222.333-44"]["donated_at"] == "2022-09-15"
+    assert by_donor["222.333.444-55"]["donated_at"] == ""
+    assert by_donor["333.444.555-66"]["donated_at"] == ""
+
+
+def test_transform_donated_at_missing_column_stays_empty() -> None:
+    """Fixture sem coluna data_doacao (legado) deve gerar donated_at=''."""
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+
+    for d in pipeline.donations:
+        assert d["donated_at"] == ""
+
+
+def test_load_doou_person_rel_carries_donated_at() -> None:
+    """DOOU rel (pessoa) inclui donated_at no row e r.donated_at no SET."""
+    import pandas as pd
+
+    pipeline = _make_pipeline()
+    pipeline._raw_candidatos = pd.read_csv(
+        FIXTURES / "tse_candidatos.csv", encoding="latin-1", dtype=str,
+    )
+    pipeline._raw_doacoes = pd.DataFrame([
+        {
+            "sq_candidato": "100001",
+            "cpf_cnpj_doador": "111.222.333-44",
+            "nome_doador": "Pedro Oliveira",
+            "valor": "1500.50",
+            "ano": "2022",
+            "data_doacao": "20/08/2022",
+        },
+    ])
+    pipeline.transform()
+    pipeline.load()
+
+    session = mock_session(pipeline)
+    doou_calls = [
+        call for call in session.run.call_args_list
+        if "DOOU" in str(call) and "Person {cpf:" in str(call)
+    ]
+    assert len(doou_calls) >= 1
+    call = doou_calls[0]
+    query_str = str(call[0][0])
+    assert "r.donated_at = row.donated_at" in query_str
+
+    rows = (call[1] or {}).get("rows") or call[0][1]["rows"]
+    assert len(rows) == 1
+    assert rows[0]["donated_at"] == "2022-08-20"
+
+
+def test_load_doou_company_rel_carries_donated_at() -> None:
+    """DOOU rel (empresa) inclui donated_at no row e r.donated_at no SET."""
+    import pandas as pd
+
+    pipeline = _make_pipeline()
+    pipeline._raw_candidatos = pd.read_csv(
+        FIXTURES / "tse_candidatos.csv", encoding="latin-1", dtype=str,
+    )
+    pipeline._raw_doacoes = pd.DataFrame([
+        {
+            "sq_candidato": "100001",
+            "cpf_cnpj_doador": "12345678000199",
+            "nome_doador": "Empresa ABC Ltda",
+            "valor": "50000.00",
+            "ano": "2022",
+            "data_doacao": "10/10/2022",
+        },
+    ])
+    pipeline.transform()
+    pipeline.load()
+
+    session = mock_session(pipeline)
+    doou_calls = [
+        call for call in session.run.call_args_list
+        if "DOOU" in str(call) and "Company {cnpj:" in str(call)
+    ]
+    assert len(doou_calls) >= 1
+    call = doou_calls[0]
+    query_str = str(call[0][0])
+    assert "r.donated_at = row.donated_at" in query_str
+
+    rows = (call[1] or {}).get("rows") or call[0][1]["rows"]
+    assert len(rows) == 1
+    assert rows[0]["donated_at"] == "2022-10-10"
+
+
 def test_load_company_donors_include_razao_social() -> None:
     """Company donor nodes must include razao_social for API compatibility."""
     pipeline = _make_pipeline()

@@ -17,6 +17,7 @@ from bracc_etl.transforms import (
     format_cnpj,
     format_cpf,
     normalize_name,
+    parse_date,
     strip_document,
 )
 
@@ -134,6 +135,15 @@ class TSEPipeline(Pipeline):
             valor = float(str(row["valor"]).replace(",", "."))
             ano = int(row["ano"])
 
+            # Data da doação (DT_RECEITA / Data da receita / variantes early).
+            # Coluna opcional em fixtures e anos antigos — ``parse_date``
+            # devolve "" quando ausente ou não parseável, e o Neo4j aceita
+            # string vazia na rel sem quebrar o grafo.
+            raw_data = row.get("data_doacao", "")
+            if pd.isna(raw_data):
+                raw_data = ""
+            donated_at = parse_date(str(raw_data).strip())
+
             is_company = len(donor_doc) == 14
             donor_doc_fmt = format_cnpj(donor_doc)
             if not is_company:
@@ -146,6 +156,7 @@ class TSEPipeline(Pipeline):
                 "donor_is_company": is_company,
                 "valor": valor,
                 "year": ano,
+                "donated_at": donated_at,
             })
 
         self.donations = donations
@@ -284,12 +295,18 @@ class TSEPipeline(Pipeline):
                     "target_sq": d["candidate_sq"] if not target_cpf else "",
                     "valor": d["valor"],
                     "year": d["year"],
+                    "donated_at": d["donated_at"],
                 },
                 record_id=f"{d['year']}:{d['donor_doc']}:{target_key}",
                 record_url=_TSE_DATASET_URL,
             )
             person_donation_rels.append(rel)
         if person_donation_rels:
+            # DOOU MERGE key é ``(year)`` — múltiplas doações do mesmo doador
+            # pro mesmo candidato no mesmo ano colapsam em 1 rel só. Por isso
+            # ``r.donated_at`` é ``last-write-wins`` neste pipeline (bulk
+            # histórico). O pipeline ``tse_prestacao_contas_go`` mantém
+            # granularidade por doação via ``donation_id``.
             loader.run_query(
                 "UNWIND $rows AS row "
                 "MATCH (d:Person {cpf: row.source_key}) "
@@ -300,6 +317,7 @@ class TSEPipeline(Pipeline):
                 "WHERE c IS NOT NULL "
                 "MERGE (d)-[r:DOOU {year: row.year}]->(c) "
                 "SET r.valor = row.valor, "
+                "    r.donated_at = row.donated_at, "
                 "    r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
                 "    r.source_url = row.source_url, "
@@ -322,6 +340,7 @@ class TSEPipeline(Pipeline):
                     "target_sq": d["candidate_sq"] if not target_cpf else "",
                     "valor": d["valor"],
                     "year": d["year"],
+                    "donated_at": d["donated_at"],
                 },
                 record_id=f"{d['year']}:{d['donor_doc']}:{target_key}",
                 record_url=_TSE_DATASET_URL,
@@ -338,6 +357,7 @@ class TSEPipeline(Pipeline):
                 "WHERE c IS NOT NULL "
                 "MERGE (d)-[r:DOOU {year: row.year}]->(c) "
                 "SET r.valor = row.valor, "
+                "    r.donated_at = row.donated_at, "
                 "    r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
                 "    r.source_url = row.source_url, "
@@ -384,6 +404,7 @@ _DOACAO_COLS_NEW = {
     "NR_CPF_CNPJ_DOADOR": "cpf_cnpj_doador",
     "NM_DOADOR": "nome_doador",
     "VR_RECEITA": "valor",
+    "DT_RECEITA": "data_doacao",
     "AA_ELEICAO": "ano",
     "NM_CANDIDATO": "nome_candidato",
     "SG_PARTIDO": "partido",
@@ -397,6 +418,7 @@ _DOACAO_COLS_LEGACY = {
     "CPF/CNPJ do doador": "cpf_cnpj_doador",
     "Nome do doador": "nome_doador",
     "Valor receita": "valor",
+    "Data da receita": "data_doacao",
     "Nome candidato": "nome_candidato",
     "UF": "uf",
     "Sigla  UE": "sg_ue",
@@ -410,6 +432,7 @@ _DOACAO_COLS_EARLY_VARIANTS: dict[str, list[str]] = {
     ],
     "nome_doador": ["NM_DOADOR", "NO_DOADOR", "NOME_DOADOR"],
     "valor": ["VR_RECEITA", "VALOR_RECEITA"],
+    "data_doacao": ["DT_RECEITA", "DT_DOACAO", "DATA_RECEITA", "DATA_DOACAO"],
     "nome_candidato": ["NM_CANDIDATO", "NO_CAND", "NOME_CANDIDATO"],
     "partido": ["SG_PARTIDO", "SG_PART", "SIGLA_PARTIDO"],
     "uf": ["SG_UF", "SIGLA_UF", "UF"],

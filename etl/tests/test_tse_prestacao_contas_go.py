@@ -1030,3 +1030,41 @@ class TestLoad:
         # Person + donation nodes + donation rels + expense nodes +
         # expense rels — mínimo 3 chamadas ao session.
         assert mock_session(pipeline).run.call_count >= 3
+
+
+class TestDonatedAt:
+    """DT_RECEITA vira donated_at (ISO) na donation_rel + SET cypher."""
+
+    def test_donation_rels_carry_iso_date(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        # Fixture default usa dt_receita="15/09/2022" em todos os rows.
+        assert pipeline.donation_rels
+        for rel in pipeline.donation_rels:
+            assert rel["donated_at"] == "2022-09-15"
+
+    def test_donation_node_carries_iso_date(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        assert pipeline.donations
+        for d in pipeline.donations:
+            assert d["donated_at"] == "2022-09-15"
+
+    def test_load_sets_donated_at_in_merge(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        pipeline.load()
+        session = mock_session(pipeline)
+        doou_calls = [
+            call for call in session.run.call_args_list
+            if "[r:DOOU" in str(call)
+        ]
+        assert doou_calls
+        query_str = str(doou_calls[0][0][0])
+        assert "r.donated_at = row.donated_at" in query_str

@@ -66,6 +66,7 @@ DOACAO_COLS_NEW = {
     "NR_CPF_CNPJ_DOADOR": "cpf_cnpj_doador",
     "NM_DOADOR": "nome_doador",
     "VR_RECEITA": "valor",
+    "DT_RECEITA": "data_doacao",
     "AA_ELEICAO": "ano",
     "NM_CANDIDATO": "nome_candidato",
     "SG_PARTIDO": "partido",
@@ -78,6 +79,7 @@ DOACAO_COLS_LEGACY = {
     "CPF/CNPJ do doador": "cpf_cnpj_doador",
     "Nome do doador": "nome_doador",
     "Valor receita": "valor",
+    "Data da receita": "data_doacao",
     "Nome candidato": "nome_candidato",
     # Partido has inconsistent spacing across years; handled in _detect_partido_col
 }
@@ -89,6 +91,7 @@ DOACAO_COLS_EARLY_VARIANTS: dict[str, list[str]] = {
     "cpf_cnpj_doador": ["CD_CPF_CNPJ_DOADOR", "CD_CPF_CGC", "CD_CPF_CGC_DOA", "NUMERO_CPF_CGC_DOADOR"],
     "nome_doador": ["NM_DOADOR", "NO_DOADOR", "NOME_DOADOR"],
     "valor": ["VR_RECEITA", "VALOR_RECEITA"],
+    "data_doacao": ["DT_RECEITA", "DT_DOACAO", "DATA_RECEITA", "DATA_DOACAO"],
     "nome_candidato": ["NM_CANDIDATO", "NO_CAND", "NOME_CANDIDATO"],
     "partido": ["SG_PARTIDO", "SG_PART", "SIGLA_PARTIDO"],
 }
