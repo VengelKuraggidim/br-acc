@@ -223,7 +223,7 @@ def gerar_resumo_politico(
 
     if num_conexoes > 0:
         partes.append(
-            f"Possui {num_conexoes} conexao(oes) registrada(s) com "
+            f"Foram identificadas {num_conexoes} conexao(oes) registrada(s) com "
             "empresas, pessoas e contratos publicos."
         )
 
