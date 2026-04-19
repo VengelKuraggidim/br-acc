@@ -49,6 +49,13 @@ services:
       # Manager. Camadas de defesa em api/src/bracc/secrets.py impedem
       # ativação acidental em prod (whitelist APP_ENV + reject K_SERVICE).
       BRACC_SECRETS_SOURCE: env
+      # Docs (registry + copy pedagogico) montados via bind-mount abaixo.
+      # Overrides evitam dependencia do path resolver parents[4] dentro do
+      # container (que resolveria pra /, nao o repo root).
+      BRACC_SOURCE_REGISTRY_PATH: /app/docs/source_registry_br_v1.csv
+      BRACC_SOURCES_COPY_PATH: /app/docs/sources_public_copy.json
+    volumes:
+      - ./docs:/app/docs:ro
     depends_on:
       neo4j:
         condition: service_healthy
