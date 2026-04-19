@@ -1,0 +1,121 @@
+================================================================
+ GUIA DE DEPLOY — Fiscal Cidadão
+================================================================
+
+URLs em produção:
+  Site: https://storage.googleapis.com/fiscal-cidadao-pwa/index.html
+  API:  https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app
+  Aura: neo4j+s://5cb9f76f.databases.neo4j.io (instance 5cb9f76f)
+
+Todo deploy roda por:
+  bash scripts/deploy/deploy_all.sh <flags>
+
+----------------------------------------------------------------
+ O QUE FLAG RODAR EM CADA CASO
+----------------------------------------------------------------
+
+Mudei arquivo do site (pwa/index.html, sw.js, manifest.json):
+  bash scripts/deploy/deploy_all.sh --pwa
+  tempo: ~10s
+  depois: Ctrl+Shift+R no browser (service worker cacheia)
+
+Mudei código do backend (api/src/bracc/...):
+  bash scripts/deploy/deploy_all.sh --api
+  tempo: ~2min (build 1m + deploy 1m)
+
+Rodei novos pipelines ETL e grafo local mudou:
+  bash scripts/deploy/deploy_all.sh --graph
+  tempo: ~2-3min
+  cuidado: elementIds mudam → links salvos quebram
+  (só busca e navegação a partir da home continuam funcionando)
+
+Mexi em tudo:
+  bash scripts/deploy/deploy_all.sh --all
+  tempo: ~5min
+  ordem interna: graph → api → pwa
+  (faz sentido: API nova precisa de grafo novo; PWA nova pode
+  precisar de API nova; então PWA vai por último)
+
+Combinações livres:
+  bash scripts/deploy/deploy_all.sh --api --pwa
+  bash scripts/deploy/deploy_all.sh --graph --pwa
+  etc.
+
+----------------------------------------------------------------
+ PRÉ-REQUISITOS (uma vez só)
+----------------------------------------------------------------
+
+1. gcloud autenticado como fernandoeq@live.com
+     gcloud auth login
+
+2. Projeto padrão gcloud
+     gcloud config set project fiscal-cidadao-493716
+
+3. Container local do Neo4j up (só pra --graph):
+     docker compose up -d neo4j
+
+4. uv instalado e etl/ com deps (só pra --graph):
+     cd etl && uv sync
+
+----------------------------------------------------------------
+ TROUBLESHOOTING
+----------------------------------------------------------------
+
+"não foi possível extrair senha do container fiscal-neo4j"
+  → docker compose up -d neo4j && aguarda ~30s
+
+"não foi possível ler secret fiscal-cidadao-neo4j-password"
+  → gcloud auth list (conferir conta)
+  → gcloud config get-value project (deve ser fiscal-cidadao-493716)
+
+"Image not found" ao deployar
+  → tentou usar uma tag que não foi pushada. Use --all ou --api
+    (que sempre faz build antes).
+
+"Site mudou mas browser não mostra"
+  → Ctrl+Shift+R (invalidar service worker)
+  → ou abrir DevTools → Application → Service Workers → Unregister
+
+Cold start lento primeira chamada
+  → normal: min-instances=0 (mantém $0/mês). Segunda chamada é
+    rápida (~100ms). Pra tirar: editar deploy_api.sh pra
+    --min-instances=1 (custa ~$22/mês sempre).
+
+----------------------------------------------------------------
+ SCRIPTS INDIVIDUAIS (se precisar granularidade)
+----------------------------------------------------------------
+
+Só upload PWA:
+  bash scripts/deploy/upload_pwa.sh
+
+Só deploy Cloud Run (pressupõe imagem já buildada):
+  NEO4J_URI=neo4j+s://5cb9f76f.databases.neo4j.io \
+  NEO4J_USER=5cb9f76f \
+  NEO4J_DATABASE=5cb9f76f \
+  bash scripts/deploy/deploy_api.sh
+
+Só build Cloud Build (sem deploy):
+  gcloud builds submit api/ \
+    --tag southamerica-east1-docker.pkg.dev/fiscal-cidadao-493716/fiscal-cidadao/fiscal-cidadao-api:latest \
+    --project=fiscal-cidadao-493716
+
+Só re-copia grafo (dry-run, só mede):
+  cd etl && uv run python ../scripts/build_demo_graph.py \
+    --source-password "$(docker exec fiscal-neo4j env | grep NEO4J_AUTH | cut -d/ -f2)" \
+    --dry-run-only
+
+----------------------------------------------------------------
+ CHECKLIST DEPOIS DO DEPLOY
+----------------------------------------------------------------
+
+[ ] curl https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app/health
+    (deve retornar {"status":"ok"})
+
+[ ] Abrir site e buscar "rubens otoni" — deve aparecer na lista
+
+[ ] Clicar num político — card com emendas, doações, conexões
+
+[ ] No breakdown dos doadores, datas aparecem (12/09/2018 etc.)
+
+[ ] Home: "Quanto custa um cargo eletivo?" com 4 botões
+    (só não mostra se custo_mandato_br não foi copiado pro Aura)
