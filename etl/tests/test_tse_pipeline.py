@@ -187,6 +187,79 @@ def test_load_doou_merge_preserves_multi_year_donations() -> None:
     assert years == {2022, 2024}
 
 
+def test_load_doou_person_rel_carries_provenance() -> None:
+    """DOOU rel rows (pessoa→candidato) carregam os 5 campos de proveniência.
+
+    Regressão: sem isso, a API não achava chip de fonte nos doadores e só
+    rendezia provenance via fallback no nó target (cobertura parcial).
+    """
+    import pandas as pd
+
+    pipeline = _make_pipeline()
+    pipeline._raw_candidatos = pd.read_csv(
+        FIXTURES / "tse_candidatos.csv", encoding="latin-1", dtype=str,
+    )
+    pipeline._raw_doacoes = pd.DataFrame([
+        {
+            "sq_candidato": "100001",
+            "cpf_cnpj_doador": "111.222.333-44",
+            "nome_doador": "Pedro Oliveira",
+            "valor": "1500.50",
+            "ano": "2022",
+        },
+    ])
+    pipeline.transform()
+    pipeline.load()
+
+    session_mock = mock_session(pipeline)
+    run_calls = session_mock.run.call_args_list
+    doou_person_calls = [
+        call for call in run_calls
+        if "DOOU" in str(call) and "Person {cpf:" in str(call)
+    ]
+    assert len(doou_person_calls) >= 1
+
+    call = doou_person_calls[0]
+    query_str = str(call[0][0])
+    for field in ("source_id", "source_record_id", "source_url", "ingested_at", "run_id"):
+        assert f"r.{field} = row.{field}" in query_str, (
+            f"Query Cypher não seta r.{field}: {query_str}"
+        )
+
+    call_kwargs = call[1] if call[1] else {}
+    rows = call_kwargs.get("rows") or call[0][1]["rows"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["source_id"] == "tribunal_superior_eleitoral"
+    assert row["source_url"] == "https://dadosabertos.tse.jus.br/"
+    assert row["source_record_id"].startswith("2022:")
+    assert row["ingested_at"]
+    assert row["run_id"].startswith("tribunal_superior_eleitoral_")
+
+
+def test_load_doou_company_rel_carries_provenance() -> None:
+    """Análogo ao teste de pessoa, mas para doador empresa."""
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+    pipeline.load()
+
+    session_mock = mock_session(pipeline)
+    run_calls = session_mock.run.call_args_list
+    doou_company_calls = [
+        call for call in run_calls
+        if "DOOU" in str(call) and "Company {cnpj:" in str(call)
+    ]
+    assert len(doou_company_calls) >= 1
+
+    call = doou_company_calls[0]
+    call_kwargs = call[1] if call[1] else {}
+    rows = call_kwargs.get("rows") or call[0][1]["rows"]
+    for row in rows:
+        for field in ("source_id", "source_record_id", "source_url", "ingested_at", "run_id"):
+            assert field in row, f"Row sem {field}: {row}"
+
+
 def test_load_company_donors_include_razao_social() -> None:
     """Company donor nodes must include razao_social for API compatibility."""
     pipeline = _make_pipeline()

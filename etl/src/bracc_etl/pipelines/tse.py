@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 # We use SQ_CANDIDATO (unique sequential ID per candidate per election) instead.
 _MASKED_CPF_SENTINEL = "-4"
 
+# URL canônica do dataset TSE pro attach_provenance. O source_id deste
+# pipeline (``tribunal_superior_eleitoral``) não está no registry; sem URL
+# explícita, ``attach_provenance`` levantaria ValueError. Mantemos a URL
+# hardcoded aqui em vez de aliasar source_id pra não mexer em 674k+ nós já
+# no grafo com o id atual.
+_TSE_DATASET_URL = "https://dadosabertos.tse.jus.br/"
+
 
 class TSEPipeline(Pipeline):
     """Electoral data pipeline — candidates and campaign donations."""
@@ -246,13 +253,19 @@ class TSEPipeline(Pipeline):
             if d["donor_is_company"]:
                 continue
             target_cpf = sq_to_cpf.get(d["candidate_sq"], "")
-            person_donation_rels.append({
-                "source_key": d["donor_doc"],
-                "target_cpf": target_cpf,
-                "target_sq": d["candidate_sq"] if not target_cpf else "",
-                "valor": d["valor"],
-                "year": d["year"],
-            })
+            target_key = target_cpf or d["candidate_sq"]
+            rel = self.attach_provenance(
+                {
+                    "source_key": d["donor_doc"],
+                    "target_cpf": target_cpf,
+                    "target_sq": d["candidate_sq"] if not target_cpf else "",
+                    "valor": d["valor"],
+                    "year": d["year"],
+                },
+                record_id=f"{d['year']}:{d['donor_doc']}:{target_key}",
+                record_url=_TSE_DATASET_URL,
+            )
+            person_donation_rels.append(rel)
         if person_donation_rels:
             loader.run_query(
                 "UNWIND $rows AS row "
@@ -263,7 +276,12 @@ class TSEPipeline(Pipeline):
                 "WITH d, coalesce(c1, c2) AS c, row "
                 "WHERE c IS NOT NULL "
                 "MERGE (d)-[r:DOOU {year: row.year}]->(c) "
-                "SET r.valor = row.valor",
+                "SET r.valor = row.valor, "
+                "    r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id",
                 person_donation_rels,
             )
 
@@ -273,13 +291,19 @@ class TSEPipeline(Pipeline):
             if not d["donor_is_company"]:
                 continue
             target_cpf = sq_to_cpf.get(d["candidate_sq"], "")
-            company_donation_rels.append({
-                "source_key": d["donor_doc"],
-                "target_cpf": target_cpf,
-                "target_sq": d["candidate_sq"] if not target_cpf else "",
-                "valor": d["valor"],
-                "year": d["year"],
-            })
+            target_key = target_cpf or d["candidate_sq"]
+            rel = self.attach_provenance(
+                {
+                    "source_key": d["donor_doc"],
+                    "target_cpf": target_cpf,
+                    "target_sq": d["candidate_sq"] if not target_cpf else "",
+                    "valor": d["valor"],
+                    "year": d["year"],
+                },
+                record_id=f"{d['year']}:{d['donor_doc']}:{target_key}",
+                record_url=_TSE_DATASET_URL,
+            )
+            company_donation_rels.append(rel)
         if company_donation_rels:
             loader.run_query(
                 "UNWIND $rows AS row "
@@ -290,7 +314,12 @@ class TSEPipeline(Pipeline):
                 "WITH d, coalesce(c1, c2) AS c, row "
                 "WHERE c IS NOT NULL "
                 "MERGE (d)-[r:DOOU {year: row.year}]->(c) "
-                "SET r.valor = row.valor",
+                "SET r.valor = row.valor, "
+                "    r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id",
                 company_donation_rels,
             )
 
