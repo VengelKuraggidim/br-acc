@@ -9,8 +9,10 @@
 #   2. scripts/deploy/create_archival_bucket.sh rodado (uma vez).
 #   3. Instancia Neo4j Aura Free criada; NEO4J_URI exportado e
 #      password atualizada no secret `fiscal-cidadao-neo4j-password`.
-#   4. Imagem buildada em gcr.io/$PROJECT_ID/$SERVICE:$DEPLOY_TAG, via:
-#        gcloud builds submit api/ --tag gcr.io/fiscal-cidadao-493716/fiscal-cidadao-api:latest
+#   4. Imagem buildada em Artifact Registry, via:
+#        gcloud builds submit api/ --tag \
+#          southamerica-east1-docker.pkg.dev/fiscal-cidadao-493716/fiscal-cidadao/fiscal-cidadao-api:latest
+#      (gcr.io foi deprecated em 2024 — projetos novos usam AR nativo)
 #
 # Uso:
 #   NEO4J_URI=neo4j+s://xxxxx.databases.neo4j.io bash scripts/deploy/deploy_api.sh
@@ -23,8 +25,9 @@ PROJECT_ID="fiscal-cidadao-493716"
 REGION="southamerica-east1"
 SERVICE="fiscal-cidadao-api"
 SA_EMAIL="${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com"
+AR_REPO="fiscal-cidadao"
 DEPLOY_TAG="${DEPLOY_TAG:-latest}"
-IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${DEPLOY_TAG}"
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${DEPLOY_TAG}"
 
 if [[ -z "${NEO4J_URI:-}" ]]; then
   echo "ERRO: NEO4J_URI nao setado."
@@ -62,7 +65,7 @@ gcloud run deploy "$SERVICE" \
   --service-account="$SA_EMAIL" \
   --set-env-vars="$ENV_VARS" \
   --allow-unauthenticated \
-  --min-instances=1 \
+  --min-instances=0 \
   --max-instances=10 \
   --concurrency=40 \
   --memory=1Gi \

@@ -1,0 +1,19 @@
+# Evita upload de 360MB de venv/cache pra Cloud Build.
+# Dockerfile só precisa de pyproject.toml + uv.lock + src/.
+.venv
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+*.log
+.DS_Store
+.git
+.gitignore
+tests
+archival

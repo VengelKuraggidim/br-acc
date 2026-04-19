@@ -1383,14 +1383,17 @@
 </div>
 
 <script>
-// API base: em localhost aponta direto pro FastAPI bracc (porta 8000,
-// default do `make api` / `uvicorn bracc.main:app`). Em produção (PWA servida
-// pelo mesmo host via nginx), `/api` é reescrito no reverse-proxy para o
-// serviço `bracc-api:8000`. Endpoints consumidos: `/status`, `/buscar-tudo`,
-// `/politico/{id}` — todos expostos na raiz por `bracc.routers.pwa_parity`.
+// API base:
+//   - localhost: FastAPI direto em :8000 (make api).
+//   - Prod atual (sem LB/domínio unificado): PWA servida via GCS aponta
+//     direto pro Cloud Run — CORS liberado em scripts/deploy/deploy_api.sh.
+//   - Quando Prompt 03 subir Firebase Hosting ou LB com `/api/*` rewrite,
+//     voltar pra "/api" relativo e remover a URL absoluta.
+// Endpoints consumidos: `/status`, `/buscar-tudo`, `/politico/{id}` — todos
+// expostos na raiz por `bracc.routers.pwa_parity`.
 const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
   ? "http://localhost:8000"
-  : "/api";
+  : "https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app";
 let buscaTimeout = null;
 
 // === CHIP DE FONTE (proveniência rastreável) ===

@@ -1,107 +1,167 @@
 ---
-# Domínio custom + Cloud CDN pra PWA + HTTPS — ⏳ PENDENTE
+# Domínio unificado + PWA/API no mesmo host — ⏳ PENDENTE
 
-> Depende de [02-deploy-api-cloud-run.md](02-deploy-api-cloud-run.md).
-> API funcional no Cloud Run, PWA no GCS público. Agora apontar um
-> domínio real + CDN pra PWA + restringir CORS.
+> Depende de [02-deploy-api-cloud-run.md](02-deploy-api-cloud-run.md)
+> (Cloud Run ativo + PWA no bucket). Estado atual: PWA em
+> `storage.googleapis.com/fiscal-cidadao-pwa/...` aponta direto pra
+> API `fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app` via CORS `*`. Funciona
+> mas URL é feia e CORS aberto é guardrail frouxo.
 
-## Contexto
+## Objetivo
 
-Depois do prompt 02, o site está "no ar" mas com URLs feias:
-- API: `https://fiscal-cidadao-api-xxx-rj.a.run.app`
-- PWA: `https://storage.googleapis.com/fiscal-cidadao-pwa/index.html`
+PWA e API no **mesmo host**, com:
+- Domínio próprio (`fiscalcidadao.org.br` ou `fiscal-cidadao.web.app`)
+- HTTPS automático
+- `/api/*` → Cloud Run; `/*` → bucket PWA
+- CORS restrito ao próprio domínio
 
-Pra compartilhar com público (leigos), precisa:
-1. Domínio registrado (ex: `fiscalcidadao.org.br`)
-2. Cloud Load Balancer + Cloud CDN pra servir PWA com cache global
-3. Cloud Run domain mapping pra API em `api.<dominio>`
-4. Certificados SSL managed (grátis, renovação automática)
-5. CORS restrito ao domínio final (não mais `*`)
+## Caminho A — Firebase Hosting (recomendado, $0/mês)
 
-Custo adicional: **Load Balancer ~$18/mês** (mínimo, independe de
-tráfego) + tráfego saída do GCS (~$0 pra volume baixo).
+**Por que:** grátis (10GB storage + 360MB/dia egress), mesmo projeto GCP,
+integra nativo com Cloud Run via rewrites, SSL automático, CDN global.
 
-## Arquivos relevantes
+### Setup
 
-- `pwa/index.html` — hardcoded URL da API (procurar `.a.run.app` ou
-  `localhost`); precisa atualizar pra `https://api.<dominio>`
-- `pwa/sw.js` — service worker pode ter URLs cacheadas
-- `scripts/deploy/deploy_api.sh` — ajustar `CORS_ORIGINS=https://<dominio>`
-- `scripts/deploy/upload_pwa.sh` — script pode ganhar `--cache-control`
-  mais agressivo quando CDN estiver na frente
-- `docs/deploy.md` §7 "Decisões futuras" — atualizar quando feito
+1. Instalar Firebase CLI (`npm i -g firebase-tools`) ou usar container.
+2. `firebase login` com conta GCP.
+3. `firebase init hosting --project=fiscal-cidadao-493716`:
+   - Public directory: `pwa`
+   - Single-page app: **No** (PWA já tem rotas próprias)
+   - GitHub action deploy: opcional
+4. Criar/editar `firebase.json`:
 
-## Missão
+```json
+{
+  "hosting": {
+    "public": "pwa",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, max-age=0" }
+        ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, max-age=0" }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "fiscal-cidadao-api",
+          "region": "southamerica-east1"
+        }
+      }
+    ]
+  }
+}
+```
 
-1. **Confirmar domínio com Fernando** — qual domínio? Já registrado?
-   Onde (Registro.br, Cloudflare, Google Domains)?
-2. **Verificar domínio no Google Cloud**:
-   ```bash
-   gcloud domains verify <dominio>
+5. Reverter `pwa/index.html` pra `/api` relativo:
+   ```js
+   // ANTES:
+   : "https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app";
+   // DEPOIS:
+   : "/api";
    ```
-   Seguir o processo de adicionar TXT record no DNS.
+6. Deploy: `firebase deploy --only hosting`.
+7. URL default: `https://fiscal-cidadao-493716.web.app`.
+8. **Restringir CORS** — em `scripts/deploy/deploy_api.sh` trocar
+   `CORS_ORIGINS=*` por `CORS_ORIGINS=https://fiscal-cidadao-493716.web.app`
+   (+ domínio custom quando tiver). Redeploy.
+9. Testar: abrir `https://fiscal-cidadao-493716.web.app` — busca
+   deve funcionar com `/api/status`, `/api/buscar-tudo`, etc.
 
-3. **Cloud Run domain mapping pra API**:
+### Custom domain (opcional)
+
+1. Comprar domínio (~$10-15/ano):
+   - Cloud Domains: `.com.br` ~R$40/ano, `.org.br` ~R$40/ano
+   - Registro.br direto: mais barato mas sem integração automática
+   - Namecheap `.com` ~$10/ano
+2. No console Firebase → Hosting → Add custom domain.
+3. Firebase dá TXT record pra verificação + A/AAAA pra apontar DNS.
+4. Adicionar no painel do registrador. SSL provisiona em ~1h.
+
+## Caminho B — Load Balancer + Cloud CDN (~$18/mês)
+
+**Por que:** controle fino, integra com Cloud Armor (DDoS/WAF),
+path matching mais flexível, backend buckets nativos. Só vale se já
+for pagar algo mais ou precisar de WAF.
+
+### Setup resumido
+
+1. Reservar IP estático global:
    ```bash
-   gcloud run domain-mappings create \
-     --service=fiscal-cidadao-api \
-     --domain=api.<dominio> \
+   gcloud compute addresses create fiscal-cidadao-ip --global
+   ```
+2. Criar backend bucket pro PWA:
+   ```bash
+   gcloud compute backend-buckets create fiscal-cidadao-pwa-backend \
+     --gcs-bucket-name=fiscal-cidadao-pwa --enable-cdn
+   ```
+3. Criar Serverless NEG pro Cloud Run:
+   ```bash
+   gcloud compute network-endpoint-groups create fiscal-cidadao-api-neg \
      --region=southamerica-east1 \
-     --project=fiscal-cidadao-493716
+     --network-endpoint-type=serverless \
+     --cloud-run-service=fiscal-cidadao-api
    ```
-   Adicionar o CNAME/A record que o gcloud retornar.
-
-4. **PWA com Load Balancer + CDN**:
-   - Criar backend bucket: `gcloud compute backend-buckets create
-     fiscal-cidadao-pwa-backend --gcs-bucket-name=fiscal-cidadao-pwa
-     --enable-cdn`
-   - URL map apontando `/` pro backend bucket
-   - Target HTTPS proxy com managed cert: `gcloud compute
-     ssl-certificates create fiscal-cidadao-cert
-     --domains=<dominio>,www.<dominio> --global`
-   - Global forwarding rule na porta 443
-   - Adicionar registro A apontando `<dominio>` e `www.<dominio>` pro
-     IP do forwarding rule
-
-5. **Restringir CORS**:
-   Editar `scripts/deploy/deploy_api.sh`:
+4. Criar backend service apontando pro NEG:
    ```bash
-   ENV_VARS="${ENV_VARS},CORS_ORIGINS=https://<dominio>,https://www.<dominio>"
+   gcloud compute backend-services create fiscal-cidadao-api-backend \
+     --global --load-balancing-scheme=EXTERNAL_MANAGED
+   gcloud compute backend-services add-backend fiscal-cidadao-api-backend \
+     --global --network-endpoint-group=fiscal-cidadao-api-neg \
+     --network-endpoint-group-region=southamerica-east1
    ```
-   Rebuild + redeploy (prompt 02 de novo com a env var nova).
-
-6. **Atualizar PWA pra apontar pra `https://api.<dominio>`**:
-   - Editar `pwa/index.html` substituindo URL antiga
-   - Rerun `bash scripts/deploy/upload_pwa.sh`
-   - Force-refresh no navegador pra invalidar SW
-
-7. **Smoke test final**:
+5. Criar URL map com path matcher:
+   - `/api/*` → `fiscal-cidadao-api-backend`
+   - Default → `fiscal-cidadao-pwa-backend`
+6. Managed SSL cert + HTTPS target proxy + forwarding rule:
    ```bash
-   curl -fsS https://<dominio>/ | head -20           # PWA HTML via CDN
-   curl -fsS https://api.<dominio>/health             # API via domain mapping
+   gcloud compute ssl-certificates create fiscal-cidadao-cert \
+     --domains=fiscalcidadao.org.br --global
+   gcloud compute target-https-proxies create fiscal-cidadao-https-proxy \
+     --url-map=fiscal-cidadao-url-map \
+     --ssl-certificates=fiscal-cidadao-cert
+   gcloud compute forwarding-rules create fiscal-cidadao-https-fr \
+     --global --address=fiscal-cidadao-ip \
+     --target-https-proxy=fiscal-cidadao-https-proxy \
+     --ports=443
    ```
-   Abrir `https://<dominio>` em navegador, confirmar PWA carrega e faz
-   chamadas com sucesso pra `https://api.<dominio>`.
+7. Apontar domínio pro IP estático no registrador.
+
+### Custo real
+
+- Forwarding rule: $0.025/h = ~$18/mês
+- Data processing: $0.008/GB (cobra só o tráfego)
+- Cloud CDN cache: $0.02-0.08/GB egress
+- SSL cert: grátis (managed)
+
+Pra tráfego de demo (<100GB/mês): **~$18-20/mês** total.
 
 ## Critérios de aceite
 
-- Domínio registrado e verificado no GCP.
-- `https://<dominio>` serve a PWA via Cloud CDN (response header
-  `via: 1.1 google` ou `age: N` indica cache).
-- `https://api.<dominio>/health` responde `{"status":"ok"}`.
-- Certificado SSL status `ACTIVE` em ambos domínios (pode levar 15-60
-  min pro managed cert provisionar).
-- `CORS_ORIGINS` restrito ao domínio final; request de outra origem
-  bloqueada pelo browser.
-- `pwa/index.html` commitado apontando pra URL final.
-- `docs/deploy.md` §7 atualizado documentando setup final.
+- [ ] `https://<domínio>/` carrega PWA
+- [ ] `https://<domínio>/api/status` retorna JSON da API
+- [ ] Busca no PWA funciona (chamando `/api/buscar-tudo?q=...`)
+- [ ] HTTPS válido (sem warning no browser)
+- [ ] `CORS_ORIGINS` restringido ao próprio domínio (não mais `*`)
+- [ ] `pwa/index.html` voltou pra `/api` relativo
+- [ ] docs/deploy.md atualizado com setup escolhido
 
 ## Guardrails
 
-- Confirmar domínio + custo do Load Balancer ($18/mês) com Fernando
-  antes de criar recursos.
-- Managed cert demora até 1h pra sair de `PROVISIONING` → `ACTIVE`.
-  Não recriar repetidamente.
-- Se CDN cachear arquivo errado: `gcloud compute url-maps
-  invalidate-cdn-cache` com path.
-- Commits: `feat(deploy):` pro setup, `docs:` pra atualizações.
+- **Confirmar com Fernando qual caminho (A ou B) antes de provisionar
+  recursos pagos.** B custa $18+/mês, A é $0.
+- **Não deixar `CORS_ORIGINS=*` em produção** depois que o domínio
+  estiver unificado — é fail-open por default.
+- Se custom domain: avisar que DNS propagation pode levar até 48h
+  (geralmente 5-30min).
+- Após migrar pra `/api` relativo, testar que PWA serve pelo novo
+  domínio ANTES de apagar a versão do bucket antigo.
