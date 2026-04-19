@@ -8,6 +8,7 @@ from bracc.dependencies import get_session
 from bracc.services.neo4j_service import execute_query, execute_query_single
 from bracc.services.public_guard import should_hide_person_entities
 from bracc.services.source_registry import load_source_registry, source_registry_summary
+from bracc.services.sources_public_service import build_public_sources_grouped
 
 router = APIRouter(prefix="/api/v1/meta", tags=["meta"])
 
@@ -137,3 +138,13 @@ async def database_stats(
 async def list_sources() -> dict[str, list[dict[str, Any]]]:
     sources = [entry.to_public_dict() for entry in load_source_registry() if entry.in_universe_v1]
     return {"sources": sources}
+
+
+@router.get("/sources/publico")
+async def list_public_sources() -> dict[str, list[dict[str, Any]]]:
+    """Lista fontes com copy pedagógico pt-BR, agrupadas por categoria.
+
+    Consumido pela aba 'Fontes' na PWA. TCEs de outros estados e portais
+    estaduais fora-de-GO são filtrados (escopo Fiscal Cidadão é Goiás).
+    """
+    return {"grupos": build_public_sources_grouped()}

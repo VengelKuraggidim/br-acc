@@ -957,6 +957,123 @@
 
     .fade-in { animation: fadeUp 0.3s ease forwards; }
 
+    /* === FONTES (aba "De onde vêm os dados") === */
+    .fonte-grupo {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .fonte-grupo > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .fonte-grupo > summary::-webkit-details-marker { display: none; }
+    .fonte-grupo > summary::after {
+      content: "+";
+      font-weight: 400;
+      color: var(--text-dim);
+      font-size: 18px;
+      line-height: 1;
+    }
+    .fonte-grupo[open] > summary::after { content: "\2212"; }
+    .fonte-grupo-titulo { flex: 1; }
+    .fonte-grupo-contador {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      background: var(--bg-primary);
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-right: 4px;
+    }
+    .fonte-grupo-corpo {
+      padding: 0 10px 10px 10px;
+    }
+
+    .fonte-item {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .fonte-item > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .fonte-item > summary::-webkit-details-marker { display: none; }
+    .fonte-item > summary::after {
+      content: "+";
+      font-weight: 400;
+      color: var(--text-dim);
+      font-size: 16px;
+    }
+    .fonte-item[open] > summary::after { content: "\2212"; }
+    .fonte-sigla { flex: 1; font-weight: 600; }
+    .fonte-id {
+      font-size: 10px;
+      font-family: ui-monospace, monospace;
+      color: var(--text-dim);
+      background: var(--bg-secondary);
+      padding: 2px 6px;
+      border-radius: 6px;
+      margin-right: 4px;
+    }
+    .fonte-item-corpo {
+      padding: 6px 12px 12px 12px;
+      border-top: 1px solid var(--border);
+    }
+    .fonte-bloco { margin-top: 10px; }
+    .fonte-bloco-rotulo {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .fonte-bloco p {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    .fonte-arquivos {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+    }
+    .fonte-link {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 6px 10px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+    }
+    .fonte-link:hover { text-decoration: underline; }
+
     /* === SCROLLBAR === */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -1028,6 +1145,28 @@
   </div>
 </div>
 
+<!-- PAGE: FONTES -->
+<div class="page" id="pageFontes">
+  <div class="container" style="padding-top: 16px;">
+    <div class="section-header fade-in" style="margin-bottom: 12px;">
+      <div class="section-title">
+        <span class="section-icon" style="background: var(--info-bg);">&#128218;</span>
+        De onde vêm os dados
+      </div>
+    </div>
+    <div class="card fade-in" style="margin-bottom: 14px;">
+      <p style="font-size: 13px; line-height: 1.7; color: var(--text-secondary); margin: 0;">
+        O Fiscal Cidadão reúne dados de órgãos públicos oficiais e listas internacionais.
+        Cada fonte abaixo mostra o que é, quais arquivos baixamos e por que o dado ajuda a
+        fiscalizar Goiás. Toque para abrir.
+      </p>
+    </div>
+    <div id="fontesContent" class="fade-in">
+      <div class="loading"><div class="spinner"></div><span class="loading-text">Carregando fontes...</span></div>
+    </div>
+  </div>
+</div>
+
 <!-- PAGE: SOBRE -->
 <div class="page" id="pageSobre">
   <div class="container" style="padding-top: 16px;">
@@ -1091,6 +1230,9 @@
   </button>
   <button class="tab" onclick="document.getElementById('searchInput').focus()" id="tabBuscar">
     <span class="tab-icon">&#128269;</span>Buscar
+  </button>
+  <button class="tab" onclick="irPara('pageFontes', this); carregarFontes();" id="tabFontes">
+    <span class="tab-icon">&#128218;</span>Fontes
   </button>
   <button class="tab" onclick="irPara('pageSobre', this)" id="tabSobre">
     <span class="tab-icon">&#9432;</span>Sobre
@@ -1999,6 +2141,76 @@ function processarHash() {
   }
 }
 window.addEventListener("hashchange", processarHash);
+
+// === FONTES (aba "De onde vêm os dados") ===
+let fontesCache = null;
+async function carregarFontes() {
+  const content = document.getElementById("fontesContent");
+  if (fontesCache) {
+    content.innerHTML = renderFontes(fontesCache);
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/api/v1/meta/sources/publico`);
+    const d = await r.json();
+    fontesCache = d.grupos || [];
+    content.innerHTML = renderFontes(fontesCache);
+  } catch {
+    content.innerHTML = '<div class="empty"><div class="empty-icon">&#9888;</div>Não foi possível carregar as fontes. Tente novamente.</div>';
+  }
+}
+
+function renderFontes(grupos) {
+  if (!grupos.length) {
+    return '<div class="empty"><div class="empty-icon">&#128218;</div>Nenhuma fonte publicada ainda.</div>';
+  }
+  return grupos.map(g => `
+    <details class="fonte-grupo">
+      <summary>
+        <span class="fonte-grupo-titulo">${escaparHTML(g.category_label)}</span>
+        <span class="fonte-grupo-contador">${g.sources.length}</span>
+      </summary>
+      <div class="fonte-grupo-corpo">
+        ${g.sources.map(renderFonteItem).join("")}
+      </div>
+    </details>
+  `).join("");
+}
+
+function renderFonteItem(s) {
+  const sigla = s.sigla_full || s.name || s.id;
+  const oQueE = s.o_que_e
+    ? `<div class="fonte-bloco"><div class="fonte-bloco-rotulo">O que é</div><p>${escaparHTML(s.o_que_e)}</p></div>`
+    : "";
+  const oQuePegamos = s.o_que_pegamos
+    ? `<div class="fonte-bloco"><div class="fonte-bloco-rotulo">O que a gente pega</div><p>${escaparHTML(s.o_que_pegamos)}</p></div>`
+    : "";
+  const porQueImporta = s.por_que_importa
+    ? `<div class="fonte-bloco"><div class="fonte-bloco-rotulo">Por que importa</div><p>${escaparHTML(s.por_que_importa)}</p></div>`
+    : "";
+  const arquivos = (s.arquivos_exemplo || []).map(a => `<li>${escaparHTML(a)}</li>`).join("");
+  const arquivosBloco = arquivos
+    ? `<div class="fonte-bloco"><div class="fonte-bloco-rotulo">Arquivos que baixamos</div><ul class="fonte-arquivos">${arquivos}</ul></div>`
+    : "";
+  const linkFonte = s.primary_url
+    ? `<a class="fonte-link" href="${escaparHTML(s.primary_url)}" target="_blank" rel="noopener noreferrer">&#128279; Abrir site oficial</a>`
+    : "";
+  return `
+    <details class="fonte-item">
+      <summary>
+        <span class="fonte-sigla">${escaparHTML(sigla)}</span>
+        <span class="fonte-id">${escaparHTML(s.id)}</span>
+      </summary>
+      <div class="fonte-item-corpo">
+        ${oQueE}
+        ${oQuePegamos}
+        ${porQueImporta}
+        ${arquivosBloco}
+        ${linkFonte}
+      </div>
+    </details>
+  `;
+}
 
 // === INIT ===
 carregarInicio();

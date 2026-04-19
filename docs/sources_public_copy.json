@@ -1,0 +1,965 @@
+{
+  "_meta": {
+    "description": "Copy pedagogico pt-BR para leigos. Um bloco por source_id do registry. Complementa docs/source_registry_br_v1.csv. Tom: vocabulario de 6a serie, neutro, descritivo — nunca acusatorio.",
+    "last_updated": "2026-04-18",
+    "scope": "Goias (br-acc rebrand Fiscal Cidadao)"
+  },
+  "category_labels": {
+    "identity": "Cadastro de empresas",
+    "electoral": "Eleições",
+    "contracts": "Compras, contratos e licitações",
+    "sanctions": "Sanções e listas de impedidos",
+    "integrity": "Integridade e servidores",
+    "finance": "Bancos e sistema financeiro",
+    "fiscal": "Dívidas e tributos",
+    "environment": "Meio ambiente e terras",
+    "labor": "Trabalho e emprego",
+    "education": "Educação",
+    "gazette": "Diários oficiais",
+    "health": "Saúde",
+    "offshore": "Offshore e vazamentos",
+    "market": "Mercado de capitais",
+    "legislative": "Legislativo e mandatos",
+    "spending": "Gastos públicos",
+    "transfers": "Transferências e convênios",
+    "ownership": "Holdings e participações",
+    "budget": "Orçamento público",
+    "judiciary": "Judiciário",
+    "regulatory": "Agências regulatórias",
+    "tax": "Benefícios fiscais",
+    "social": "Programas sociais",
+    "international": "Listas internacionais",
+    "state": "Goiás — estado e tribunais",
+    "municipal": "Goiás — municípios",
+    "procurement": "Goiás — compras públicas",
+    "enrichment": "Enriquecimento de dados",
+    "audit": "Tribunais de contas"
+  },
+  "sources": {
+    "cnpj": {
+      "sigla_full": "Cadastro Nacional da Pessoa Jurídica (Receita Federal)",
+      "o_que_e": "É o registro oficial de toda empresa que existe no Brasil. A Receita Federal mantém essa lista pública.",
+      "o_que_pegamos": "Baixamos a base inteira de empresas, sócios e atividades. São arquivos grandes, atualizados todo mês.",
+      "por_que_importa": "Ajuda a ver quem são os donos das empresas que recebem dinheiro público em Goiás.",
+      "arquivos_exemplo": [
+        "ZIP com tabela de empresas ativas",
+        "ZIP com lista de sócios de cada empresa",
+        "ZIP com ramos de atividade (CNAE)"
+      ]
+    },
+    "brasilapi_cnpj": {
+      "sigla_full": "BrasilAPI consulta de CNPJ",
+      "o_que_e": "É um serviço gratuito que consulta a situação de uma empresa na Receita Federal.",
+      "o_que_pegamos": "Para cada CNPJ, pegamos se a empresa está ativa, baixada ou suspensa. Também pegamos endereço e telefone.",
+      "por_que_importa": "Mostra na hora se uma empresa que recebe contrato público ainda está funcionando."
+    },
+    "tse": {
+      "sigla_full": "Tribunal Superior Eleitoral",
+      "o_que_e": "É o órgão que organiza as eleições no Brasil. Guarda dados de candidatos, votos e doações.",
+      "o_que_pegamos": "Baixamos listas de candidatos de Goiás, resultados de votação e quem doou pra campanha.",
+      "por_que_importa": "Permite ver quem financiou cada político antes dele ganhar o cargo.",
+      "arquivos_exemplo": [
+        "CSV com candidatos por eleição",
+        "CSV com votos apurados por zona",
+        "CSV com doações recebidas"
+      ]
+    },
+    "tse_bens": {
+      "sigla_full": "TSE — declaração de bens de candidatos",
+      "o_que_e": "É a lista de tudo que o candidato disse que possui quando se registrou pra eleição.",
+      "o_que_pegamos": "Pegamos carros, casas, terras e dinheiro declarados por quem concorreu em Goiás.",
+      "por_que_importa": "Serve pra comparar o patrimônio antes e depois do mandato.",
+      "arquivos_exemplo": [
+        "CSV com bens declarados por candidato"
+      ]
+    },
+    "tse_filiados": {
+      "sigla_full": "TSE — filiados partidários",
+      "o_que_e": "É o registro oficial de quem é filiado a cada partido político no Brasil.",
+      "o_que_pegamos": "Baixamos a lista de filiados dos partidos em Goiás, com data de entrada e situação.",
+      "por_que_importa": "Mostra a rede de gente ligada a cada partido e aos políticos eleitos.",
+      "arquivos_exemplo": [
+        "CSV com filiados por partido",
+        "CSV com histórico de filiações"
+      ]
+    },
+    "tse_prestacao_contas": {
+      "sigla_full": "TSE — prestação de contas eleitorais",
+      "o_que_e": "É o relatório onde cada candidato e partido conta quanto gastou e recebeu na campanha.",
+      "o_que_pegamos": "Pegamos receitas, despesas e doadores das campanhas em Goiás, ano por ano.",
+      "por_que_importa": "Mostra de onde veio o dinheiro da campanha e pra onde foi gasto.",
+      "arquivos_exemplo": [
+        "CSV com receitas de campanha",
+        "CSV com despesas de campanha",
+        "CSV com doadores identificados"
+      ]
+    },
+    "tse_candidatos_foto": {
+      "sigla_full": "TSE DivulgaCandContas — fotos oficiais",
+      "o_que_e": "É o sistema do TSE que mostra a foto oficial de cada candidato registrado.",
+      "o_que_pegamos": "Baixamos a foto de cada candidato de Goiás, a mesma que aparece na urna.",
+      "por_que_importa": "Ajuda o cidadão a reconhecer o político pelo rosto, não só pelo nome.",
+      "arquivos_exemplo": [
+        "JPG com foto oficial do candidato"
+      ]
+    },
+    "transparencia": {
+      "sigla_full": "Portal da Transparência do Governo Federal",
+      "o_que_e": "Site oficial do governo federal que publica gastos públicos. É mantido pela Controladoria-Geral da União (CGU).",
+      "o_que_pegamos": "Baixamos as planilhas de contratos que o governo federal assinou. Também pegamos pagamentos feitos a empresas e pessoas.",
+      "por_que_importa": "Mostra pra onde vai o dinheiro federal que chega em Goiás.",
+      "arquivos_exemplo": [
+        "CSV com lista de contratos federais",
+        "CSV com pagamentos a fornecedores",
+        "CSV com servidores e salários"
+      ]
+    },
+    "comprasnet": {
+      "sigla_full": "ComprasNet — Portal de Compras do Governo Federal",
+      "o_que_e": "Sistema onde o governo federal registra as compras que faz. É mantido pelo Ministério da Gestão.",
+      "o_que_pegamos": "Baixamos os contratos de compra assinados pelo governo federal. Cada linha mostra o que foi comprado e de quem.",
+      "por_que_importa": "Ajuda a ver quais empresas vendem pro governo e por quanto.",
+      "arquivos_exemplo": [
+        "CSV com contratos de compras federais",
+        "CSV com itens comprados e valores"
+      ]
+    },
+    "pncp": {
+      "sigla_full": "Portal Nacional de Contratações Públicas",
+      "o_que_e": "Site oficial que junta todas as licitações e contratos públicos do Brasil. É obrigatório por lei desde 2021.",
+      "o_que_pegamos": "Baixamos editais de licitação, atas de registro de preço e contratos. Vem de prefeituras, estados e órgãos federais.",
+      "por_que_importa": "Mostra o que o poder público está comprando antes mesmo de gastar o dinheiro.",
+      "arquivos_exemplo": [
+        "JSON com editais de licitação",
+        "JSON com contratos assinados",
+        "JSON com atas de registro de preços"
+      ]
+    },
+    "pncp_go": {
+      "sigla_full": "PNCP — recorte Goiás",
+      "o_que_e": "É o mesmo PNCP, mas filtrado só para o estado de Goiás. Pega o governo estadual e as 246 prefeituras goianas.",
+      "o_que_pegamos": "Baixamos pela API só as compras feitas por órgãos goianos. Inclui estado, câmaras e prefeituras.",
+      "por_que_importa": "Mostra no detalhe o que prefeituras e governo de Goiás estão comprando.",
+      "arquivos_exemplo": [
+        "JSON com licitações de prefeituras goianas",
+        "JSON com contratos do governo estadual"
+      ]
+    },
+    "transferegov": {
+      "sigla_full": "TransfereGov — Sistema de Transferências da União",
+      "o_que_e": "Sistema do governo federal que controla repasses de dinheiro para estados e cidades. Antes era chamado de Siconv.",
+      "o_que_pegamos": "Baixamos os convênios (acordos) e emendas parlamentares que mandam dinheiro pra Goiás. Também pegamos em que foi gasto.",
+      "por_que_importa": "Mostra quanto dinheiro federal chega nas prefeituras goianas e de qual deputado veio.",
+      "arquivos_exemplo": [
+        "CSV com convênios e valores",
+        "CSV com emendas parlamentares",
+        "CSV com propostas e execução"
+      ]
+    },
+    "portal_transparencia_emendas": {
+      "sigla_full": "Portal da Transparência — API de Emendas Parlamentares",
+      "o_que_e": "Serviço de dados da CGU focado só em emendas parlamentares. Emenda é dinheiro que o deputado direciona pra obras e serviços.",
+      "o_que_pegamos": "Consultamos pela internet as emendas dos deputados federais de Goiás. Trazemos valor, destino e autor de cada emenda.",
+      "por_que_importa": "Mostra pra onde cada deputado de Goiás está mandando dinheiro público."
+    },
+    "tesouro_emendas": {
+      "sigla_full": "Tesouro Transparente — Secretaria do Tesouro Nacional",
+      "o_que_e": "Site do Tesouro Nacional, órgão que cuida do caixa do governo federal. Publica dados oficiais sobre o dinheiro da União.",
+      "o_que_pegamos": "Baixamos planilhas com o pagamento das emendas parlamentares. Mostra quando o dinheiro saiu do cofre federal.",
+      "por_que_importa": "Confirma se a emenda prometida pelo deputado virou pagamento de verdade.",
+      "arquivos_exemplo": [
+        "CSV com execução de emendas",
+        "Planilha com valores pagos por ano"
+      ]
+    },
+    "sanctions": {
+      "sigla_full": "CEIS e CNEP — Cadastros de Empresas Sancionadas",
+      "o_que_e": "Lista oficial do governo federal com empresas que foram punidas. Fica no Portal da Transparência.",
+      "o_que_pegamos": "Baixamos os nomes de empresas sancionadas e o motivo de cada punição. Também pegamos quando começa e termina o bloqueio.",
+      "por_que_importa": "Ajuda a ver se uma empresa que recebe dinheiro público em Goiás já foi punida antes.",
+      "arquivos_exemplo": [
+        "CSV com empresas sancionadas",
+        "CSV com datas e órgão que puniu"
+      ]
+    },
+    "pep_cgu": {
+      "sigla_full": "Lista de Pessoas Expostas Politicamente da CGU",
+      "o_que_e": "Lista do governo federal com gente que ocupa cargo político ou de confiança. PEP quer dizer Pessoa Exposta Politicamente.",
+      "o_que_pegamos": "Baixamos os nomes dessas pessoas, o cargo que ocupam e o órgão onde trabalham.",
+      "por_que_importa": "Mostra quem tem poder de decidir sobre dinheiro público em Goiás e no Brasil.",
+      "arquivos_exemplo": [
+        "CSV com nomes, cargos e órgãos"
+      ]
+    },
+    "ceaf": {
+      "sigla_full": "Cadastro de Expulsões da Administração Federal",
+      "o_que_e": "Lista oficial de servidores públicos federais que foram demitidos por falta grave. Fica no Portal da Transparência.",
+      "o_que_pegamos": "Baixamos os nomes dos servidores demitidos, o motivo da saída e a data da expulsão.",
+      "por_que_importa": "Ajuda a checar se alguém que atua em Goiás já foi demitido do serviço público antes.",
+      "arquivos_exemplo": [
+        "CSV com servidores expulsos",
+        "CSV com motivo e data da expulsão"
+      ]
+    },
+    "cepim": {
+      "sigla_full": "Cadastro de Entidades Privadas Sem Fins Lucrativos Impedidas",
+      "o_que_e": "Lista oficial de ONGs que estão impedidas de receber dinheiro do governo federal. Fica no Portal da Transparência.",
+      "o_que_pegamos": "Baixamos os nomes das ONGs bloqueadas, o motivo do impedimento e o órgão que bloqueou.",
+      "por_que_importa": "Ajuda a ver se uma ONG que atua em Goiás está impedida de receber verba pública.",
+      "arquivos_exemplo": [
+        "CSV com ONGs bloqueadas",
+        "CSV com motivo e órgão responsável"
+      ]
+    },
+    "leniency": {
+      "sigla_full": "Acordos de Leniência da Controladoria-Geral da União",
+      "o_que_e": "Lista de acordos em que empresas confessam irregularidades e pagam multa. Em troca, colaboram com a investigação.",
+      "o_que_pegamos": "Baixamos os nomes das empresas, o valor da multa e a data do acordo.",
+      "por_que_importa": "Mostra quais empresas já admitiram irregularidades e podem contratar com o poder público em Goiás.",
+      "arquivos_exemplo": [
+        "CSV com acordos firmados",
+        "CSV com valores de multa"
+      ]
+    },
+    "ofac": {
+      "sigla_full": "OFAC — Office of Foreign Assets Control (Tesouro dos EUA)",
+      "o_que_e": "Órgão do governo dos Estados Unidos que faz lista de sancionados internacionais. Bloqueia pessoas e empresas no sistema financeiro americano.",
+      "o_que_pegamos": "Baixamos a lista global de pessoas e empresas bloqueadas pelos Estados Unidos.",
+      "por_que_importa": "Ajuda a ver se políticos ou empresas ligadas a Goiás aparecem em listas internacionais.",
+      "arquivos_exemplo": [
+        "XML com lista de sancionados",
+        "CSV com nomes e motivos"
+      ]
+    },
+    "opensanctions": {
+      "sigla_full": "OpenSanctions",
+      "o_que_e": "Projeto internacional que junta várias listas de sancionados do mundo todo em um lugar só. É mantido por jornalistas e pesquisadores.",
+      "o_que_pegamos": "Baixamos a lista global de pessoas politicamente expostas de vários países.",
+      "por_que_importa": "Ajuda a cruzar nomes de Goiás com registros políticos internacionais.",
+      "arquivos_exemplo": [
+        "JSON com pessoas expostas politicamente"
+      ]
+    },
+    "eu_sanctions": {
+      "sigla_full": "Lista Consolidada de Sanções Financeiras da União Europeia",
+      "o_que_e": "Lista oficial da União Europeia com pessoas e empresas bloqueadas. Vale para os países do bloco europeu.",
+      "o_que_pegamos": "Baixamos os nomes de pessoas e empresas sancionadas pela Europa, com motivo e data.",
+      "por_que_importa": "Ajuda a ver se alguém ligado a Goiás aparece em lista de bloqueio europeia.",
+      "arquivos_exemplo": [
+        "XML com lista consolidada",
+        "CSV com nomes e motivos"
+      ]
+    },
+    "un_sanctions": {
+      "sigla_full": "Lista Consolidada de Sanções das Nações Unidas",
+      "o_que_e": "Lista oficial da ONU com pessoas e grupos bloqueados no mundo todo. Os países-membros são obrigados a cumprir.",
+      "o_que_pegamos": "Baixamos os nomes de pessoas e grupos sancionados pela ONU, com motivo e data.",
+      "por_que_importa": "Ajuda a cruzar nomes de Goiás com a maior lista de bloqueio mundial.",
+      "arquivos_exemplo": [
+        "XML com lista consolidada"
+      ]
+    },
+    "world_bank": {
+      "sigla_full": "Lista de Empresas Impedidas do Banco Mundial",
+      "o_que_e": "Lista do Banco Mundial com empresas bloqueadas de receber contratos financiados pelo banco. O bloqueio vale no mundo todo.",
+      "o_que_pegamos": "Baixamos os nomes das empresas bloqueadas, o motivo e o prazo do bloqueio.",
+      "por_que_importa": "Ajuda a ver se empresas que atuam em Goiás estão bloqueadas em um banco internacional.",
+      "arquivos_exemplo": [
+        "CSV com empresas bloqueadas",
+        "CSV com motivo e prazo"
+      ]
+    },
+    "tcu": {
+      "sigla_full": "Tribunal de Contas da União",
+      "o_que_e": "Órgão federal que fiscaliza o dinheiro público do governo federal. Também mantém lista de empresas e pessoas consideradas inidôneas.",
+      "o_que_pegamos": "Baixamos a lista de pessoas e empresas declaradas inidôneas pelo tribunal.",
+      "por_que_importa": "Ajuda a ver se quem recebe verba pública em Goiás foi declarado inidôneo pelo TCU.",
+      "arquivos_exemplo": [
+        "HTML com lista de inidôneos",
+        "CSV com nomes e prazos"
+      ]
+    },
+    "interpol_red_notices": {
+      "sigla_full": "Difusões Vermelhas da Interpol",
+      "o_que_e": "Pedidos da Interpol para localizar pessoas procuradas por países. A Interpol é a polícia internacional que liga as polícias do mundo.",
+      "o_que_pegamos": "Baixamos os nomes de pessoas procuradas e o país que pediu a localização.",
+      "por_que_importa": "Ajuda a ver se alguém ligado a Goiás é procurado em outro país.",
+      "arquivos_exemplo": [
+        "JSON com pessoas procuradas"
+      ]
+    },
+    "cnciai_improbidade": {
+      "sigla_full": "Cadastro Nacional de Condenados por Improbidade Administrativa",
+      "o_que_e": "Lista do Conselho Nacional de Justiça com pessoas condenadas por improbidade. Improbidade é quando um agente público age contra o interesse do povo.",
+      "o_que_pegamos": "Baixamos os nomes de condenados, o processo e o tipo de punição aplicada.",
+      "por_que_importa": "Ajuda a ver se políticos e servidores de Goiás têm condenação registrada no CNJ.",
+      "arquivos_exemplo": [
+        "HTML com lista de condenados",
+        "CSV com processos e punições"
+      ]
+    },
+    "stf": {
+      "sigla_full": "Supremo Tribunal Federal",
+      "o_que_e": "A corte mais alta da Justiça do Brasil. Julga casos envolvendo a Constituição e autoridades com foro especial.",
+      "o_que_pegamos": "Baixamos os processos e decisões do tribunal, com partes envolvidas e datas.",
+      "por_que_importa": "Ajuda a ver se políticos de Goiás têm processos no tribunal mais alto do país.",
+      "arquivos_exemplo": [
+        "CSV com processos e decisões",
+        "CSV com partes envolvidas"
+      ]
+    },
+    "datajud": {
+      "sigla_full": "DataJud — Base Nacional do CNJ",
+      "o_que_e": "Base oficial que junta processos de todos os tribunais do Brasil. É mantida pelo Conselho Nacional de Justiça.",
+      "o_que_pegamos": "Baixamos processos públicos de tribunais de todo o país, com partes e movimentações.",
+      "por_que_importa": "Ajuda a ver se políticos e empresas de Goiás têm processos em qualquer tribunal do país.",
+      "arquivos_exemplo": [
+        "JSON com processos judiciais"
+      ]
+    },
+    "stj_dados_abertos": {
+      "sigla_full": "Portal de Dados Abertos do Superior Tribunal de Justiça",
+      "o_que_e": "Portal oficial do Superior Tribunal de Justiça. O STJ julga recursos vindos dos tribunais de cada estado.",
+      "o_que_pegamos": "Baixamos os processos e decisões do tribunal, com partes envolvidas e datas.",
+      "por_que_importa": "Ajuda a ver se políticos e empresas de Goiás têm processos no tribunal que cuida dos recursos.",
+      "arquivos_exemplo": [
+        "CSV com processos e decisões",
+        "JSON com partes envolvidas"
+      ]
+    },
+    "bndes": {
+      "sigla_full": "Banco Nacional de Desenvolvimento Econômico e Social",
+      "o_que_e": "Banco do governo federal que empresta dinheiro grande pra empresas e obras no Brasil.",
+      "o_que_pegamos": "Lista de empréstimos feitos pelo banco, com nome de quem pegou, valor e data.",
+      "por_que_importa": "Mostra se empresas de Goiás receberam dinheiro público e pra que.",
+      "arquivos_exemplo": [
+        "Planilha CSV com operações de financiamento",
+        "Lista de beneficiários por estado e ano"
+      ]
+    },
+    "pgfn": {
+      "sigla_full": "Procuradoria-Geral da Fazenda Nacional",
+      "o_que_e": "Órgão do governo federal que cobra quem deve imposto ou multa pra União.",
+      "o_que_pegamos": "Lista de pessoas e empresas com dívida registrada, valor e tipo da dívida.",
+      "por_que_importa": "Mostra quem deve dinheiro pro governo federal, incluindo gente de Goiás.",
+      "arquivos_exemplo": [
+        "CSV com devedores inscritos em dívida ativa",
+        "Tabela por CPF ou CNPJ e valor devido"
+      ]
+    },
+    "bcb": {
+      "sigla_full": "Banco Central do Brasil",
+      "o_que_e": "Órgão que fiscaliza bancos e o sistema financeiro do país inteiro.",
+      "o_que_pegamos": "Lista de multas e punições aplicadas pelo Banco Central a bancos e pessoas.",
+      "por_que_importa": "Mostra se bancos ou empresários de Goiás foram punidos pelo regulador.",
+      "arquivos_exemplo": [
+        "CSV de processos administrativos sancionadores",
+        "Tabela com nome, tipo de punição e data"
+      ]
+    },
+    "estban": {
+      "sigla_full": "ESTBAN — Estatística Bancária Mensal por Município",
+      "o_que_e": "Relatório mensal do Banco Central com o movimento dos bancos em cada cidade.",
+      "o_que_pegamos": "Saldos de depósitos e empréstimos dos bancos por município de Goiás.",
+      "por_que_importa": "Mostra quanto dinheiro circula nas cidades goianas e como os bancos atuam.",
+      "arquivos_exemplo": [
+        "CSV mensal por município e banco",
+        "Tabela de saldos de conta corrente e poupança"
+      ]
+    },
+    "if_data": {
+      "sigla_full": "IF.data — Dados Selecionados de Instituições Financeiras",
+      "o_que_e": "Painel do Banco Central que mostra a saúde de cada banco e cooperativa.",
+      "o_que_pegamos": "Indicadores de lucro, capital e risco das instituições financeiras do país.",
+      "por_que_importa": "Permite ver se bancos que operam em Goiás estão saudáveis ou em risco.",
+      "arquivos_exemplo": [
+        "CSV trimestral com indicadores por banco",
+        "Tabela com capital, lucro e inadimplência"
+      ]
+    },
+    "bcb_liquidacao": {
+      "sigla_full": "Regimes de Resolução do Banco Central",
+      "o_que_e": "Lista do Banco Central com bancos que foram fechados ou estão sob intervenção.",
+      "o_que_pegamos": "Nome das instituições que entraram em liquidação, intervenção ou regime especial.",
+      "por_que_importa": "Mostra se algum banco que atua em Goiás foi fechado pelo regulador.",
+      "arquivos_exemplo": [
+        "CSV com instituições em regime especial",
+        "Tabela com data de início e tipo de regime"
+      ]
+    },
+    "renuncias": {
+      "sigla_full": "Renúncias Fiscais da Receita Federal",
+      "o_que_e": "Registro de empresas que deixaram de pagar imposto por causa de benefício da lei.",
+      "o_que_pegamos": "Lista de empresas com desconto ou isenção de imposto federal e o valor deixado.",
+      "por_que_importa": "Mostra quanto o governo deixou de arrecadar de empresas em Goiás.",
+      "arquivos_exemplo": [
+        "Planilha anual de benefícios tributários",
+        "Tabela por setor e valor renunciado"
+      ]
+    },
+    "receita_dirbi": {
+      "sigla_full": "DIRBI — Declaração de Incentivos, Renúncias, Benefícios e Imunidades Tributárias",
+      "o_que_e": "Declaração que empresas entregam à Receita contando quais descontos de imposto usaram.",
+      "o_que_pegamos": "Lista de empresas que declararam benefício fiscal e o valor de cada benefício.",
+      "por_que_importa": "Mostra quais empresas goianas usaram descontos de imposto e quanto.",
+      "arquivos_exemplo": [
+        "CSV mensal de declarações DIRBI",
+        "Tabela por CNPJ e tipo de benefício"
+      ]
+    },
+    "siconfi": {
+      "sigla_full": "SICONFI — Sistema de Informações Contábeis e Fiscais do Setor Público",
+      "o_que_e": "Sistema do Tesouro onde prefeituras e estados mandam suas contas oficiais.",
+      "o_que_pegamos": "Receitas, despesas e dívidas declaradas pelos municípios de Goiás e pelo estado.",
+      "por_que_importa": "Permite ver quanto cada prefeitura arrecada, gasta e deve.",
+      "arquivos_exemplo": [
+        "JSON com balanços municipais por ano",
+        "Tabela de receita, despesa e dívida"
+      ]
+    },
+    "siop": {
+      "sigla_full": "SIOP — Sistema Integrado de Planejamento e Orçamento",
+      "o_que_e": "Sistema do governo federal que mostra o orçamento e as emendas dos parlamentares.",
+      "o_que_pegamos": "Emendas feitas por deputados e senadores, com valor e destino do dinheiro.",
+      "por_que_importa": "Mostra pra onde deputados de Goiás mandam dinheiro do orçamento federal.",
+      "arquivos_exemplo": [
+        "CSV de emendas por autor e ano",
+        "Tabela com valor empenhado e pago"
+      ]
+    },
+    "siga_brasil": {
+      "sigla_full": "SIGA Brasil — Sistema de Informações sobre Orçamento Público do Senado",
+      "o_que_e": "Sistema do Senado que abre os detalhes do orçamento federal pro cidadão.",
+      "o_que_pegamos": "Dados de execução do orçamento da União, por órgão, programa e ação.",
+      "por_que_importa": "Permite cruzar gastos federais que chegam em Goiás com o que foi planejado.",
+      "arquivos_exemplo": [
+        "CSV de execução orçamentária anual",
+        "Tabela por órgão, função e valor"
+      ]
+    },
+    "cpgf": {
+      "sigla_full": "CPGF — Cartão de Pagamento do Governo Federal",
+      "o_que_e": "Cartão usado por servidores do governo federal pra pagar despesas pequenas do trabalho.",
+      "o_que_pegamos": "Lista de compras feitas no cartão, com data, valor, local e nome do servidor.",
+      "por_que_importa": "Mostra em que servidores federais em Goiás gastaram o cartão corporativo.",
+      "arquivos_exemplo": [
+        "CSV mensal de transações do cartão",
+        "Tabela com portador, estabelecimento e valor"
+      ]
+    },
+    "viagens": {
+      "sigla_full": "Viagens a Serviço do Governo Federal",
+      "o_que_e": "Registro oficial das viagens pagas pelo governo federal pros seus servidores.",
+      "o_que_pegamos": "Lista de viagens com nome, destino, motivo, diárias e passagens pagas.",
+      "por_que_importa": "Mostra quanto foi gasto em viagens de servidores ligados a Goiás.",
+      "arquivos_exemplo": [
+        "CSV mensal de viagens por servidor",
+        "Tabela com trecho, diárias e valor total"
+      ]
+    },
+    "carf_tax_appeals": {
+      "sigla_full": "CARF — Conselho Administrativo de Recursos Fiscais",
+      "o_que_e": "Tribunal administrativo onde empresas recorrem quando discordam de cobrança da Receita.",
+      "o_que_pegamos": "Processos de empresas discutindo cobranças de imposto, com número, valor e decisão.",
+      "por_que_importa": "Mostra quais empresas de Goiás estão brigando na justiça administrativa por imposto.",
+      "arquivos_exemplo": [
+        "CSV de processos julgados no conselho",
+        "Tabela com contribuinte, matéria e resultado"
+      ]
+    },
+    "camara": {
+      "sigla_full": "Câmara dos Deputados — cota parlamentar (CEAP)",
+      "o_que_e": "É a casa onde trabalham os deputados federais do Brasil. Eles fazem as leis do país.",
+      "o_que_pegamos": "Baixamos os gastos da CEAP, que é uma mesada paga pelo governo pro deputado pagar despesas do mandato.",
+      "por_que_importa": "Mostra em que cada deputado gastou o dinheiro público que recebeu pra trabalhar.",
+      "arquivos_exemplo": [
+        "CSV com notas de gasto mensais",
+        "CSV com nome do fornecedor pago",
+        "CSV com valor e tipo da despesa"
+      ]
+    },
+    "camara_inquiries": {
+      "sigla_full": "Câmara dos Deputados — requerimentos e propostas",
+      "o_que_e": "É outra parte dos dados da Câmara. Aqui aparecem os pedidos e propostas que cada deputado apresenta.",
+      "o_que_pegamos": "Baixamos os requerimentos, indicações e propostas que o deputado assina durante o mandato.",
+      "por_que_importa": "Mostra o que o deputado pede e propõe no seu trabalho, além dos gastos.",
+      "arquivos_exemplo": [
+        "JSON com lista de requerimentos",
+        "JSON com proposições apresentadas",
+        "JSON com autores de cada pedido"
+      ]
+    },
+    "senado": {
+      "sigla_full": "Senado Federal — cota senatorial (CEAPS)",
+      "o_que_e": "É a casa onde trabalham os senadores. Eles também ajudam a fazer as leis do país.",
+      "o_que_pegamos": "Baixamos os gastos da CEAPS, que é a mesada paga pro senador pagar despesas do mandato.",
+      "por_que_importa": "Mostra em que o senador gastou o dinheiro público recebido pra trabalhar.",
+      "arquivos_exemplo": [
+        "CSV com gastos mensais do senador",
+        "CSV com fornecedor e valor pago",
+        "CSV com tipo de despesa"
+      ]
+    },
+    "senado_cpis": {
+      "sigla_full": "Senado Federal — Comissões Parlamentares de Inquérito (CPIs)",
+      "o_que_e": "CPI é um grupo de senadores que investiga um assunto sério. Eles chamam pessoas pra depor e pedem documentos.",
+      "o_que_pegamos": "Baixamos a lista de CPIs, quem participa de cada uma e quais assuntos estão sendo investigados.",
+      "por_que_importa": "Mostra em quais investigações cada senador de Goiás está envolvido.",
+      "arquivos_exemplo": [
+        "JSON com lista de CPIs ativas",
+        "JSON com membros de cada CPI",
+        "JSON com tema investigado"
+      ]
+    },
+    "camara_deputados": {
+      "sigla_full": "Câmara dos Deputados — cadastro de deputados de Goiás",
+      "o_que_e": "É a ficha cadastral dos deputados federais eleitos em Goiás. Tipo um RG político deles.",
+      "o_que_pegamos": "Baixamos nome, partido, foto, contato e situação atual do mandato de cada deputado goiano.",
+      "por_que_importa": "É a base pra saber quem representa Goiás em Brasília agora.",
+      "arquivos_exemplo": [
+        "JSON com ficha de cada deputado",
+        "JSON com partido e estado",
+        "Imagem com foto oficial"
+      ]
+    },
+    "camara_deputados_ceap": {
+      "sigla_full": "Câmara dos Deputados — CEAP dos deputados de Goiás",
+      "o_que_e": "É o recorte dos gastos da CEAP só dos deputados federais de Goiás.",
+      "o_que_pegamos": "Baixamos todas as notas e despesas pagas pela mesada parlamentar dos deputados goianos.",
+      "por_que_importa": "Foca só em Goiás e facilita acompanhar o gasto de quem representa o estado.",
+      "arquivos_exemplo": [
+        "CSV com gasto mensal por deputado GO",
+        "CSV com fornecedor e valor",
+        "CSV com tipo e data da despesa"
+      ]
+    },
+    "camara_votes_bills": {
+      "sigla_full": "Câmara dos Deputados — votações e projetos de lei",
+      "o_que_e": "É mais um recorte dos dados da Câmara. Aqui ficam as votações e os projetos de lei em discussão.",
+      "o_que_pegamos": "Baixamos como cada deputado votou em cada matéria e quais projetos de lei ele apresentou.",
+      "por_que_importa": "Mostra a posição real do deputado nas decisões que viram lei.",
+      "arquivos_exemplo": [
+        "JSON com votos por deputado",
+        "JSON com projetos de lei apresentados",
+        "JSON com resultado de cada votação"
+      ]
+    },
+    "senado_votes_bills": {
+      "sigla_full": "Senado Federal — votações e projetos de lei",
+      "o_que_e": "É o registro de como os senadores votam e quais projetos de lei eles apresentam.",
+      "o_que_pegamos": "Baixamos o voto de cada senador em cada matéria e os projetos de lei que ele assina.",
+      "por_que_importa": "Mostra a posição real do senador de Goiás nas decisões que viram lei.",
+      "arquivos_exemplo": [
+        "JSON com votos por senador",
+        "JSON com projetos de lei apresentados",
+        "JSON com resultado de cada votação"
+      ]
+    },
+    "dou": {
+      "sigla_full": "Diário Oficial da União",
+      "o_que_e": "É o jornal oficial do governo federal. Tudo que o governo decide precisa ser publicado lá pra valer.",
+      "o_que_pegamos": "Baixamos as publicações do DOU que citam Goiás, como nomeações, contratos e sanções.",
+      "por_que_importa": "É a forma oficial de saber decisões do governo que afetam Goiás.",
+      "arquivos_exemplo": [
+        "PDF com edição diária do jornal",
+        "JSON com texto das publicações",
+        "HTML com página original"
+      ]
+    },
+    "senado_senadores_foto": {
+      "sigla_full": "Senado Federal — fotos oficiais dos senadores de Goiás",
+      "o_que_e": "É o banco de fotos oficiais dos senadores em exercício. Cada senador tem um retrato no site do Senado.",
+      "o_que_pegamos": "Baixamos a foto oficial de cada senador eleito por Goiás.",
+      "por_que_importa": "Ajuda o cidadão a reconhecer na hora quem representa Goiás no Senado.",
+      "arquivos_exemplo": [
+        "Imagem JPG com retrato oficial",
+        "JSON com link da foto"
+      ]
+    },
+    "anp_royalties": {
+      "sigla_full": "ANP — Agência Nacional do Petróleo, Gás Natural e Biocombustíveis",
+      "o_que_e": "Órgão do governo federal que cuida do petróleo e combustíveis no Brasil. Também controla royalties (dinheiro pago por quem tira petróleo do chão).",
+      "o_que_pegamos": "Baixamos quem recebe royalties do petróleo e onde cada posto de gasolina está cadastrado. Também pegamos os preços da gasolina pesquisados nas cidades.",
+      "por_que_importa": "Mostra quanto dinheiro de petróleo entra em cada cidade de Goiás e quem vende combustível por aqui.",
+      "arquivos_exemplo": [
+        "CSV com valores pagos por município",
+        "CSV com postos cadastrados em Goiás",
+        "CSV com preços de combustível por cidade"
+      ]
+    },
+    "aneel_concessions": {
+      "sigla_full": "ANEEL — Agência Nacional de Energia Elétrica",
+      "o_que_e": "Órgão do governo federal que cuida da energia elétrica. Decide quem pode gerar e distribuir luz no país.",
+      "o_que_pegamos": "Baixamos a lista de empresas autorizadas a fornecer energia e de usinas que geram eletricidade. Também pegamos contratos e tarifas cobradas.",
+      "por_que_importa": "Mostra quais empresas têm permissão do governo pra cobrar pela luz em Goiás e quem gera essa energia.",
+      "arquivos_exemplo": [
+        "CSV com empresas distribuidoras de energia",
+        "CSV com usinas em operação no estado",
+        "CSV com tarifas cobradas do consumidor"
+      ]
+    },
+    "anm_mining_rights": {
+      "sigla_full": "ANM — Agência Nacional de Mineração",
+      "o_que_e": "Órgão do governo federal que controla a mineração. Decide quem pode tirar minério, ouro ou outras pedras do chão.",
+      "o_que_pegamos": "Baixamos a lista de áreas liberadas pra mineração e quem são os donos dessas áreas. Também pegamos quanto minério foi retirado.",
+      "por_que_importa": "Mostra quem tem autorização pra minerar em Goiás e o quanto está sendo tirado do solo do estado.",
+      "arquivos_exemplo": [
+        "CSV com áreas de mineração liberadas",
+        "CSV com empresas donas da autorização",
+        "CSV com produção mineral declarada"
+      ]
+    },
+    "antt_transport_concessions": {
+      "sigla_full": "ANTT — Agência Nacional de Transportes Terrestres",
+      "o_que_e": "Órgão do governo federal que cuida de estradas, ônibus interestaduais e ferrovias. Decide quem pode operar esses serviços.",
+      "o_que_pegamos": "Baixamos os contratos de rodovias com pedágio e as empresas de ônibus autorizadas. Também pegamos multas e dados das ferrovias.",
+      "por_que_importa": "Mostra quais empresas ganharam contrato pra operar estradas e transporte que atendem Goiás.",
+      "arquivos_exemplo": [
+        "CSV com contratos de rodovias com pedágio",
+        "CSV com empresas de ônibus autorizadas",
+        "CSV com operadoras de ferrovias"
+      ]
+    },
+    "ans_health_plans": {
+      "sigla_full": "ANS — Agência Nacional de Saúde Suplementar",
+      "o_que_e": "Órgão do governo federal que fiscaliza planos de saúde privados. Cuida pra empresa cumprir o que vendeu ao cliente.",
+      "o_que_pegamos": "Baixamos a lista de operadoras de plano de saúde e quais estão liberadas pra funcionar. Também pegamos reclamações registradas contra cada uma.",
+      "por_que_importa": "Mostra quais planos de saúde podem vender em Goiás e o histórico de problemas que tiveram.",
+      "arquivos_exemplo": [
+        "CSV com operadoras de plano cadastradas",
+        "CSV com operadoras sancionadas",
+        "CSV com reclamações de consumidores"
+      ]
+    },
+    "anvisa_registrations": {
+      "sigla_full": "ANVISA — Agência Nacional de Vigilância Sanitária",
+      "o_que_e": "Órgão do governo federal que libera remédios, cosméticos e alimentos pra venda. Decide o que é seguro pra consumir.",
+      "o_que_pegamos": "Baixamos a lista de remédios, vacinas e produtos registrados pra venda no Brasil. Também pegamos empresas autorizadas a produzir.",
+      "por_que_importa": "Mostra quais produtos foram liberados pelo governo e quais empresas fabricam o que chega em Goiás.",
+      "arquivos_exemplo": [
+        "CSV com remédios registrados",
+        "CSV com empresas autorizadas a produzir",
+        "CSV com alimentos e cosméticos liberados"
+      ]
+    },
+    "anac_aviation_concessions": {
+      "sigla_full": "ANAC — Agência Nacional de Aviação Civil",
+      "o_que_e": "Órgão do governo federal que cuida dos aviões e aeroportos. Decide quem pode voar e quem pode operar aeroporto.",
+      "o_que_pegamos": "Baixamos a lista de empresas aéreas autorizadas e aeroportos com contrato. Também pegamos aviões registrados no país.",
+      "por_que_importa": "Mostra quem opera o aeroporto de Goiânia e quais empresas têm voos saindo do estado.",
+      "arquivos_exemplo": [
+        "CSV com contratos de aeroportos",
+        "CSV com empresas aéreas autorizadas",
+        "CSV com aviões registrados"
+      ]
+    },
+    "antaq_port_contracts": {
+      "sigla_full": "ANTAQ — Agência Nacional de Transportes Aquaviários",
+      "o_que_e": "Órgão do governo federal que cuida de portos, rios e transporte por barco. Fiscaliza quem opera essas áreas.",
+      "o_que_pegamos": "Baixamos os contratos de portos e terminais autorizados. Também pegamos empresas de navegação e carga movimentada.",
+      "por_que_importa": "Mostra quem opera os portos fluviais que escoam a produção de Goiás pelos rios.",
+      "arquivos_exemplo": [
+        "CSV com contratos de portos e terminais",
+        "CSV com empresas de navegação",
+        "CSV com carga movimentada por porto"
+      ]
+    },
+    "ana_water_grants": {
+      "sigla_full": "ANA — Agência Nacional de Águas e Saneamento Básico",
+      "o_que_e": "Órgão do governo federal que cuida da água dos rios. Decide quem pode tirar água pra usar na fazenda ou fábrica.",
+      "o_que_pegamos": "Baixamos as autorizações pra uso de água e quem pediu cada uma. Também pegamos dados dos rios e reservatórios.",
+      "por_que_importa": "Mostra quem tem permissão pra usar água dos rios de Goiás e em que quantidade.",
+      "arquivos_exemplo": [
+        "CSV com outorgas de uso de água",
+        "CSV com dados de rios e reservatórios",
+        "CSV com donos das autorizações"
+      ]
+    },
+    "anatel_telecom_licenses": {
+      "sigla_full": "ANATEL — Agência Nacional de Telecomunicações",
+      "o_que_e": "Órgão do governo federal que cuida de celular, internet, rádio e TV. Decide quem pode oferecer esses serviços.",
+      "o_que_pegamos": "Baixamos empresas autorizadas a vender celular e internet. Também pegamos rádios, TVs e antenas cadastradas.",
+      "por_que_importa": "Mostra quais empresas têm permissão pra operar telefone e internet em Goiás e onde ficam as antenas.",
+      "arquivos_exemplo": [
+        "CSV com empresas de telefone e internet",
+        "CSV com rádios e TVs autorizadas",
+        "CSV com antenas instaladas"
+      ]
+    },
+    "susep_insurance_market": {
+      "sigla_full": "SUSEP — Superintendência de Seguros Privados",
+      "o_que_e": "Órgão do governo federal que fiscaliza seguradoras e planos de previdência privada. Cuida pra empresa pagar o cliente quando precisar.",
+      "o_que_pegamos": "Baixamos a lista de seguradoras autorizadas a funcionar e os produtos que elas vendem. Também pegamos reclamações e sanções aplicadas.",
+      "por_que_importa": "Mostra quais seguradoras podem vender em Goiás e o histórico de problemas de cada uma.",
+      "arquivos_exemplo": [
+        "CSV com seguradoras autorizadas",
+        "CSV com produtos de seguro registrados",
+        "CSV com sanções aplicadas"
+      ]
+    },
+    "cvm": {
+      "sigla_full": "CVM — Comissão de Valores Mobiliários",
+      "o_que_e": "Órgão federal que fiscaliza o mercado financeiro no Brasil. Cuida de empresas que vendem ações e fundos de investimento.",
+      "o_que_pegamos": "Baixamos a lista de processos administrativos abertos pela CVM. São casos em que a CVM apura condutas de empresas e pessoas no mercado.",
+      "por_que_importa": "Ajuda a ver se político ou empresário de Goiás já foi investigado no mercado financeiro.",
+      "arquivos_exemplo": [
+        "CSV com processos abertos e sancionados",
+        "CSV com pessoas e empresas envolvidas"
+      ]
+    },
+    "cvm_funds": {
+      "sigla_full": "CVM — cadastro de fundos de investimento",
+      "o_que_e": "Lista oficial de fundos de investimento registrados no Brasil. Fundo é um bolso coletivo de dinheiro aplicado no mercado.",
+      "o_que_pegamos": "Baixamos o cadastro dos fundos: nome, CNPJ, tipo, situação e quem administra. Também pegamos quem são os cotistas quando é informado.",
+      "por_que_importa": "Mostra se político de Goiás ou empresa ligada a ele aparece como dono de cotas em fundos.",
+      "arquivos_exemplo": [
+        "CSV com cadastro geral dos fundos",
+        "CSV com administradores e gestores",
+        "CSV com cotistas declarados"
+      ]
+    },
+    "cvm_full_ownership_chain": {
+      "sigla_full": "CVM — cadeia de controle de empresas",
+      "o_que_e": "Dado da CVM que mostra quem controla quem dentro de empresas de capital aberto. Segue a linha de donos até chegar na pessoa física.",
+      "o_que_pegamos": "Baixamos o mapa de controle: empresa A é dona da B, que é dona da C. Vai ligando até achar o dono final de carne e osso.",
+      "por_que_importa": "Revela quem está de verdade por trás de empresas que fazem negócio com o estado de Goiás.",
+      "arquivos_exemplo": [
+        "CSV com vínculos entre empresas",
+        "CSV com pessoa física no topo da cadeia"
+      ]
+    },
+    "holdings": {
+      "sigla_full": "Brasil.IO — Base de Holdings",
+      "o_que_e": "Site público que organiza dados abertos do Brasil. A base de holdings mostra empresas que existem só pra ser dona de outras empresas.",
+      "o_que_pegamos": "Baixamos a lista de holdings brasileiras e as empresas que cada uma controla. Também pegamos os sócios declarados na Receita.",
+      "por_que_importa": "Ajuda a enxergar quando político de Goiás usa holding pra esconder participação em várias empresas.",
+      "arquivos_exemplo": [
+        "CSV com holdings e empresas controladas",
+        "CSV com sócios de cada holding"
+      ]
+    },
+    "icij": {
+      "sigla_full": "ICIJ — Consórcio Internacional de Jornalistas Investigativos (Panama Papers, Pandora Papers)",
+      "o_que_e": "Grupo de jornalistas do mundo todo que publicou vazamentos famosos como Panama Papers e Pandora Papers. Os dados mostram empresas registradas em paraísos fiscais.",
+      "o_que_pegamos": "Baixamos a base pública de pessoas e empresas citadas nos vazamentos. Traz nome, país e empresa offshore ligada a cada um.",
+      "por_que_importa": "Mostra se político ou empresário de Goiás aparece com empresa registrada em paraíso fiscal.",
+      "arquivos_exemplo": [
+        "CSV com pessoas mencionadas nos vazamentos",
+        "CSV com empresas offshore registradas",
+        "CSV com vínculos entre pessoa e empresa"
+      ]
+    },
+    "ibama": {
+      "sigla_full": "IBAMA — Instituto Brasileiro do Meio Ambiente",
+      "o_que_e": "Órgão do governo federal que cuida do meio ambiente. Aplica multas e embarga áreas quando a lei ambiental não é cumprida.",
+      "o_que_pegamos": "Lista de áreas embargadas pelo IBAMA em Goiás. Mostra quem foi autuado, onde fica o terreno e o motivo.",
+      "por_que_importa": "Permite cruzar nomes de políticos e empresas com áreas autuadas pelo órgão ambiental.",
+      "arquivos_exemplo": [
+        "CSV com áreas embargadas e autuados",
+        "HTML das páginas públicas de consulta"
+      ]
+    },
+    "mapbiomas_alertas": {
+      "sigla_full": "MapBiomas Alerta",
+      "o_que_e": "Plataforma que usa imagens de satélite para detectar perda de vegetação. É feita por universidades e organizações ambientais.",
+      "o_que_pegamos": "Alertas de desmatamento em Goiás, com localização, tamanho da área e data. Também quem é o dono registrado do terreno.",
+      "por_que_importa": "Mostra onde a mata nativa está sendo derrubada no estado, com prova visual de satélite.",
+      "arquivos_exemplo": [
+        "JSON da API com alertas por município",
+        "GeoJSON com polígonos das áreas alertadas"
+      ]
+    },
+    "sicar_rural_registry": {
+      "sigla_full": "SiCAR — Sistema Nacional de Cadastro Ambiental Rural",
+      "o_que_e": "Cadastro obrigatório para todo imóvel rural do Brasil. Serve para saber os limites da propriedade e o que é mata e o que é produção.",
+      "o_que_pegamos": "Dados dos imóveis rurais cadastrados em Goiás. Inclui localização, tamanho e situação do cadastro.",
+      "por_que_importa": "Permite saber quem é o dono declarado de cada fazenda e cruzar com outras bases.",
+      "arquivos_exemplo": [
+        "Shapefile com polígonos dos imóveis rurais",
+        "CSV com situação do cadastro por município"
+      ]
+    },
+    "icmbio_cnuc": {
+      "sigla_full": "ICMBio — Cadastro Nacional de Unidades de Conservação",
+      "o_que_e": "Órgão federal que cuida dos parques e reservas do Brasil. O CNUC é a lista oficial dessas áreas protegidas.",
+      "o_que_pegamos": "Lista das unidades de conservação que ficam em Goiás. Inclui nome, tipo, tamanho e quem administra.",
+      "por_que_importa": "Ajuda a checar se obras, fazendas ou alertas de desmatamento estão dentro de área protegida por lei.",
+      "arquivos_exemplo": [
+        "CSV com as unidades de conservação",
+        "Shapefile com os limites de cada área"
+      ]
+    },
+    "rais": {
+      "sigla_full": "RAIS — Relação Anual de Informações Sociais",
+      "o_que_e": "Registro que todo empregador tem que mandar uma vez por ano para o governo. Mostra quem trabalha com carteira assinada no Brasil.",
+      "o_que_pegamos": "Números de empregos formais em Goiás, por município e por setor. Salários médios e quantidade de trabalhadores.",
+      "por_que_importa": "Mostra o tamanho real do emprego formal em cada cidade do estado.",
+      "arquivos_exemplo": [
+        "CSV anual com vínculos por município",
+        "Arquivo compactado com microdados anuais"
+      ]
+    },
+    "caged": {
+      "sigla_full": "CAGED — Cadastro Geral de Empregados e Desempregados",
+      "o_que_e": "Registro mensal de quem foi contratado e quem foi demitido com carteira assinada. É enviado pelas empresas ao Ministério do Trabalho.",
+      "o_que_pegamos": "Admissões e demissões mês a mês em Goiás. Separa por cidade, setor e tipo de vínculo.",
+      "por_que_importa": "Mostra se o emprego está crescendo ou caindo em cada município, em tempo quase real.",
+      "arquivos_exemplo": [
+        "Arquivo 7z com microdados mensais",
+        "CSV mensal por município"
+      ]
+    },
+    "inep": {
+      "sigla_full": "INEP — Instituto Nacional de Estudos e Pesquisas Educacionais Anísio Teixeira",
+      "o_que_e": "Órgão do governo federal que cuida dos dados de educação. Faz o Censo Escolar todo ano, escola por escola.",
+      "o_que_pegamos": "Lista das escolas de Goiás com endereço, número de alunos, turmas e infraestrutura (água, luz, internet).",
+      "por_que_importa": "Permite ver se a escola do bairro tem o básico e comparar com o que a prefeitura declara.",
+      "arquivos_exemplo": [
+        "CSV com dados de cada escola",
+        "Arquivo compactado do censo anual"
+      ]
+    },
+    "datasus": {
+      "sigla_full": "DATASUS — CNES (Cadastro Nacional de Estabelecimentos de Saúde)",
+      "o_que_e": "Banco de dados oficial do SUS. O CNES é a lista de todo posto, hospital e clínica cadastrados no Brasil.",
+      "o_que_pegamos": "Estabelecimentos de saúde em Goiás com endereço, tipo de atendimento, leitos e equipamentos.",
+      "por_que_importa": "Mostra quantos postos e hospitais cada cidade tem de verdade e compara com o que a prefeitura diz.",
+      "arquivos_exemplo": [
+        "CSV com os estabelecimentos de saúde",
+        "Arquivo mensal com leitos e equipes"
+      ]
+    },
+    "bolsa_familia_bpc": {
+      "sigla_full": "Bolsa Família e BPC (Benefício de Prestação Continuada)",
+      "o_que_e": "Programas do governo federal que pagam por mês para famílias de baixa renda e para idosos e pessoas com deficiência sem renda.",
+      "o_que_pegamos": "Lista de pagamentos feitos em Goiás, com município, valor e mês. O CPF do beneficiário vem mascarado.",
+      "por_que_importa": "Mostra quanto dinheiro de transferência social chega em cada cidade do estado todo mês.",
+      "arquivos_exemplo": [
+        "CSV mensal com pagamentos por município",
+        "Arquivo compactado do Portal da Transparência"
+      ]
+    },
+    "alego": {
+      "sigla_full": "Assembleia Legislativa de Goiás",
+      "o_que_e": "É a casa onde os deputados estaduais de Goiás trabalham. Eles fazem as leis do estado.",
+      "o_que_pegamos": "Pegamos a lista de deputados, os gastos do gabinete deles e quem eles contratam.",
+      "por_que_importa": "Mostra como cada deputado usa o dinheiro público pago pelo cidadão goiano.",
+      "arquivos_exemplo": [
+        "CSV com despesas mensais dos gabinetes",
+        "JSON com lista de deputados ativos",
+        "HTML com detalhes de contratação"
+      ]
+    },
+    "alego_deputados_foto": {
+      "sigla_full": "Portal da Assembleia Legislativa de Goiás — fotos dos deputados",
+      "o_que_e": "É a página oficial da Assembleia com a foto de cada deputado estadual.",
+      "o_que_pegamos": "Baixamos só a foto do rosto de cada deputado que está no site.",
+      "por_que_importa": "Ajuda o cidadão a reconhecer quem é o político quando vê o nome.",
+      "arquivos_exemplo": [
+        "JPG com a foto oficial do deputado"
+      ]
+    },
+    "camara_goiania": {
+      "sigla_full": "Câmara Municipal de Goiânia",
+      "o_que_e": "É a casa dos vereadores de Goiânia. Eles fazem as leis da cidade.",
+      "o_que_pegamos": "Pegamos a lista de vereadores, o salário deles e os gastos do mandato.",
+      "por_que_importa": "Permite olhar de perto como o dinheiro da capital é usado pelos vereadores.",
+      "arquivos_exemplo": [
+        "HTML com lista de vereadores",
+        "PDF com gastos de gabinete",
+        "CSV com folha de pagamento"
+      ]
+    },
+    "folha_go": {
+      "sigla_full": "Folha de Pagamento do Estado de Goiás",
+      "o_que_e": "É a lista de todo mundo que recebe salário do governo do estado. Inclui cargos de confiança.",
+      "o_que_pegamos": "Baixamos o nome, o cargo e o salário de cada servidor estadual.",
+      "por_que_importa": "Mostra quem o governo contrata e quanto paga com dinheiro do cidadão.",
+      "arquivos_exemplo": [
+        "CSV mensal com servidores e salários",
+        "JSON com cargos comissionados"
+      ]
+    },
+    "tce_go": {
+      "sigla_full": "Tribunal de Contas do Estado de Goiás",
+      "o_que_e": "É o órgão que confere se o governo estadual gastou o dinheiro direito. Funciona como um auditor público.",
+      "o_que_pegamos": "Pegamos as contas julgadas, os gestores punidos e os processos em análise.",
+      "por_que_importa": "Avisa quando um político ou gestor foi responsabilizado por problemas nas contas.",
+      "arquivos_exemplo": [
+        "PDF com decisões do tribunal",
+        "HTML com lista de gestores sancionados",
+        "CSV com processos em andamento"
+      ]
+    },
+    "tcm_go": {
+      "sigla_full": "Contas dos Municípios goianos via SICONFI (Tesouro)",
+      "o_que_e": "É um sistema do governo federal que junta as contas de todas as prefeituras. Inclui as cidades de Goiás.",
+      "o_que_pegamos": "Baixamos receitas, despesas e dívidas de cada município goiano.",
+      "por_que_importa": "Mostra se a prefeitura está gastando mais do que arrecada.",
+      "arquivos_exemplo": [
+        "JSON com receitas e despesas por município",
+        "CSV com dívida consolidada"
+      ]
+    },
+    "tcmgo_sancoes": {
+      "sigla_full": "TCMGO — Tribunal de Contas dos Municípios de Goiás (sanções)",
+      "o_que_e": "É o órgão que audita as contas das prefeituras goianas. Ele publica quem ficou impedido de gerir dinheiro público.",
+      "o_que_pegamos": "Pegamos a lista de prefeitos e gestores impedidos e as contas rejeitadas.",
+      "por_que_importa": "Mostra se um candidato teve as contas reprovadas antes de disputar eleição.",
+      "arquivos_exemplo": [
+        "PDF com lista de impedidos",
+        "HTML com decisões de rejeição de contas"
+      ]
+    },
+    "ssp_go": {
+      "sigla_full": "Secretaria de Segurança Pública de Goiás",
+      "o_que_e": "É o órgão do estado que cuida da polícia. Ele publica números sobre crimes registrados.",
+      "o_que_pegamos": "Pegamos estatísticas de ocorrências por cidade e por mês.",
+      "por_que_importa": "Permite comparar a segurança entre municípios goianos ao longo do tempo.",
+      "arquivos_exemplo": [
+        "CSV com ocorrências por município",
+        "PDF com relatórios mensais"
+      ]
+    },
+    "querido_diario_go": {
+      "sigla_full": "Querido Diário — diários oficiais municipais de Goiás",
+      "o_que_e": "É um projeto aberto que junta os diários oficiais das prefeituras. O diário é onde a cidade publica tudo que decide.",
+      "o_que_pegamos": "Baixamos os atos publicados pelos municípios goianos, como nomeações e contratos.",
+      "por_que_importa": "Permite acompanhar o que cada prefeitura de Goiás decide no dia a dia.",
+      "arquivos_exemplo": [
+        "PDF com diário oficial do município",
+        "JSON com texto extraído dos atos"
+      ]
+    },
+    "state_portal_go": {
+      "sigla_full": "Portal de Dados Abertos do Estado de Goiás",
+      "o_que_e": "É o site oficial onde o governo estadual publica suas planilhas. Qualquer cidadão pode baixar.",
+      "o_que_pegamos": "Pegamos contratos, convênios, gastos e outras bases abertas pelo estado.",
+      "por_que_importa": "Concentra os dados que o próprio governo liberou sobre as suas ações.",
+      "arquivos_exemplo": [
+        "CSV com contratos do estado",
+        "JSON com convênios firmados",
+        "XLSX com execução orçamentária"
+      ]
+    },
+    "mides": {
+      "sigla_full": "MiDES — Microdados de Despesa Municipal (Banco Mundial)",
+      "o_que_e": "É uma base que junta as compras feitas pelas prefeituras do Brasil. Inclui os municípios de Goiás.",
+      "o_que_pegamos": "Pegamos o que cada prefeitura goiana comprou, de quem comprou e por quanto.",
+      "por_que_importa": "Permite ver padrões de compras e fornecedores recorrentes nas cidades.",
+      "arquivos_exemplo": [
+        "CSV com compras municipais",
+        "Parquet com licitações e fornecedores"
+      ]
+    },
+    "wikidata_politicos_foto": {
+      "sigla_full": "Wikidata — base colaborativa (fallback de fotos)",
+      "o_que_e": "É uma enciclopédia de dados mantida por voluntários, parente da Wikipédia. Tem foto de muita gente pública.",
+      "o_que_pegamos": "Usamos só como reserva, quando não achamos a foto do ex-político no site oficial.",
+      "por_que_importa": "Garante que o cidadão veja o rosto do político mesmo quando ele já saiu do cargo.",
+      "arquivos_exemplo": [
+        "JPG com foto de ex-político goiano"
+      ]
+    }
+  }
+}
