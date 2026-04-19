@@ -1,139 +1,48 @@
-================================================================
- GUIA DE DEPLOY — Fiscal Cidadão
-================================================================
+========================================
+ DEPLOY — Fiscal Cidadão
+========================================
 
-URLs em produção:
-  Site: https://storage.googleapis.com/fiscal-cidadao-pwa/index.html
-  API:  https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app
-  Aura: neo4j+s://5cb9f76f.databases.neo4j.io (instance 5cb9f76f)
+Site: https://storage.googleapis.com/fiscal-cidadao-pwa/index.html
+API:  https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app
 
-Todo deploy roda por:
-  bash scripts/deploy/deploy_all.sh <flags>
 
-----------------------------------------------------------------
- MAIS COMUM: NÃO SEI O QUE MUDOU
-----------------------------------------------------------------
+----- 99% dos casos -----
 
   bash scripts/deploy/deploy_all.sh
 
-  (sem flags = --auto)
+Detecta o que mudou e sobe. Termina na hora se nada mudou.
 
-Compara arquivos locais com o último deploy (arquivo .last-deploy,
-gitignored) e detecta se pwa/ ou api/ mudaram. Deploya só o que
-mudou. Se nada mudou, termina em segundos avisando.
+Depois: Ctrl+Shift+R no browser pra ver mudança no site.
 
-Caveat: --graph NÃO é detectado automaticamente. Por quê?
-Mudança em etl/src/ só significa "código novo do pipeline", mas
-pra Aura precisar ser atualizada o pipeline tem que ter SIDO
-RODADO. Se você re-ingeriu dados, passe --graph explícito:
-  bash scripts/deploy/deploy_all.sh --auto --graph
 
-----------------------------------------------------------------
- O QUE FLAG RODAR EM CADA CASO (se quiser controle)
-----------------------------------------------------------------
+----- Re-ingeriu ETL (grafo local mudou) -----
 
-Mudei arquivo do site (pwa/index.html, sw.js, manifest.json):
-  bash scripts/deploy/deploy_all.sh --pwa
-  tempo: ~10s
-  depois: Ctrl+Shift+R no browser (service worker cacheia)
-
-Mudei código do backend (api/src/bracc/...):
-  bash scripts/deploy/deploy_all.sh --api
-  tempo: ~2min (build 1m + deploy 1m)
-
-Rodei novos pipelines ETL e grafo local mudou:
   bash scripts/deploy/deploy_all.sh --graph
-  tempo: ~2-3min
-  cuidado: elementIds mudam → links salvos quebram
-  (só busca e navegação a partir da home continuam funcionando)
 
-Mexi em tudo:
+Só passa --graph quando os pipelines RODARAM. Mudança em etl/src/
+no código não basta. Essa flag wipa e re-copia o Aura (~3min) e os
+links de políticos salvos quebram — busca continua funcionando.
+
+
+----- Força bruta (refazer tudo) -----
+
   bash scripts/deploy/deploy_all.sh --all
-  tempo: ~5min
-  ordem interna: graph → api → pwa
-  (faz sentido: API nova precisa de grafo novo; PWA nova pode
-  precisar de API nova; então PWA vai por último)
 
-Combinações livres:
-  bash scripts/deploy/deploy_all.sh --api --pwa
-  bash scripts/deploy/deploy_all.sh --graph --pwa
-  etc.
 
-----------------------------------------------------------------
- PRÉ-REQUISITOS (uma vez só)
-----------------------------------------------------------------
+----- Pré-requisitos (uma vez só) -----
 
-1. gcloud autenticado como fernandoeq@live.com
-     gcloud auth login
+  gcloud auth login
+  gcloud config set project fiscal-cidadao-493716
+  docker compose up -d neo4j        # só pra --graph
 
-2. Projeto padrão gcloud
-     gcloud config set project fiscal-cidadao-493716
 
-3. Container local do Neo4j up (só pra --graph):
-     docker compose up -d neo4j
+----- Quando algo dá errado -----
 
-4. uv instalado e etl/ com deps (só pra --graph):
-     cd etl && uv sync
+"senha do container" ou "não achou fiscal-neo4j"
+  docker compose up -d neo4j && espera 30s
 
-----------------------------------------------------------------
- TROUBLESHOOTING
-----------------------------------------------------------------
+"cannot read secret" do gcloud
+  gcloud auth list   # tá logado como fernandoeq@live.com?
 
-"não foi possível extrair senha do container fiscal-neo4j"
-  → docker compose up -d neo4j && aguarda ~30s
-
-"não foi possível ler secret fiscal-cidadao-neo4j-password"
-  → gcloud auth list (conferir conta)
-  → gcloud config get-value project (deve ser fiscal-cidadao-493716)
-
-"Image not found" ao deployar
-  → tentou usar uma tag que não foi pushada. Use --all ou --api
-    (que sempre faz build antes).
-
-"Site mudou mas browser não mostra"
-  → Ctrl+Shift+R (invalidar service worker)
-  → ou abrir DevTools → Application → Service Workers → Unregister
-
-Cold start lento primeira chamada
-  → normal: min-instances=0 (mantém $0/mês). Segunda chamada é
-    rápida (~100ms). Pra tirar: editar deploy_api.sh pra
-    --min-instances=1 (custa ~$22/mês sempre).
-
-----------------------------------------------------------------
- SCRIPTS INDIVIDUAIS (se precisar granularidade)
-----------------------------------------------------------------
-
-Só upload PWA:
-  bash scripts/deploy/upload_pwa.sh
-
-Só deploy Cloud Run (pressupõe imagem já buildada):
-  NEO4J_URI=neo4j+s://5cb9f76f.databases.neo4j.io \
-  NEO4J_USER=5cb9f76f \
-  NEO4J_DATABASE=5cb9f76f \
-  bash scripts/deploy/deploy_api.sh
-
-Só build Cloud Build (sem deploy):
-  gcloud builds submit api/ \
-    --tag southamerica-east1-docker.pkg.dev/fiscal-cidadao-493716/fiscal-cidadao/fiscal-cidadao-api:latest \
-    --project=fiscal-cidadao-493716
-
-Só re-copia grafo (dry-run, só mede):
-  cd etl && uv run python ../scripts/build_demo_graph.py \
-    --source-password "$(docker exec fiscal-neo4j env | grep NEO4J_AUTH | cut -d/ -f2)" \
-    --dry-run-only
-
-----------------------------------------------------------------
- CHECKLIST DEPOIS DO DEPLOY
-----------------------------------------------------------------
-
-[ ] curl https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app/health
-    (deve retornar {"status":"ok"})
-
-[ ] Abrir site e buscar "rubens otoni" — deve aparecer na lista
-
-[ ] Clicar num político — card com emendas, doações, conexões
-
-[ ] No breakdown dos doadores, datas aparecem (12/09/2018 etc.)
-
-[ ] Home: "Quanto custa um cargo eletivo?" com 4 botões
-    (só não mostra se custo_mandato_br não foi copiado pro Aura)
+"mudei mas browser não atualiza"
+  Ctrl+Shift+R (service worker cacheia)
