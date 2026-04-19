@@ -67,6 +67,7 @@ from bracc.services.analise_service import (
 )
 from bracc.services.common_helpers import archival_url
 from bracc.services.conexoes_service import classificar
+from bracc.services.contas_campanha_service import gerar_comparacao_contas
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
@@ -662,6 +663,7 @@ async def obter_perfil(
     )
 
     validacao_tse = gerar_validacao_tse(props, total_doacoes)
+    contas_campanha = gerar_comparacao_contas(props, 2022)
 
     # Teto de gastos de campanha vs despesas declaradas (Resolução TSE
     # 23.607/2019 — MVP só cobre eleição 2022). ``total_despesas_tse_2022``
@@ -777,5 +779,6 @@ async def obter_perfil(
         familia=resultado.familia,
         aviso_despesas=aviso_despesas,
         validacao_tse=validacao_tse,
+        contas_campanha=contas_campanha,
         teto_gastos=teto_gastos,
     )
