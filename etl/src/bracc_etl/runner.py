@@ -33,6 +33,9 @@ from bracc_etl.pipelines.dou import DouPipeline
 from bracc_etl.pipelines.emendas_parlamentares_go import (
     EmendasParlamentaresGoPipeline,
 )
+from bracc_etl.pipelines.entity_resolution_politicos_go import (
+    EntityResolutionPoliticosGoPipeline,
+)
 from bracc_etl.pipelines.eu_sanctions import EuSanctionsPipeline
 from bracc_etl.pipelines.folha_go import FolhaGoPipeline
 from bracc_etl.pipelines.holdings import HoldingsPipeline
@@ -147,6 +150,7 @@ PIPELINES: dict[str, type] = {
     "brasilapi_cnpj_status": BrasilapiCnpjStatusPipeline,
     "wikidata_politicos_foto": WikidataPoliticosFotoPipeline,
     "tse_candidatos_foto": TseCandidatosFotoPipeline,
+    "entity_resolution_politicos_go": EntityResolutionPoliticosGoPipeline,
 }
 
 

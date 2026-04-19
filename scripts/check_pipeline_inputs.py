@@ -19,6 +19,11 @@ VALID_SOURCE_FORMATS = {
     "file_batch",
     "bigquery_table",
     "web_portal",
+    # Pipelines que derivam dados a partir do próprio grafo (entity
+    # resolution, rollup canônico), sem fetch externo. A "fonte" é a
+    # lógica de derivação versionada em git — ver
+    # etl/src/bracc_etl/pipelines/entity_resolution_politicos_go.py.
+    "derived",
     "unknown",
 }
 
