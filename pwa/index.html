@@ -1882,19 +1882,19 @@ async function carregarInicio() {
     <div class="stats-row fade-in">
       <div class="stat">
         <div class="stat-value">${d.deputados_federais}</div>
-        <div class="stat-label">Dep. Federais</div>
+        <div class="stat-label">Cand. Dep. Federal <span title="Candidatos a deputado federal por Goiás registrados no TSE na última eleição geral (2022). Não é a lista de deputados em exercício — o TSE expõe base de candidaturas, não de mandatos." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
       </div>
       <div class="stat">
         <div class="stat-value">${d.deputados_estaduais}</div>
-        <div class="stat-label">Dep. Estaduais</div>
+        <div class="stat-label">Cand. Dep. Estadual <span title="Candidatos a deputado estadual por Goiás registrados no TSE na última eleição geral (2022). Não é a lista de deputados em exercício — o TSE expõe base de candidaturas, não de mandatos." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
       </div>
       <div class="stat">
         <div class="stat-value">${d.senadores}</div>
-        <div class="stat-label">Senadores</div>
+        <div class="stat-label">Cand. Senador <span title="Candidatos a senador por Goiás registrados no TSE na última eleição geral (2022). Não é a lista de senadores em exercício — o TSE expõe base de candidaturas, não de mandatos." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
       </div>
       <div class="stat">
         <div class="stat-value">${d.vereadores_goiania}</div>
-        <div class="stat-label">Cand. Vereador <span title="Candidatos a vereador em Goiânia registrados no TSE (último pleito). O app não tem ainda a lista de vereadores em exercício porque a Câmara Municipal de Goiânia não expõe API de dados abertos consultável por máquina." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
+        <div class="stat-label">Cand. Vereador <span title="Candidatos a vereador em Goiânia registrados no TSE (último pleito, 2024). O app não tem ainda a lista de vereadores em exercício porque a Câmara Municipal de Goiânia não expõe API de dados abertos consultável por máquina." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
       </div>
     </div>
 
@@ -2119,7 +2119,6 @@ function limparBusca() {
 }
 
 async function fazerBusca(query) {
-  searchInput.value = query;
   searchClear.style.display = "flex";
 
   irPara("pageResultados", document.getElementById("tabBuscar"));

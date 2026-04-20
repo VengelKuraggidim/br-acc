@@ -285,8 +285,15 @@ async def pwa_buscar_tudo(
     filter, and maps each result to the PWA ``BuscarTudoItem`` shape.
     """
     try:
+        # Person search uses a wider fulltext window (500 vs 30) so the
+        # post-query UF=GO filter in ``_format_item`` has enough
+        # candidates to draw from. With only 30, popular names in other
+        # states (SP/MG/PE) saturate the top-ranked slice and almost no
+        # GO rows survive the filter, even when the graph has hundreds
+        # of matching GO persons. 500 keeps the round-trip under ~100ms
+        # and restores parity with the prod result volume.
         pessoas, pessoas_total = await _run_search(
-            session, q, page, 30, entity_type="person"
+            session, q, page, 500, entity_type="person"
         )
         outros, outros_total = await _run_search(
             session, q, page, 20, entity_type=None
