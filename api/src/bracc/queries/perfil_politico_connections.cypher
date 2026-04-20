@@ -14,6 +14,13 @@
 //                                   (Senator > FederalLegislator >
 //                                   StateLegislator > Person).
 //
+// Resolução de cluster canônico: para QUALQUER formato de entrada acima,
+// se o nó match tiver um cluster :CanonicalPerson linkado via :REPRESENTS,
+// varre os nós-irmãos e devolve o mais oficial. Isso resolve o sintoma UX
+// em que o fulltext ``/buscar-tudo`` devolve o elementId do ``:Person`` TSE
+// (sem id_camara → sem emendas, sem CEAP) quando o mesmo cluster tem um
+// ``:FederalLegislator`` com emendas carimbadas.
+//
 // Shape de retorno:
 //   politico {dict}    — properties + element_id + labels do político
 //   conexoes [list]    — lista de dicts, um por aresta que toca o político,
@@ -37,23 +44,53 @@
 // A resolução do canônico ranqueia o nó-fonte por oficialidade do cargo:
 // Senator (0) > FederalLegislator (1) > StateLegislator (2) > Person (3).
 // Isso garante que `GET /politico/canon_senado_5895` surface a foto do
-// Senator mesmo quando o cluster tem também um :Person TSE histórico.
+// Senator mesmo quando o cluster tem também um :Person TSE histórico —
+// e, pela branch B, que clicar num :Person TSE no /buscar-tudo também
+// resolva pro :FederalLegislator/:Senator do mesmo cluster.
 CALL {
+    // Branch A: match direto por identificador → ranqueia por label
+    // (sem cluster canônico, esse é o único nó retornado).
     MATCH (p)
     WHERE elementId(p) = $entity_id
        OR p.id_camara = $entity_id
        OR p.legislator_id = $entity_id
        OR p.id_senado = $entity_id
        OR p.senator_id = $entity_id
-    RETURN p, 0 AS source_rank
-  UNION
-    MATCH (cp:CanonicalPerson {canonical_id: $entity_id})-[:REPRESENTS]->(p)
     RETURN p,
            CASE
-             WHEN 'Senator' IN labels(p) THEN 10
-             WHEN 'FederalLegislator' IN labels(p) THEN 11
-             WHEN 'StateLegislator' IN labels(p) THEN 12
-             ELSE 13
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    // Branch B: match direto + caminhada no cluster canônico pra achar
+    // nó-irmão mais oficial. :REPRESENTS é direcional CanonicalPerson→source,
+    // daí (p_seed)<-[:REPRESENTS]-(cp)-[:REPRESENTS]->(p). Inclui p=p_seed
+    // quando o cluster tem só o seed, mas aí o rank é igual ao da Branch A
+    // e o tie-breaker no ORDER BY mantém consistência.
+    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
+    WHERE elementId(p_seed) = $entity_id
+       OR p_seed.id_camara = $entity_id
+       OR p_seed.legislator_id = $entity_id
+       OR p_seed.id_senado = $entity_id
+       OR p_seed.senator_id = $entity_id
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    // Branch C: match via canonical_id explícito (formato `canon_*`).
+    MATCH (:CanonicalPerson {canonical_id: $entity_id})-[:REPRESENTS]->(p)
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
            END AS source_rank
 }
 WITH p, source_rank
