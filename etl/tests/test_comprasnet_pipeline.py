@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import io
 import json
+import shutil
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from bracc_etl.pipelines.comprasnet import ComprasnetPipeline
+import pytest
+
+from bracc_etl.pipelines.comprasnet import (
+    ComprasnetPipeline,
+    _stream_json_array,
+)
 from tests._mock_helpers import mock_session
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -219,3 +226,158 @@ def test_load_calls_batch_loader() -> None:
     session = mock_session(driver)
     # Should have called session.run for Contract nodes, Company nodes, VENCEU and REFERENTE_A rels
     assert session.run.call_count >= 4
+
+
+def test_provenance_stamped_on_contract_nodes() -> None:
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+
+    assert pipeline.contract_nodes
+    for node in pipeline.contract_nodes:
+        assert node["source_id"] == "comprasnet"
+        assert node["source_record_id"] == node["contract_id"]
+        assert node["source_url"].startswith("http")
+        assert node["ingested_at"].startswith("20")
+        assert node["run_id"].startswith("comprasnet_")
+
+
+def test_provenance_stamped_on_company_nodes() -> None:
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+
+    assert pipeline.company_nodes
+    for node in pipeline.company_nodes:
+        assert node["source_id"] == "comprasnet"
+        assert node["source_record_id"] == node["cnpj"]
+        assert node["source_url"].startswith("http")
+        assert node["run_id"].startswith("comprasnet_")
+
+
+def test_provenance_stamped_on_venceu_rels() -> None:
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+
+    assert pipeline.venceu_rels
+    for rel in pipeline.venceu_rels:
+        assert rel["source_id"] == "comprasnet"
+        assert rel["source_record_id"] == rel["target_key"]  # contract_id
+        assert rel["source_url"].startswith("http")
+        assert rel["run_id"].startswith("comprasnet_")
+
+
+def test_provenance_stamped_on_referente_a_rels() -> None:
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+
+    assert pipeline.referente_a_rels
+    for rel in pipeline.referente_a_rels:
+        assert rel["source_id"] == "comprasnet"
+        assert rel["source_record_id"] == rel["source_key"]  # contract_id
+        assert rel["source_url"].startswith("http")
+
+
+def test_contract_nodes_count_matches_contracts() -> None:
+    pipeline = _make_pipeline()
+    _extract_from_fixtures(pipeline)
+    pipeline.transform()
+
+    assert len(pipeline.contract_nodes) == len(pipeline.contracts)
+    assert len(pipeline.venceu_rels) == len(pipeline.contracts)
+
+
+def test_stream_json_array_empty() -> None:
+    assert list(_stream_json_array(io.StringIO("[]"))) == []
+
+
+def test_stream_json_array_pretty_printed() -> None:
+    src = '[\n  {"id": "a", "n": {"k": [1, 2]}},\n  {"id": "b"}\n]\n'
+    assert list(_stream_json_array(io.StringIO(src))) == [
+        {"id": "a", "n": {"k": [1, 2]}},
+        {"id": "b"},
+    ]
+
+
+def test_stream_json_array_consolidated_format() -> None:
+    """Matches the shape written by scripts/download_comprasnet.py."""
+    src = '[{"id": 1},\n{"id": 2},\n{"id": 3}]\n'
+    assert list(_stream_json_array(io.StringIO(src))) == [
+        {"id": 1}, {"id": 2}, {"id": 3},
+    ]
+
+
+def test_stream_json_array_small_chunk_size() -> None:
+    """Decoder must reassemble objects split across chunk boundaries."""
+    src = '[{"aaaaaaaaaa": 1, "bbbbbbbbbb": 2}, {"cccccccccc": 3}]'
+    assert list(_stream_json_array(io.StringIO(src), chunk_size=4)) == [
+        {"aaaaaaaaaa": 1, "bbbbbbbbbb": 2},
+        {"cccccccccc": 3},
+    ]
+
+
+def test_stream_json_array_truncated_raises() -> None:
+    with pytest.raises(json.JSONDecodeError):
+        list(_stream_json_array(io.StringIO('[{"id": 1')))
+
+
+def test_run_loops_per_year_file(tmp_path: Path) -> None:
+    """run() must process each *_contratos.json independently."""
+    comprasnet_dir = tmp_path / "comprasnet"
+    comprasnet_dir.mkdir()
+    for year in (2023, 2024, 2025):
+        shutil.copyfile(
+            FIXTURES / "comprasnet_contratos.json",
+            comprasnet_dir / f"{year}_contratos.json",
+        )
+
+    driver = MagicMock()
+    pipeline = ComprasnetPipeline(driver, data_dir=str(tmp_path))
+    pipeline.run()
+
+    # Each fixture has 5 raw records; three years -> 15 records ingested.
+    assert pipeline.rows_in == 15
+    # After run completes state is cleared; rows_loaded aggregates per-year
+    # Contract-node counts (3 per year * 3 years = 9).
+    assert pipeline.rows_loaded == 9
+    # State reset: no leftover working sets.
+    assert pipeline.contracts == []
+    assert pipeline.contract_nodes == []
+
+    session = mock_session(driver)
+    # 4 load_* calls per year × 3 years = 12 session.run calls minimum
+    # (plus 2 _upsert_ingestion_run calls at start/end).
+    assert session.run.call_count >= 12
+
+
+def test_run_respects_global_limit(tmp_path: Path) -> None:
+    """limit caps total contracts across years, not per year."""
+    comprasnet_dir = tmp_path / "comprasnet"
+    comprasnet_dir.mkdir()
+    for year in (2023, 2024, 2025):
+        shutil.copyfile(
+            FIXTURES / "comprasnet_contratos.json",
+            comprasnet_dir / f"{year}_contratos.json",
+        )
+
+    driver = MagicMock()
+    pipeline = ComprasnetPipeline(driver, data_dir=str(tmp_path), limit=4)
+    pipeline.run()
+
+    # limit=4, fixture yields 3 valid contracts per year:
+    # year 1 loads 3, year 2 loads 1, year 3 short-circuits.
+    assert pipeline.rows_loaded == 4
+    # original limit restored after run.
+    assert pipeline.limit == 4
+
+
+def test_run_no_input_files_is_noop(tmp_path: Path) -> None:
+    (tmp_path / "comprasnet").mkdir()
+    driver = MagicMock()
+    pipeline = ComprasnetPipeline(driver, data_dir=str(tmp_path))
+    pipeline.run()
+
+    assert pipeline.rows_in == 0
+    assert pipeline.rows_loaded == 0
