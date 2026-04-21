@@ -105,15 +105,14 @@ prod: `/politico/<id_elias_vaz>` devolve `despesas_gabinete: []`.
      conta da usuária no IAM do projeto; OU
    - Marido envia NEO4J_URI + NEO4J_PASSWORD por canal seguro, usuária
      cola em `.env` local e o pipeline lê dali.
-2. **Runner CLI não expõe `--start-year`** — `etl/src/bracc_etl/runner.py`
-   não passa `start_year` pra `CamaraPoliticosGoPipeline` (o pipeline
-   aceita via kwargs, default `_DEFAULT_START_YEAR=2020`). Sem flag, só
-   dá pra rodar com o default que puxa ~90k linhas (2020-2026) —
-   estoura o Aura Free com ~50k de headroom. **Fix trivial**: adicionar
-   `@click.option("--start-year", type=int, default=None)` em `runner.py`
-   e passar pra `extra_kwargs` condicionalmente (mesmo padrão já usado
-   pra `batch_size`). Sem isso, a única saída segura é limitar por
-   `--start-year 2025` ou `2024` pra caber no headroom.
+2. ~~**Runner CLI não expõe `--start-year`**~~ — **RESOLVIDO 2026-04-21**.
+   Flag `--start-year` adicionada em `runner.py` com helper
+   `_pipeline_accepts_kwarg` pra detectar pipelines que consomem via
+   `kwargs.pop` (não dá pra usar o guard do `--batch-size` porque aquele
+   só olha params explícitos). Sweep confirma que só
+   `camara_politicos_go` (= `camara_deputados_ceap`) e
+   `emendas_parlamentares_go` recebem o kwarg. Uso:
+   `bracc-etl run --source camara_deputados_ceap --start-year 2025 ...`.
 3. **`expense_count=0` em `/meta/stats` é ruído, não sinal** — a query
    `meta_stats.cypher:56` conta `MATCH (e:Expense)`, mas o pipeline
    escreve `:LegislativeExpense`. Mesmo depois de rodar o pipeline com

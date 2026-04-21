@@ -174,6 +174,40 @@ def _pipeline_init_params(pipeline_cls: type) -> set[str]:
     return {name for name in sig.parameters if name != "self"}
 
 
+def _pipeline_accepts_kwarg(pipeline_cls: type, name: str) -> bool:
+    """Whether ``pipeline_cls.__init__`` accepts *name* as a kwarg.
+
+    Duas formas suportadas:
+
+    1. *name* e parametro keyword explicito de ``__init__``.
+    2. ``__init__`` declara ``**kwargs`` **e** consome *name* via
+       ``kwargs.pop("name"...)`` — padrao usado por CamaraPoliticosGo
+       pra optional kwargs. Verificar so a presenca de ``**kwargs`` nao
+       basta: pipelines como brasilapi_cnpj_status declaram **kwargs
+       mas encaminham pro ``Pipeline.__init__`` base (que nao aceita
+       kwargs arbitrarios) — passar algo nao-consumido da TypeError.
+
+    Retorna False se a introspeccao falhar — comportamento conservador.
+    """
+    try:
+        sig = inspect.signature(pipeline_cls)
+    except (TypeError, ValueError):
+        return False
+    has_var_kw = False
+    for pname, param in sig.parameters.items():
+        if pname == name:
+            return True
+        if param.kind is inspect.Parameter.VAR_KEYWORD:
+            has_var_kw = True
+    if not has_var_kw:
+        return False
+    try:
+        src = inspect.getsource(pipeline_cls.__init__)
+    except (OSError, TypeError):
+        return False
+    return f'kwargs.pop("{name}"' in src or f"kwargs.pop('{name}'" in src
+
+
 def _load_dotenv_if_present() -> None:
     """Carrega ``.env`` do repo root em ``os.environ`` (sem sobrescrever).
 
@@ -239,6 +273,16 @@ def cli() -> None:
         "e.g. brasilapi_cnpj_status)."
     ),
 )
+@click.option(
+    "--start-year",
+    type=int,
+    default=None,
+    help=(
+        "Earliest year to ingest (only honored by pipelines that accept "
+        "it, e.g. camara_politicos_go / camara_deputados_ceap). Util pra "
+        "limitar volume em Aura Free tier."
+    ),
+)
 def run(
     source: str,
     neo4j_uri: str,
@@ -253,6 +297,7 @@ def run(
     start_phase: int,
     history: bool,
     batch_size: int | None,
+    start_year: int | None,
 ) -> None:
     """Run an ETL pipeline."""
     os.environ["NEO4J_DATABASE"] = neo4j_database
@@ -283,6 +328,13 @@ def run(
             pipeline_cls,
         ):
             extra_kwargs["batch_size"] = batch_size
+        # start_year e consumido via kwargs.pop nos pipelines que suportam
+        # (ex.: CamaraPoliticosGoPipeline), entao precisa do guard que olha
+        # pra **kwargs, nao so params explicitos.
+        if start_year is not None and _pipeline_accepts_kwarg(
+            pipeline_cls, "start_year",
+        ):
+            extra_kwargs["start_year"] = start_year
         pipeline = pipeline_cls(
             driver=driver,
             data_dir=data_dir,
