@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-21T22:30:12Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-21T23:29:52Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -41,7 +41,7 @@ Status buckets:
 | cnpj | cnpj | implemented_loaded | loaded | file_batch | data/cnpj/* | - |
 | comprasnet | comprasnet | implemented_partial | partial | file_batch | data/comprasnet/* | Needs freshness backfill |
 | cpgf | cpgf | implemented_loaded | loaded | file_batch | data/cpgf/* | - |
-| custo_mandato_br | custo_mandato_br | implemented_partial | partial | api_json | API payload from https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao | Materializa CustoMandato + CustoComponente por cargo (dep_federal/senador/dep_estadual_go/governador_go) com proveniencia rastreavel; valores hardcoded de Decretos/Atos/Leis publicos; archive_fetch dos URLs legais por componente; substitui card hardcoded da home Quanto custa um deputado federal |
+| custo_mandato_br | custo_mandato_br | implemented_partial | partial | api_json | API payload from https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao | Materializa CustoMandato + CustoComponente por cargo (dep_federal/senador/dep_estadual_go/governador_go) com proveniencia rastreavel; valores hardcoded de Decretos/Atos/Leis publicos; archive_fetch dos URLs legais por componente; substitui card hardcoded da home Quanto custa um deputado federal |
 | cvm | cvm | implemented_loaded | loaded | file_batch | data/cvm/* | - |
 | cvm_full_ownership_chain | cvm_full_ownership_chain | not_built | not_loaded | file_batch | data/cvm_full_ownership_chain/* | Shareholder graph expansion |
 | cvm_funds | cvm_funds | implemented_loaded | loaded | file_batch | data/cvm_funds/* | - |

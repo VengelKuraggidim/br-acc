@@ -2164,12 +2164,6 @@ async function carregarCustoMandato(cargo) {
          </div>`
       : "";
 
-    // Painel de proveniência expandido (igual ao usado nos outros cards):
-    // mostra source_id, run_id, link pra fonte original e cópia preservada.
-    const proveniencia = d.provenance
-      ? renderDetalhesProveniencia(d.provenance)
-      : "";
-
     container.innerHTML = `
       <div class="card" style="padding:0; overflow:hidden;">
         <div style="display:flex; flex-direction:column; gap:0;">
@@ -2178,7 +2172,6 @@ async function carregarCustoMandato(cargo) {
         </div>
       </div>
       ${rodape}
-      ${proveniencia}
     `;
   } catch (err) {
     container.innerHTML = `<div class="card" style="padding:14px; color:var(--text-dim); font-size:12px;">Erro ao carregar custo do cargo: ${escaparHTML(String(err && err.message || err))}.</div>`;

@@ -92,7 +92,7 @@ class TestAnalisarEmendas:
         ]
         alertas = analisar_emendas(emendas)
         assert any(
-            a["tipo"] == "atencao" and "demoram" in a["texto"]
+            a["tipo"] == "atencao" and "demorando" in a["texto"]
             for a in alertas
         )
 

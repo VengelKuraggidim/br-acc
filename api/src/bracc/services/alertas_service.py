@@ -190,9 +190,9 @@ def analisar_emendas(emendas: list[dict[str, Any]]) -> list[dict[str, str]]:
             "tipo": "atencao",
             "icone": "emenda",
             "texto": (
-                f"{len(nao_pagas)} emenda(s) empenhada(s) que demoram muito "
-                f"para serem concluidas: {fmt_brl(total_nao_pago)} "
-                f"reservados mas ainda nao pagos{local_txt}"
+                f"{len(nao_pagas)} emenda(s) com pagamento demorando pra "
+                f"chegar ao destino: {fmt_brl(total_nao_pago)} empenhados "
+                f"mas ainda nao pagos{local_txt}"
             ),
         })
 

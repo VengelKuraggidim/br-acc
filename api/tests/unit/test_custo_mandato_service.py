@@ -49,7 +49,7 @@ def _record(
 _PROVENANCE = {
     "source_id": "custo_mandato_br",
     "source_record_id": "dep_federal",
-    "source_url": "https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao",
+    "source_url": "https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao",
     "ingested_at": "2026-04-19T12:00:00+00:00",
     "run_id": "custo_mandato_br_20260419120000",
     "source_snapshot_uri": "custo_mandato_br/2026-04/abc123def456.html",
@@ -90,7 +90,7 @@ def _fake_dep_federal_record() -> MagicMock:
             "valor_mensal": None,
             "valor_observacao": "não divulgado em formato consolidado pela Câmara",
             "fonte_legal": "—",
-            "fonte_url": "https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao",
+            "fonte_url": "https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao",
             "incluir_no_total": True,
             "ordem": 4,
             **_PROVENANCE,

@@ -75,7 +75,7 @@ logger = logging.getLogger(__name__)
 
 _SOURCE_ID = "custo_mandato_br"
 _REGISTRY_URL = (
-    "https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao"
+    "https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao"
 )
 _HTTP_TIMEOUT = 30.0
 _DEFAULT_HEADERS = {
@@ -151,14 +151,14 @@ _COMPONENTS: dict[str, list[dict[str, Any]]] = {
             "dep_federal", "gabinete", "Verba de gabinete (até 25 assessores)",
             valor_mensal=165844.80,
             fonte_legal="Ato da Mesa nº 243/2024",
-            fonte_url="https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao",
+            fonte_url="https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao",
         ),
         _comp(
             "dep_federal", "auxilio_moradia", "Auxílio-moradia",
             valor_mensal=4253.00,
             valor_observacao="opcional, pago a quem não usa imóvel funcional",
             fonte_legal="Resolução da Câmara dos Deputados",
-            fonte_url="https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao",
+            fonte_url="https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao",
         ),
         _comp(
             "dep_federal", "saude_encargos",
@@ -166,7 +166,7 @@ _COMPONENTS: dict[str, list[dict[str, Any]]] = {
             valor_mensal=None,
             valor_observacao="não divulgado em formato consolidado pela Câmara",
             fonte_legal="—",
-            fonte_url="https://www.camara.leg.br/transparencia/recursos-humanos/remuneracao",
+            fonte_url="https://www2.camara.leg.br/transparencia/recursos-humanos/remuneracao",
         ),
     ],
     "senador": [
