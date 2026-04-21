@@ -89,6 +89,41 @@ curl -s "https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app/politico/<ID_CAMARA>
   paralelo por que os IngestionRuns locais não chegam no Aura (bug de
   replicação ou pipeline não está gravando no Neo4j apontado).
 
+## Atualização 2026-04-21 — tentativa de executar travou
+
+Usuária confirmou o problema de novo no PWA (perfil de dep. federal GO
+mostra "Dados de gastos parlamentares nao disponiveis"). Confirmado em
+prod: `/politico/<id_elias_vaz>` devolve `despesas_gabinete: []`.
+
+**Blockers encontrados ao tentar executar**:
+
+1. **Credencial do Aura inacessível pela conta logada** — `gcloud auth`
+   ativo é `vengelkuraggidim@gmail.com`, que não tem permissão em
+   `fiscal-cidadao-493716` (owner é o marido da usuária). Erro:
+   `Permission 'secretmanager.secrets.list' denied`. Caminhos:
+   - Marido concede `roles/secretmanager.secretAccessor` (ou owner) pra
+     conta da usuária no IAM do projeto; OU
+   - Marido envia NEO4J_URI + NEO4J_PASSWORD por canal seguro, usuária
+     cola em `.env` local e o pipeline lê dali.
+2. **Runner CLI não expõe `--start-year`** — `etl/src/bracc_etl/runner.py`
+   não passa `start_year` pra `CamaraPoliticosGoPipeline` (o pipeline
+   aceita via kwargs, default `_DEFAULT_START_YEAR=2020`). Sem flag, só
+   dá pra rodar com o default que puxa ~90k linhas (2020-2026) —
+   estoura o Aura Free com ~50k de headroom. **Fix trivial**: adicionar
+   `@click.option("--start-year", type=int, default=None)` em `runner.py`
+   e passar pra `extra_kwargs` condicionalmente (mesmo padrão já usado
+   pra `batch_size`). Sem isso, a única saída segura é limitar por
+   `--start-year 2025` ou `2024` pra caber no headroom.
+3. **`expense_count=0` em `/meta/stats` é ruído, não sinal** — a query
+   `meta_stats.cypher:56` conta `MATCH (e:Expense)`, mas o pipeline
+   escreve `:LegislativeExpense`. Mesmo depois de rodar o pipeline com
+   sucesso, `expense_count` vai continuar zero. Validação correta
+   pós-run é consultar direto `/politico/<id_camara>` e ver
+   `despesas_gabinete` populado, OU rodar Cypher ad-hoc
+   `MATCH (e:LegislativeExpense) WHERE e.source_id='camara_deputados_ceap' RETURN count(e)`.
+   **Débito colateral**: considerar adicionar `legislative_expense_count`
+   ao `meta_stats.cypher` pra ter observabilidade real desse label.
+
 ## Origem
 
 Diagnóstico em sessão de 2026-04-19 em conversa com o usuário sobre
@@ -97,3 +132,6 @@ Diagnóstico em sessão de 2026-04-19 em conversa com o usuário sobre
 1. **Busca devolve Person TSE sem cluster canônico** → resolvido nesta
    sessão no Cypher (`perfil_politico_connections.cypher`).
 2. **CEAP completamente vazio no Aura** → este débito.
+
+Retomado em 2026-04-21 — usuária tentou autorizar execução, blockers
+(credencial + falta de `--start-year`) documentados acima.
