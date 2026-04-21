@@ -115,6 +115,7 @@ async def test_stats_hides_person_count_in_public_mode(
         "global_pep_count": 3,
         "cvm_proceeding_count": 4,
         "expense_count": 11,
+        "legislative_expense_count": 111,
         "pep_record_count": 12,
         "expulsion_count": 13,
         "leniency_count": 14,

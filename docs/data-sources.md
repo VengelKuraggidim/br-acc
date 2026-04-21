@@ -112,17 +112,17 @@ All sources below have working ETL pipelines in `etl/src/bracc_etl/pipelines/` a
 
 | # | Source | URL | Format | Est. Volume | Nodes/Rels | Value | Notes |
 |---|--------|-----|--------|-------------|------------|-------|-------|
-| 19 | ANP (Oil/Gas Royalties) | dados.gov.br/dados/conjuntos-dados/anp | API + CSV | ~100K/yr | Royalty, FuelPrice nodes | MEDIUM | Oil royalties + fuel pricing |
+| 19 | ANP (Oil/Gas Royalties) | gov.br/anp/pt-br/centrais-de-conteudo/dados-abertos | API + CSV | ~100K/yr | Royalty, FuelPrice nodes | MEDIUM | Oil royalties + fuel pricing |
 | 20 | ANEEL (Energy) | dadosabertos.aneel.gov.br | API | ~50K | EnergyContract nodes | MEDIUM | Energy concessions and contracts |
-| 21 | ANM (Mining) | dados.gov.br/dados/conjuntos-dados/anm | API + CSV | ~100K | MiningConcession nodes | HIGH | Mining rights, often tied to deforestation |
-| 22 | ANTT (Roads) | dados.gov.br/dados/conjuntos-dados/antt | API | ~10K | TransportContract nodes | LOW | Transport concessions |
-| 23 | ANS (Health Insurance) | dados.gov.br/dados/conjuntos-dados/ans | API | ~50K | HealthPlan nodes | LOW | Health plan operators |
-| 24 | ANVISA (Drug/Food) | dados.gov.br/dados/conjuntos-dados/anvisa | API | ~100K | RegulatoryApproval nodes | LOW | Product registrations |
-| 25 | ANAC (Aviation) | dados.gov.br/dados/conjuntos-dados/anac | API | ~10K | AviationConcession nodes | LOW | Airport concessions |
-| 26 | ANTAQ (Waterways) | dados.gov.br/dados/conjuntos-dados/antaq | API | ~5K | PortContract nodes | LOW | Port authority contracts |
-| 27 | ANA (Water) | dados.gov.br/dados/conjuntos-dados/ana | API | ~10K | WaterConcession nodes | LOW | Water resource grants |
-| 28 | ANATEL (Telecom) | dados.gov.br/dados/conjuntos-dados/anatel | API | ~50K | TelecomLicense nodes | LOW | Telecom licenses |
-| 29 | SUSEP (Insurance) | dados.gov.br/dados/conjuntos-dados/susep | CSV | ~10K | InsuranceEntity nodes | LOW | Insurance market data |
+| 21 | ANM (Mining) | gov.br/anm/pt-br/acesso-a-informacao/dados-abertos | API + CSV | ~100K | MiningConcession nodes | HIGH | Mining rights, often tied to deforestation |
+| 22 | ANTT (Roads) | dados.antt.gov.br | API | ~10K | TransportContract nodes | LOW | Transport concessions |
+| 23 | ANS (Health Insurance) | gov.br/ans/pt-br/acesso-a-informacao/dados-abertos | API | ~50K | HealthPlan nodes | LOW | Health plan operators |
+| 24 | ANVISA (Drug/Food) | gov.br/anvisa/pt-br/acessoainformacao/dadosabertos | API | ~100K | RegulatoryApproval nodes | LOW | Product registrations |
+| 25 | ANAC (Aviation) | gov.br/anac/pt-br/acesso-a-informacao/dados-abertos | API | ~10K | AviationConcession nodes | LOW | Airport concessions |
+| 26 | ANTAQ (Waterways) | gov.br/antaq/pt-br/acesso-a-informacao/dados-abertos | API | ~5K | PortContract nodes | LOW | Port authority contracts |
+| 27 | ANA (Water) | dadosabertos.ana.gov.br | API | ~10K | WaterConcession nodes | LOW | Water resource grants |
+| 28 | ANATEL (Telecom) | gov.br/anatel/pt-br/dados/dados-abertos | API | ~50K | TelecomLicense nodes | LOW | Telecom licenses |
+| 29 | SUSEP (Insurance) | gov.br/susep/pt-br/acesso-a-informacao/dados-abertos | CSV | ~10K | InsuranceEntity nodes | LOW | Insurance market data |
 
 ### 3.5 Financial / Securities (2 sources)
 

@@ -115,6 +115,7 @@ async def test_meta_stats(client: AsyncClient) -> None:
         "global_pep_count": 15_000,
         "cvm_proceeding_count": 5_000,
         "expense_count": 2_000_000,
+        "legislative_expense_count": 3_500_000,
         "pep_record_count": 100_000,
         "expulsion_count": 10_000,
         "leniency_count": 34,
@@ -175,6 +176,7 @@ async def test_meta_stats(client: AsyncClient) -> None:
     assert data["global_pep_count"] == 15_000
     assert data["cvm_proceeding_count"] == 5_000
     assert data["expense_count"] == 2_000_000
+    assert data["legislative_expense_count"] == 3_500_000
     assert data["pep_record_count"] == 100_000
     assert data["expulsion_count"] == 10_000
     assert data["leniency_count"] == 34

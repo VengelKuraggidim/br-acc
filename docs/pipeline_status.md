@@ -1,6 +1,6 @@
 # Pipeline Status
 
-Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-19T04:52:55Z).
+Generated from `docs/source_registry_br_v1.csv` (as-of UTC: 2026-04-21T22:30:12Z).
 
 Status buckets:
 - `implemented_loaded`: implemented and loaded in registry.
@@ -12,16 +12,16 @@ Status buckets:
 |---|---|---|---|---|---|---|
 | alego | alego | implemented_partial | not_loaded | api_json | API payload from https://transparencia.al.go.leg.br/ | Angular SPA public JSON API under /api/transparencia/ (verbas_indenizatorias + processos); downloader at scripts/download_alego.py |
 | alego_deputados_foto | alego_deputados_foto | implemented_partial | partial | web_portal | Portal export/scrape output under data/alego_deputados_foto/ | HTML scraping do portal.al.go.leg.br/deputados/perfil/{id} para extrair foto principal (img.foto) e atualizar :StateLegislator existentes com foto_url+foto_snapshot_uri |
-| ana_water_grants | ana_water_grants | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/ana | Water use rights |
-| anac_aviation_concessions | anac_aviation_concessions | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anac | Aviation contracts |
-| anatel_telecom_licenses | anatel_telecom_licenses | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anatel | Telecom operators |
+| ana_water_grants | ana_water_grants | not_built | not_loaded | api_json | API payload from https://dadosabertos.ana.gov.br/ | Water use rights |
+| anac_aviation_concessions | anac_aviation_concessions | not_built | not_loaded | api_json | API payload from https://www.gov.br/anac/pt-br/acesso-a-informacao/dados-abertos | Aviation contracts |
+| anatel_telecom_licenses | anatel_telecom_licenses | not_built | not_loaded | api_json | API payload from https://www.gov.br/anatel/pt-br/dados/dados-abertos | Telecom operators |
 | aneel_concessions | aneel_concessions | not_built | not_loaded | api_json | API payload from https://dadosabertos.aneel.gov.br/ | Energy concessions |
-| anm_mining_rights | anm_mining_rights | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anm | Mining rights and permits |
-| anp_royalties | anp_royalties | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anp | Oil and gas royalties |
-| ans_health_plans | ans_health_plans | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/ans | Health insurance operators |
-| antaq_port_contracts | antaq_port_contracts | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/antaq | Port concessions |
-| antt_transport_concessions | antt_transport_concessions | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/antt | Transport concessions |
-| anvisa_registrations | anvisa_registrations | not_built | not_loaded | api_json | API payload from https://dados.gov.br/dados/conjuntos-dados/anvisa | Regulatory registrations |
+| anm_mining_rights | anm_mining_rights | not_built | not_loaded | api_json | API payload from https://www.gov.br/anm/pt-br/acesso-a-informacao/dados-abertos | Mining rights and permits |
+| anp_royalties | anp_royalties | not_built | not_loaded | api_json | API payload from https://www.gov.br/anp/pt-br/centrais-de-conteudo/dados-abertos | Oil and gas royalties |
+| ans_health_plans | ans_health_plans | not_built | not_loaded | api_json | API payload from https://www.gov.br/ans/pt-br/acesso-a-informacao/dados-abertos | Health insurance operators |
+| antaq_port_contracts | antaq_port_contracts | not_built | not_loaded | api_json | API payload from https://www.gov.br/antaq/pt-br/acesso-a-informacao/dados-abertos | Port concessions |
+| antt_transport_concessions | antt_transport_concessions | not_built | not_loaded | api_json | API payload from https://dados.antt.gov.br/ | Transport concessions |
+| anvisa_registrations | anvisa_registrations | not_built | not_loaded | api_json | API payload from https://www.gov.br/anvisa/pt-br/acessoainformacao/dadosabertos | Regulatory registrations |
 | bcb | bcb | implemented_loaded | loaded | file_batch | data/bcb/* | - |
 | bcb_liquidacao | bcb_liquidacao | not_built | not_loaded | file_batch | data/bcb_liquidacao/* | Regulatory actions |
 | bndes | bndes | implemented_loaded | loaded | file_batch | data/bndes/* | - |
@@ -31,7 +31,7 @@ Status buckets:
 | camara | camara | implemented_loaded | loaded | api_json | API payload from https://dadosabertos.camara.leg.br/ | - |
 | camara_deputados | camara_politicos_go | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2/ | GO-scoped federal deputies roster and CEAP expenses; substitui live-call Flask /politico |
 | camara_deputados_ceap | camara_politicos_go | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2/ | CEAP (Cota de Atividade Parlamentar) per GO federal deputy; ingested by camara_politicos_go pipeline |
-| camara_goiania | camara_goiania | blocked_external | not_loaded | api_json | API payload from https://www.goiania.go.leg.br/ | Endpoints Plone @@portalmodelo-json/@@transparency-json/@@pl-json devolvem apenas stubs de metadata (1 vereador legado, categorias de transparencia sem registros). Dados reais apenas via scraping HTML de /institucional/parlamentares/ + PDF parsing. Debito: todo-list-prompts/high_priority/debitos/camara-goiania-scraping.md |
+| camara_goiania | camara_goiania | blocked_external | not_loaded | api_json | API payload from https://www.goiania.go.leg.br/ | Plone @@portalmodelo-json/@@transparency-json/@@pl-json devolvem apenas stubs de metadata (1 vereador legado; categorias de transparencia sem registros); dados reais so via scraping HTML de /institucional/parlamentares/ (~28 vereadores ativos) + PDF parsing; ver todo-list-prompts/high_priority/debitos/camara-goiania-scraping.md |
 | camara_inquiries | camara_inquiries | implemented_partial | partial | api_json | API payload from https://dadosabertos.camara.leg.br/ | Sessions still low |
 | camara_votes_bills | camara_votes_bills | not_built | not_loaded | api_json | API payload from https://dadosabertos.camara.leg.br/api/v2 | Legislative behavior |
 | carf_tax_appeals | carf_tax_appeals | not_built | not_loaded | file_batch | data/carf_tax_appeals/* | Tax litigation |

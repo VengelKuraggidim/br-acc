@@ -56,6 +56,9 @@ CALL {
   MATCH (e:Expense) RETURN count(e) AS expense_count
 }
 CALL {
+  MATCH (le:LegislativeExpense) RETURN count(le) AS legislative_expense_count
+}
+CALL {
   MATCH (p:PEPRecord) RETURN count(p) AS pep_record_count
 }
 CALL {
@@ -143,6 +146,7 @@ RETURN total_nodes, total_relationships,
        education_count, convenio_count, laborstats_count,
        offshore_entity_count, offshore_officer_count,
        global_pep_count, cvm_proceeding_count, expense_count,
+       legislative_expense_count,
        pep_record_count, expulsion_count, leniency_count,
        international_sanction_count,
        gov_card_expense_count, gov_travel_count, bid_count,

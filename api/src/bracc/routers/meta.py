@@ -95,6 +95,11 @@ async def database_stats(
         "global_pep_count": record["global_pep_count"] if record else 0,
         "cvm_proceeding_count": record["cvm_proceeding_count"] if record else 0,
         "expense_count": record["expense_count"] if record else 0,
+        # LegislativeExpense e o label correto pra CEAP/verba_alego; o label
+        # Expense antigo fica em zero apos a migracao dos pipelines.
+        "legislative_expense_count": (
+            record.get("legislative_expense_count", 0) if record else 0
+        ),
         "pep_record_count": record["pep_record_count"] if record else 0,
         "expulsion_count": record["expulsion_count"] if record else 0,
         "leniency_count": record["leniency_count"] if record else 0,

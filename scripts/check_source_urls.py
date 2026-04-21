@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 try:
@@ -66,10 +67,32 @@ def parse_simple_yaml_lists(path: Path) -> dict[str, set[str]]:
     return parsed
 
 
-def classify(status: int | None, error: str | None) -> str:
+# Paths that some portals redirect to when the requested resource doesn't
+# exist, while still returning HTTP 200 (e.g. dados.gov.br/error). Without
+# this check, a broken URL looks healthy to the auditor.
+_ERROR_LANDING_PATHS = {
+    "/error",
+    "/erro",
+    "/404",
+    "/not-found",
+    "/pagina-nao-encontrada",
+}
+
+
+def _looks_like_error_landing(final_url: str) -> bool:
+    try:
+        path = urlparse(final_url).path.rstrip("/").lower()
+    except ValueError:
+        return False
+    return path in _ERROR_LANDING_PATHS
+
+
+def classify(status: int | None, error: str | None, final_url: str = "") -> str:
     if status is None:
         return "transient_error"
     if 200 <= status < 300:
+        if final_url and _looks_like_error_landing(final_url):
+            return "broken_404_410"
         return "ok"
     if 300 <= status < 400:
         return "redirected"
@@ -176,7 +199,7 @@ def main() -> int:
         source_id = (row.get("source_id") or "").strip()
         url = (row.get("primary_url") or "").strip()
         status, error, final_url = probe_url(url, timeout_sec=args.timeout_sec)
-        classification = classify(status, error)
+        classification = classify(status, error, final_url)
         rec = UrlResult(
             source_id=source_id,
             url=url,
