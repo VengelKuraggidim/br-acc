@@ -16,7 +16,7 @@ recebe valores já computados; a busca em si é 04.D.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from bracc.services.formatacao_service import fmt_brl, nomear_mes
 from bracc.services.traducao_service import (
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from bracc.models.perfil import (
         DoadorEmpresa,
         Emenda,
+        RedFlagsSummary,
         SocioConectado,
         TetoGastos,
     )
@@ -561,6 +562,45 @@ def _parse_data_abertura(raw: str | None) -> date | None:
 BENEFICIARIO_NOVO_ANOS = 2
 BENEFICIARIO_NOVO_VALOR_MIN = 500_000.0
 
+# Limiares do alerta "emenda travada".
+#
+# * ``EMENDA_TRAVADA_ANOS``: emenda empenhada há 3 anos ou mais sem
+#   execução significativa. 3 anos é o limite prático — dentro disso
+#   ainda é razoável atribuir a timing/burocracia; acima começa a
+#   sugerir problema estrutural (município incapaz, prestação de contas
+#   pendente, intenção original enganosa).
+# * ``EMENDA_TRAVADA_PAGO_MAX_PCT``: tolera até 10% de execução como
+#   "travada efetiva" — pagamento simbólico não apaga o problema.
+# * ``EMENDA_TRAVADA_VALOR_MIN``: R$ 100k filtra emendas pequenas onde
+#   atraso é normal.
+EMENDA_TRAVADA_ANOS = 3
+EMENDA_TRAVADA_PAGO_MAX_PCT = 0.10
+EMENDA_TRAVADA_VALOR_MIN = 100_000.0
+
+# Limiares do alerta "beneficiário recorrente".
+#
+# * ``BENEFICIARIO_RECORRENTE_MIN_EMENDAS``: 3 ou mais emendas pro mesmo
+#   CNPJ do mesmo parlamentar sai do padrão. 2 ainda pode ser coincidência
+#   (convênio dividido em fases); 3+ sugere relação cativa.
+# * ``BENEFICIARIO_RECORRENTE_VALOR_MIN``: R$ 300k agregados é o piso —
+#   abaixo disso o padrão é ruído de serviço pontual repetido.
+BENEFICIARIO_RECORRENTE_MIN_EMENDAS = 3
+BENEFICIARIO_RECORRENTE_VALOR_MIN = 300_000.0
+
+# Limiares do alerta "emenda fora da base eleitoral".
+#
+# Aproximação MVP: base eleitoral = UF do parlamentar. O ideal seria
+# cruzar com votação por município do TSE (DivulgaCand/boletim de urna),
+# mas o dado ainda não é consumido nos pipelines — a aproximação por UF
+# cobre o caso mais comum (deputado de GO propondo emenda pra BA).
+#
+# * ``FORA_BASE_VALOR_MIN``: R$ 500k agregados fora da UF é o piso.
+#   Abaixo vira ruído (ajustes pontuais são legítimos).
+# * ``FORA_BASE_PCT_MIN``: 20% do total — se menos que isso, ainda é
+#   a excecao à base; acima vira padrao deliberado.
+FORA_BASE_VALOR_MIN = 500_000.0
+FORA_BASE_PCT_MIN = 0.20
+
 
 def analisar_beneficiario_novo(
     emendas: list[Emenda],
@@ -642,6 +682,212 @@ def analisar_beneficiario_novo(
     return alertas
 
 
+def analisar_beneficiario_recorrente(
+    emendas: list[Emenda],
+) -> list[dict[str, str]]:
+    """Alerta: mesmo CNPJ beneficiado em 3+ emendas do mesmo parlamentar.
+
+    Relação cativa entre parlamentar e beneficiário. Por si só não prova
+    nada (pode ser uma entidade legítima muito ativa na área do
+    parlamentar), mas é sinal que merece conferência: mesma ONG
+    recebendo repetidamente de uma só fonte vale olhar estatuto,
+    diretoria, outros financiadores.
+
+    Severidade ``atencao``.
+    """
+    if not emendas:
+        return []
+
+    por_cnpj: dict[str, tuple[str, list[Emenda]]] = {}
+    for emenda in emendas:
+        cnpj = _cnpj_digitos(emenda.beneficiario_cnpj)
+        if cnpj is None:
+            continue
+        nome, lista = por_cnpj.get(
+            cnpj, (emenda.beneficiario_nome or "Empresa sem nome", []),
+        )
+        lista.append(emenda)
+        por_cnpj[cnpj] = (nome, lista)
+
+    alertas: list[dict[str, str]] = []
+    for nome, lista in por_cnpj.values():
+        if len(lista) < BENEFICIARIO_RECORRENTE_MIN_EMENDAS:
+            continue
+        total = sum(e.valor_pago or e.valor_empenhado or 0 for e in lista)
+        if total < BENEFICIARIO_RECORRENTE_VALOR_MIN:
+            continue
+        alertas.append({
+            "tipo": "atencao",
+            "icone": "empresa",
+            "texto": (
+                f"{nome} foi beneficiada em {len(lista)} emenda(s) do mesmo "
+                f"parlamentar, totalizando {fmt_brl(total)} — relacao "
+                "recorrente merece olhar no estatuto/diretoria e em "
+                "outros financiadores da entidade"
+            ),
+        })
+    return alertas
+
+
+def analisar_emendas_travadas(
+    emendas: list[Emenda],
+    referencia: date | None = None,
+) -> list[dict[str, str]]:
+    """Alerta: emenda empenhada há >= 3 anos sem execução significativa.
+
+    "Stuck money" — recurso reservado, sem entregar. Pode significar
+    município incapaz de executar, pendência em prestação de contas, ou
+    intenção original de "marcar" recurso sem real interesse na entrega.
+    Valor reservado sem retorno é um dos sintomas clássicos de má
+    qualidade do gasto público.
+
+    Severidade ``atencao``: sozinho o sinal é fraco (burocracia bate
+    tudo), mas junto com outros (CNPJ novinho, doador-beneficiário etc)
+    fortalece o caso.
+    """
+    if not emendas:
+        return []
+
+    hoje = referencia or date.today()
+    ano_corte = hoje.year - EMENDA_TRAVADA_ANOS
+    travadas: list[Emenda] = []
+    for emenda in emendas:
+        if emenda.ano is None or emenda.ano > ano_corte:
+            continue
+        empenhado = emenda.valor_empenhado or 0.0
+        if empenhado < EMENDA_TRAVADA_VALOR_MIN:
+            continue
+        pago = emenda.valor_pago or 0.0
+        if pago > empenhado * EMENDA_TRAVADA_PAGO_MAX_PCT:
+            continue
+        travadas.append(emenda)
+
+    if not travadas:
+        return []
+
+    total_travado = sum(e.valor_empenhado for e in travadas)
+    return [{
+        "tipo": "atencao",
+        "icone": "emenda",
+        "texto": (
+            f"{len(travadas)} emenda(s) empenhada(s) ha {EMENDA_TRAVADA_ANOS}+ "
+            f"anos sem execucao relevante — {fmt_brl(total_travado)} "
+            "reservados mas parados; vale conferir prestacao de contas do "
+            "tomador ou capacidade do municipio pra executar"
+        ),
+    }]
+
+
+def analisar_emendas_fora_base(
+    politico_uf: str | None,
+    emendas: list[Emenda],
+) -> list[dict[str, str]]:
+    """Alerta: parcela relevante das emendas vai pra outra UF.
+
+    Parlamentar tende a concentrar emenda na sua base eleitoral (mesma
+    UF). Quando uma fatia relevante vai pra outro estado, é sinal de
+    padrão deliberado — pode ser barganha política entre bancadas,
+    favor pessoal, ou ligação com beneficiário específico fora da base.
+    Sinal isolado é fraco; severidade ``atencao``.
+
+    Aproximação MVP: ``politico_uf`` como proxy da base. Ideal futuro é
+    cruzar com TSE (votação por município) pra capturar o caso em que
+    o parlamentar tem base real em dois estados (ex: fronteiriço).
+    """
+    if not emendas or not politico_uf:
+        return []
+
+    base = politico_uf.strip().upper()
+    if not base:
+        return []
+
+    total = 0.0
+    fora_por_uf: dict[str, float] = {}
+    for emenda in emendas:
+        valor = emenda.valor_pago or emenda.valor_empenhado or 0.0
+        if valor <= 0:
+            continue
+        total += valor
+        uf = (emenda.uf or "").strip().upper()
+        if not uf or uf == base:
+            continue
+        fora_por_uf[uf] = fora_por_uf.get(uf, 0.0) + valor
+
+    if total <= 0 or not fora_por_uf:
+        return []
+
+    total_fora = sum(fora_por_uf.values())
+    pct = total_fora / total
+    if total_fora < FORA_BASE_VALOR_MIN or pct < FORA_BASE_PCT_MIN:
+        return []
+
+    ufs_ordenadas = sorted(fora_por_uf.items(), key=lambda kv: -kv[1])
+    detalhe = ", ".join(f"{uf} ({fmt_brl(v)})" for uf, v in ufs_ordenadas[:3])
+    return [{
+        "tipo": "atencao",
+        "icone": "emenda",
+        "texto": (
+            f"{pct * 100:.0f}% das emendas ({fmt_brl(total_fora)}) foram "
+            f"pra fora de {base} — principais destinos: {detalhe}; "
+            "parlamentar costuma concentrar emenda na base, fuga desse "
+            "padrao merece olhar no objeto do convenio"
+        ),
+    }]
+
+
+def analisar_socio_beneficiario(
+    perfil: _PerfilComEmpresas,
+    emendas: list[Emenda],
+) -> list[dict[str, str]]:
+    """Alerta grave: empresa em que o parlamentar é sócio recebeu emenda dele.
+
+    Esse é o conflito de interesse mais direto possível — o parlamentar
+    propôs uma emenda e o beneficiário é uma empresa que ele mesmo
+    co-possui (via ``:SOCIO_DE`` no grafo). Mesmo que legalmente não
+    configure crime per se, é o tipo de padrão que investigação de
+    enriquecimento ilícito rastreia. Severidade ``grave``.
+    """
+    if not emendas:
+        return []
+
+    socios_raw = getattr(perfil, "socios", []) or []
+    socios_por_cnpj: dict[str, SocioConectado] = {}
+    for socio in socios_raw:
+        chave = _cnpj_digitos(getattr(socio, "cnpj", None))
+        if chave is not None:
+            socios_por_cnpj[chave] = socio
+    if not socios_por_cnpj:
+        return []
+
+    matches: dict[str, tuple[SocioConectado, float]] = {}
+    for emenda in emendas:
+        chave = _cnpj_digitos(emenda.beneficiario_cnpj)
+        if chave is None or chave not in socios_por_cnpj:
+            continue
+        valor = emenda.valor_pago or emenda.valor_empenhado or 0.0
+        _socio, acumulado = matches.get(chave, (socios_por_cnpj[chave], 0.0))
+        matches[chave] = (socios_por_cnpj[chave], acumulado + valor)
+
+    if not matches:
+        return []
+
+    alertas: list[dict[str, str]] = []
+    for socio, valor_emendas in matches.values():
+        nome = (socio.nome or "").strip() or "Empresa sem nome"
+        alertas.append({
+            "tipo": "grave",
+            "icone": "empresa",
+            "texto": (
+                f"Parlamentar e socio(a) em {nome} — empresa recebeu "
+                f"{fmt_brl(valor_emendas)} em emenda(s) proposta(s) pelo "
+                "proprio parlamentar (conflito de interesse direto via "
+                ":SOCIO_DE no grafo); padrao classico de enriquecimento "
+                "ilicito, exige verificacao imediata"
+            ),
+        })
+    return alertas
+
+
 def analisar_doador_beneficiario(
     perfil: _PerfilComEmpresas,
     emendas: list[Emenda],
@@ -705,6 +951,79 @@ def analisar_doador_beneficiario(
     return alertas
 
 
+# --- Score consolidado ------------------------------------------------------
+
+_RED_FLAG_PESOS: dict[str, int] = {
+    "grave": 10,
+    "atencao": 3,
+    "info": 1,
+    "ok": 0,
+}
+
+
+def calcular_red_flags_summary(
+    alertas: list[dict[str, str]],
+) -> RedFlagsSummary:
+    """Agrega alertas em um score numérico + classificação legível.
+
+    Pesos: grave=10, atencao=3, info=1, ok=0. Classificação:
+    >=10 crítico, 5-9 alto, 1-4 médio, 0 baixo. Alertas informativos
+    genéricos ("Avaliação indisponível") são ignorados pra não inflar
+    a pontuação quando o perfil simplesmente não tem dados.
+    """
+    # Import tardio pra evitar ciclo alertas_service ↔ models.perfil
+    # (models.perfil é referenciado só em TYPE_CHECKING no topo).
+    from bracc.models.perfil import RedFlagsSummary as _RedFlagsSummary
+
+    num_grave = 0
+    num_atencao = 0
+    num_info = 0
+    pontos = 0
+    for a in alertas:
+        texto = a.get("texto", "")
+        if "Avaliação indisponível" in texto or "Avaliacao indisponivel" in texto:
+            continue
+        tipo = a.get("tipo", "info")
+        pontos += _RED_FLAG_PESOS.get(tipo, 0)
+        if tipo == "grave":
+            num_grave += 1
+        elif tipo == "atencao":
+            num_atencao += 1
+        elif tipo == "info":
+            num_info += 1
+
+    classificacao: Literal["baixo", "medio", "alto", "critico"]
+    if pontos >= 10:
+        classificacao = "critico"
+    elif pontos >= 5:
+        classificacao = "alto"
+    elif pontos >= 1:
+        classificacao = "medio"
+    else:
+        classificacao = "baixo"
+
+    partes: list[str] = []
+    if num_grave:
+        partes.append(
+            f"{num_grave} alerta(s) grave(s)" if num_grave > 1 else "1 alerta grave",
+        )
+    if num_atencao:
+        partes.append(f"{num_atencao} de atencao")
+    if num_info:
+        partes.append(f"{num_info} informativo(s)")
+    resumo = ", ".join(partes) if partes else "nenhum alerta relevante"
+    texto = f"{pontos} pontos de risco ({resumo})"
+
+    return _RedFlagsSummary(
+        pontos=pontos,
+        classificacao=classificacao,
+        num_grave=num_grave,
+        num_atencao=num_atencao,
+        num_info=num_info,
+        texto=texto,
+    )
+
+
 # --- Orquestração -----------------------------------------------------------
 
 
@@ -715,6 +1034,7 @@ def gerar_alertas_completos(
     emendas_raw: list[dict[str, Any]],
     perfil: _PerfilComEmpresas | None = None,
     emendas_tipadas: list[Emenda] | None = None,
+    politico_uf: str | None = None,
 ) -> list[dict[str, str]]:
     """Orquestra análises de patrimônio + emendas + conexões.
 
@@ -741,8 +1061,12 @@ def gerar_alertas_completos(
         alertas.extend(analisar_cnpj_baixados(perfil))
         if emendas_tipadas:
             alertas.extend(analisar_doador_beneficiario(perfil, emendas_tipadas))
+            alertas.extend(analisar_socio_beneficiario(perfil, emendas_tipadas))
     if emendas_tipadas:
         alertas.extend(analisar_beneficiario_novo(emendas_tipadas))
+        alertas.extend(analisar_emendas_travadas(emendas_tipadas))
+        alertas.extend(analisar_beneficiario_recorrente(emendas_tipadas))
+        alertas.extend(analisar_emendas_fora_base(politico_uf, emendas_tipadas))
 
     if not alertas:
         alertas.append({

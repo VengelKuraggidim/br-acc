@@ -10,17 +10,26 @@ from datetime import date
 from bracc.models.perfil import DoadorEmpresa, Emenda, SocioConectado, TetoGastos
 from bracc.services.alertas_service import (
     BENEFICIARIO_NOVO_VALOR_MIN,
+    BENEFICIARIO_RECORRENTE_MIN_EMENDAS,
     COTA_CEAP_MENSAL,
+    EMENDA_TRAVADA_ANOS,
+    EMENDA_TRAVADA_VALOR_MIN,
+    FORA_BASE_VALOR_MIN,
     analisar_beneficiario_novo,
+    analisar_beneficiario_recorrente,
     analisar_cnpj_baixados,
     analisar_conexoes,
     analisar_despesas_gabinete,
     analisar_despesas_vs_media,
     analisar_doador_beneficiario,
     analisar_emendas,
+    analisar_emendas_fora_base,
+    analisar_emendas_travadas,
     analisar_patrimonio,
     analisar_picos_mensais,
+    analisar_socio_beneficiario,
     analisar_teto_gastos,
+    calcular_red_flags_summary,
     gerar_alertas_completos,
 )
 
@@ -337,13 +346,16 @@ def _emenda(
     valor_pago: float = 0.0,
     valor_empenhado: float = 0.0,
     beneficiario_data_abertura: str | None = None,
+    ano: int | None = None,
+    uf: str | None = "GO",
 ) -> Emenda:
     return Emenda(
         id=amendment_id,
         tipo="Individual",
         funcao="Saude",
         municipio="Goiania",
-        uf="GO",
+        uf=uf,
+        ano=ano,
         valor_empenhado=valor_empenhado,
         valor_empenhado_fmt=f"R$ {valor_empenhado:.2f}",
         valor_pago=valor_pago,
@@ -487,6 +499,195 @@ class TestAnalisarBeneficiarioNovo:
         ]
         alertas = analisar_beneficiario_novo(emendas, referencia=self.REF)
         assert len(alertas) == 1  # Agregado.
+
+
+class TestAnalisarEmendasTravadas:
+    REF = date(2026, 4, 21)
+
+    def test_sem_emendas_vazio(self) -> None:
+        assert analisar_emendas_travadas([], referencia=self.REF) == []
+
+    def test_emenda_recente_sem_alerta(self) -> None:
+        """Empenhada este ano: prazo normal, não dispara."""
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_empenhado=EMENDA_TRAVADA_VALOR_MIN + 100_000,
+            valor_pago=0,
+            ano=2026,
+        )]
+        assert analisar_emendas_travadas(emendas, referencia=self.REF) == []
+
+    def test_emenda_travada_dispara(self) -> None:
+        """Empenhada há > 3 anos, sem pagar, valor relevante = alerta."""
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_empenhado=500_000,
+            valor_pago=0,
+            ano=self.REF.year - EMENDA_TRAVADA_ANOS,
+        )]
+        alertas = analisar_emendas_travadas(emendas, referencia=self.REF)
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "atencao"
+
+    def test_emenda_valor_pequeno_nao_dispara(self) -> None:
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_empenhado=50_000, valor_pago=0, ano=2020,
+        )]
+        assert analisar_emendas_travadas(emendas, referencia=self.REF) == []
+
+    def test_emenda_paga_quase_totalmente_nao_dispara(self) -> None:
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_empenhado=500_000, valor_pago=450_000, ano=2020,
+        )]
+        assert analisar_emendas_travadas(emendas, referencia=self.REF) == []
+
+    def test_varias_travadas_um_alerta_agregado(self) -> None:
+        emendas = [
+            _emenda("E1", "11111111000101",
+                    valor_empenhado=500_000, valor_pago=0, ano=2020),
+            _emenda("E2", "22222222000102",
+                    valor_empenhado=300_000, valor_pago=10_000, ano=2019),
+        ]
+        alertas = analisar_emendas_travadas(emendas, referencia=self.REF)
+        assert len(alertas) == 1
+        assert "2 emenda" in alertas[0]["texto"]
+
+
+class TestAnalisarBeneficiarioRecorrente:
+    def test_sem_emendas_vazio(self) -> None:
+        assert analisar_beneficiario_recorrente([]) == []
+
+    def test_abaixo_min_emendas_nao_dispara(self) -> None:
+        """1-2 emendas pro mesmo CNPJ não é recorrência."""
+        emendas = [
+            _emenda("E1", "11111111000101", valor_pago=200_000),
+            _emenda("E2", "11111111000101", valor_pago=200_000),
+        ]
+        assert analisar_beneficiario_recorrente(emendas) == []
+
+    def test_min_emendas_dispara(self) -> None:
+        emendas = [
+            _emenda(f"E{i}", "11111111000101", valor_pago=200_000)
+            for i in range(BENEFICIARIO_RECORRENTE_MIN_EMENDAS)
+        ]
+        alertas = analisar_beneficiario_recorrente(emendas)
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "atencao"
+        assert "recorrente" in alertas[0]["texto"].lower()
+
+    def test_valor_total_pequeno_nao_dispara(self) -> None:
+        """Recorrência mas valores pequenos: ignora (ruído)."""
+        emendas = [
+            _emenda(f"E{i}", "11111111000101", valor_pago=10_000)
+            for i in range(BENEFICIARIO_RECORRENTE_MIN_EMENDAS)
+        ]
+        assert analisar_beneficiario_recorrente(emendas) == []
+
+    def test_cnpjs_diferentes_nao_agregam(self) -> None:
+        """Cada CNPJ é contado separadamente."""
+        emendas = [
+            _emenda("E1", "11111111000101", valor_pago=500_000),
+            _emenda("E2", "22222222000102", valor_pago=500_000),
+        ]
+        assert analisar_beneficiario_recorrente(emendas) == []
+
+
+class TestAnalisarSocioBeneficiario:
+    def test_sem_socios_vazio(self) -> None:
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        assert analisar_socio_beneficiario(_PerfilDuck(), emendas) == []
+
+    def test_sem_emendas_vazio(self) -> None:
+        perfil = _PerfilDuck(socios=[_socio("11111111000101", "ATIVA")])
+        assert analisar_socio_beneficiario(perfil, []) == []
+
+    def test_match_dispara_grave(self) -> None:
+        perfil = _PerfilDuck(socios=[_socio("11111111000101", "ATIVA")])
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        alertas = analisar_socio_beneficiario(perfil, emendas)
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "grave"
+        assert "socio" in alertas[0]["texto"].lower()
+
+    def test_cnpj_diferente_nao_cruza(self) -> None:
+        perfil = _PerfilDuck(socios=[_socio("11111111000101", "ATIVA")])
+        emendas = [_emenda("E1", "99999999000199", valor_pago=500_000)]
+        assert analisar_socio_beneficiario(perfil, emendas) == []
+
+
+class TestAnalisarEmendasForaBase:
+    def test_sem_uf_politico_vazio(self) -> None:
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        assert analisar_emendas_fora_base(None, emendas) == []
+
+    def test_todas_dentro_base_vazio(self) -> None:
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000, uf="GO")]
+        assert analisar_emendas_fora_base("GO", emendas) == []
+
+    def test_fora_base_dispara(self) -> None:
+        """Parcela relevante das emendas indo pra outra UF."""
+        emendas = [
+            _emenda("E1", "11111111000101", valor_pago=2_000_000, uf="GO"),
+            _emenda("E2", "22222222000102",
+                    valor_pago=FORA_BASE_VALOR_MIN + 100_000, uf="BA"),
+        ]
+        alertas = analisar_emendas_fora_base("GO", emendas)
+        assert len(alertas) == 1
+        assert alertas[0]["tipo"] == "atencao"
+        assert "BA" in alertas[0]["texto"]
+
+    def test_valor_fora_pequeno_nao_dispara(self) -> None:
+        """Abaixo de FORA_BASE_VALOR_MIN: ignora (excecao legitima)."""
+        emendas = [
+            _emenda("E1", "11111111000101", valor_pago=2_000_000, uf="GO"),
+            _emenda("E2", "22222222000102", valor_pago=50_000, uf="BA"),
+        ]
+        assert analisar_emendas_fora_base("GO", emendas) == []
+
+    def test_uf_case_insensitive(self) -> None:
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000, uf="go")]
+        # Base em maiusculo, emenda em minusculo — nao deve contar como fora.
+        assert analisar_emendas_fora_base("GO", emendas) == []
+
+
+class TestCalcularRedFlagsSummary:
+    def test_sem_alertas_baixo(self) -> None:
+        summary = calcular_red_flags_summary([])
+        assert summary.pontos == 0
+        assert summary.classificacao == "baixo"
+        assert summary.num_grave == 0
+
+    def test_ignora_aviso_avaliacao_indisponivel(self) -> None:
+        """Alerta padrão de 'dados insuficientes' não infla score."""
+        alertas = [{"tipo": "info", "texto": "Avaliação indisponível no momento"}]
+        summary = calcular_red_flags_summary(alertas)
+        assert summary.pontos == 0
+        assert summary.classificacao == "baixo"
+
+    def test_um_grave_critico(self) -> None:
+        alertas = [{"tipo": "grave", "texto": "X"}]
+        summary = calcular_red_flags_summary(alertas)
+        assert summary.pontos == 10
+        assert summary.classificacao == "critico"
+        assert summary.num_grave == 1
+
+    def test_dois_atencao_medio(self) -> None:
+        alertas = [
+            {"tipo": "atencao", "texto": "X"},
+            {"tipo": "atencao", "texto": "Y"},
+        ]
+        summary = calcular_red_flags_summary(alertas)
+        assert summary.pontos == 6
+        assert summary.classificacao == "alto"
+        assert summary.num_atencao == 2
+
+    def test_um_atencao_medio(self) -> None:
+        alertas = [{"tipo": "atencao", "texto": "X"}]
+        summary = calcular_red_flags_summary(alertas)
+        assert summary.pontos == 3
+        assert summary.classificacao == "medio"
 
 
 class TestGerarAlertasCompletosComPerfil:

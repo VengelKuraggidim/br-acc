@@ -59,6 +59,7 @@ from bracc.services.alertas_service import (
     analisar_despesas_vs_media,
     analisar_picos_mensais,
     analisar_teto_gastos,
+    calcular_red_flags_summary,
     gerar_alertas_completos,
 )
 from bracc.services.analise_service import (
@@ -705,6 +706,8 @@ async def obter_perfil(
         emendas_tipadas=emendas,  # Typed list: permite cross-check
                             # doador↔beneficiário sem perder beneficiario_cnpj
                             # (que _emendas_to_raw_dicts dropa).
+        politico_uf=politico.uf,  # UF da base pro flag de emendas fora
+                            # do estado.
     )
 
     # Alerta sobre teto de gastos (grave se ultrapassou, info/atenção
@@ -761,6 +764,10 @@ async def obter_perfil(
         is_vereador_goiania=is_vereador_goiania,
     )
 
+    # Score consolidado de red flags (pedagógico pro PWA — agrega os
+    # alertas em um único indicador baixo/medio/alto/critico).
+    red_flags_summary = calcular_red_flags_summary(alertas)
+
     # --- 8. Monta o PerfilPolitico final -------------------------------------
     return PerfilPolitico(
         provenance=provenance,
@@ -790,4 +797,5 @@ async def obter_perfil(
         validacao_tse=validacao_tse,
         contas_campanha=contas_campanha,
         teto_gastos=teto_gastos,
+        red_flags_summary=red_flags_summary,
     )

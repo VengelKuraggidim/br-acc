@@ -48,6 +48,11 @@ def _record_to_emenda(record: Record) -> Emenda:
     uf_raw = record["uf"]
     valor_empenhado = float(record["valor_empenhado"] or 0)
     valor_pago = float(record["valor_pago"] or 0)
+    ano_raw = record.get("ano")
+    try:
+        ano: int | None = int(ano_raw) if ano_raw is not None else None
+    except (TypeError, ValueError):
+        ano = None
     beneficiario_cnpj_raw = record.get("beneficiario_cnpj")
     beneficiario_nome_raw = record.get("beneficiario_nome")
     beneficiario_data_abertura_raw = record.get("beneficiario_data_abertura")
@@ -70,6 +75,7 @@ def _record_to_emenda(record: Record) -> Emenda:
             if uf_raw is not None
             else None
         ),
+        ano=ano,
         valor_empenhado=valor_empenhado,
         valor_empenhado_fmt=fmt_brl(valor_empenhado),
         valor_pago=valor_pago,

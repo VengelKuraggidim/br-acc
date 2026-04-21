@@ -794,6 +794,64 @@
       border: 1px solid rgba(255, 59, 92, 0.4);
     }
 
+    .red-flags-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      border: 1px solid;
+    }
+    .red-flags-banner.baixo {
+      background: var(--ok-bg);
+      border-color: rgba(0, 229, 160, 0.25);
+    }
+    .red-flags-banner.medio {
+      background: var(--warning-bg);
+      border-color: rgba(255, 182, 39, 0.25);
+    }
+    .red-flags-banner.alto {
+      background: var(--warning-bg);
+      border-color: rgba(255, 182, 39, 0.45);
+    }
+    .red-flags-banner.critico {
+      background: var(--danger-bg);
+      border-color: rgba(255, 59, 92, 0.45);
+    }
+    .red-flags-score {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+      min-width: 54px;
+      text-align: center;
+    }
+    .red-flags-banner.baixo .red-flags-score { color: var(--ok); }
+    .red-flags-banner.medio .red-flags-score { color: var(--warning); }
+    .red-flags-banner.alto .red-flags-score { color: var(--warning); }
+    .red-flags-banner.critico .red-flags-score { color: var(--danger); }
+    .red-flags-info {
+      flex: 1;
+    }
+    .red-flags-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .red-flags-class {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+      text-transform: capitalize;
+    }
+    .red-flags-detail {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
     /* === CONEXAO CARD === */
     .conexao-card {
       display: flex;
@@ -2295,6 +2353,26 @@ function renderPerfil(d) {
     <div class="card fade-in" style="border-left: 3px solid var(--accent); margin-bottom:16px;">
       <p style="font-size:13px; line-height:1.7; color:var(--text-secondary);">${d.resumo}</p>
     </div>` : ''}`;
+
+  // Score consolidado de red flags: pedagógico, agrega alertas num único
+  // indicador. ``d.red_flags_summary`` vem do backend (calcular_red_flags_summary).
+  if (d.red_flags_summary) {
+    const rf = d.red_flags_summary;
+    const classeTxt = {
+      baixo: 'Baixo risco',
+      medio: 'Risco moderado',
+      alto: 'Risco alto',
+      critico: 'Risco crítico',
+    }[rf.classificacao] || rf.classificacao;
+    html += `<div class="red-flags-banner ${rf.classificacao} fade-in">
+      <div class="red-flags-score">${rf.pontos}</div>
+      <div class="red-flags-info">
+        <div class="red-flags-label">Score de red flags</div>
+        <div class="red-flags-class">${classeTxt}</div>
+        <div class="red-flags-detail">${rf.texto}</div>
+      </div>
+    </div>`;
+  }
 
   // Alertas (agrupados por severidade: graves -> atencao -> info)
   if (d.alertas.length) {

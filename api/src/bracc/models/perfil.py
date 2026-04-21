@@ -63,6 +63,7 @@ class Emenda(BaseModel):
     funcao: str
     municipio: str | None = None
     uf: str | None = None
+    ano: int | None = None
     valor_empenhado: float
     valor_empenhado_fmt: str
     valor_pago: float
@@ -375,6 +376,38 @@ class TetoGastos(BaseModel):
     fonte_legal: str  # ex.: "Resolução TSE nº 23.607/2019"
 
 
+class RedFlagsSummary(BaseModel):
+    """Agregado dos alertas em um score de risco legível.
+
+    Pedagógico: serve pro PWA mostrar uma "nota" geral (vermelho/amarelo/
+    verde) em vez do leitor precisar contar alertas mentalmente.
+
+    ``pontos`` é a soma ponderada (grave=10, atencao=3, info=1). Sem
+    normalização — a escala é deliberadamente não-linear pra refletir
+    que 1 grave pesa mais que 3 atencao.
+
+    ``classificacao`` deriva de ``pontos``:
+
+    * ``critico``  — >= 10 pontos (tipicamente 1+ grave OU 3+ atencao)
+    * ``alto``     — 5-9 pontos
+    * ``medio``    — 1-4 pontos
+    * ``baixo``    — 0 pontos
+
+    Aparecer em ``critico`` não prova irregularidade — é um atalho de
+    leitura sobre quanto "ruído" o parlamentar acumula. A interpretação
+    exige olhar cada alerta individualmente.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    pontos: int
+    classificacao: Literal["baixo", "medio", "alto", "critico"]
+    num_grave: int
+    num_atencao: int
+    num_info: int
+    texto: str
+
+
 class PerfilPolitico(BaseModel):
     """Response principal do endpoint /politico/{entity_id} (22 campos top-level).
 
@@ -412,3 +445,4 @@ class PerfilPolitico(BaseModel):
     validacao_tse: ValidacaoTSE | None = None
     contas_campanha: ComparacaoContas | None = None
     teto_gastos: TetoGastos | None = None
+    red_flags_summary: RedFlagsSummary | None = None
