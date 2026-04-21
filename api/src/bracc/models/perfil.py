@@ -46,6 +46,14 @@ class Emenda(BaseModel):
     ``provenance`` carrega origem rastreável dos props do nó :Amendment no
     grafo (Siop / Transparência / Câmara). ``None`` quando o nó é legado e
     ainda não foi re-ingerido sob o contrato de proveniência.
+
+    ``beneficiario_cnpj`` e ``beneficiario_nome`` surfaceiam a empresa
+    favorecida via ``(:Amendment)-[:BENEFICIOU]->(:Company)`` (populada
+    pelo pipeline ``transferegov``). Ausentes quando a emenda ainda não
+    tem beneficiário carimbado no grafo — comum em emendas recentes onde
+    o convênio não saiu. ``beneficiario_cnpj`` é armazenado no formato
+    do grafo (só dígitos); comparadores devem normalizar antes de
+    cruzar com outras bases.
     """
 
     model_config = _PERFIL_MODEL_CONFIG
@@ -59,6 +67,8 @@ class Emenda(BaseModel):
     valor_empenhado_fmt: str
     valor_pago: float
     valor_pago_fmt: str
+    beneficiario_cnpj: str | None = None
+    beneficiario_nome: str | None = None
     provenance: ProvenanceBlock | None = None
 
 

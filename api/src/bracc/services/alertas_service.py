@@ -27,6 +27,7 @@ from bracc.services.traducao_service import (
 if TYPE_CHECKING:
     from bracc.models.perfil import (
         DoadorEmpresa,
+        Emenda,
         SocioConectado,
         TetoGastos,
     )
@@ -184,12 +185,12 @@ def analisar_emendas(emendas: list[dict[str, Any]]) -> list[dict[str, str]]:
                     f"{fmt_brl(munic_nao_pago[top_mun])})"
                 )
         alertas.append({
-            "tipo": "grave",
+            "tipo": "atencao",
             "icone": "emenda",
             "texto": (
-                f"{len(nao_pagas)} emenda(s) empenhada(s) mas nao paga(s): "
-                f"{fmt_brl(total_nao_pago)} prometidos que nao chegaram ao "
-                f"destino{local_txt}"
+                f"{len(nao_pagas)} emenda(s) empenhada(s) que demoram muito "
+                f"para serem concluidas: {fmt_brl(total_nao_pago)} "
+                f"reservados mas ainda nao pagos{local_txt}"
             ),
         })
 
@@ -513,6 +514,84 @@ def analisar_cnpj_baixados(
     }]
 
 
+def _cnpj_digitos(cnpj: str | None) -> str | None:
+    """Normaliza CNPJ removendo tudo que não é dígito.
+
+    Usado no cross-check doador↔beneficiário pra casar CNPJs que podem
+    ter vindo formatados ("11.111.111/0001-11") ou crus ("11111111000111")
+    de pipelines diferentes. Retorna ``None`` pra entrada vazia/``None``
+    ou que não contém nenhum dígito — evita match espúrio de strings
+    vazias entre doadores e beneficiários sem CNPJ.
+    """
+    if not cnpj:
+        return None
+    digitos = "".join(ch for ch in cnpj if ch.isdigit())
+    return digitos or None
+
+
+def analisar_doador_beneficiario(
+    perfil: _PerfilComEmpresas,
+    emendas: list[Emenda],
+) -> list[dict[str, str]]:
+    """Alerta grave: empresa que doou pra campanha virou beneficiária de emenda.
+
+    Este é o red flag clássico de troca de favor eleitoral. A empresa
+    financiou a campanha do parlamentar (doador registrado no TSE) e o
+    mesmo parlamentar propôs emenda que acabou beneficiando-a
+    (relação ``(:Amendment)-[:BENEFICIOU]->(:Company)`` no grafo).
+
+    Comparação é feita por CNPJ normalizado (só dígitos) pra robustez
+    entre pipelines TSE (doações) e Transferegov (beneficiários de
+    emenda) que podem carimbar o documento em formatos diferentes.
+
+    Aparecer aqui não é prova de crime — a lei permite doação e emenda.
+    Mas a correlação é um sinal forte o bastante pra valer uma olhada
+    no objeto do convênio, no processo licitatório e na execução da
+    obra/serviço. Por isso severidade ``grave``.
+    """
+    if not emendas:
+        return []
+
+    doadores_raw = getattr(perfil, "doadores_empresa", []) or []
+    doadores_por_cnpj: dict[str, DoadorEmpresa] = {}
+    for doador in doadores_raw:
+        chave = _cnpj_digitos(getattr(doador, "cnpj", None))
+        if chave is not None:
+            doadores_por_cnpj[chave] = doador
+    if not doadores_por_cnpj:
+        return []
+
+    matches: dict[str, tuple[DoadorEmpresa, float]] = {}
+    for emenda in emendas:
+        chave = _cnpj_digitos(emenda.beneficiario_cnpj)
+        if chave is None or chave not in doadores_por_cnpj:
+            continue
+        valor = emenda.valor_pago or emenda.valor_empenhado or 0.0
+        _doador, acumulado = matches.get(
+            chave, (doadores_por_cnpj[chave], 0.0),
+        )
+        matches[chave] = (doadores_por_cnpj[chave], acumulado + valor)
+
+    if not matches:
+        return []
+
+    alertas: list[dict[str, str]] = []
+    for _chave, (doador, valor_emendas) in matches.items():
+        nome = (doador.nome or "").strip() or "Empresa sem nome"
+        alertas.append({
+            "tipo": "grave",
+            "icone": "empresa",
+            "texto": (
+                f"{nome} doou {doador.valor_total_fmt} para a campanha e "
+                f"recebeu {fmt_brl(valor_emendas)} em emenda(s) proposta(s) "
+                "pelo parlamentar — cruzamento TSE (doacoes) x Transferegov "
+                "(beneficiarios) sugere possivel troca de favor; vale "
+                "investigar objeto do convenio e processo licitatorio"
+            ),
+        })
+    return alertas
+
+
 # --- Orquestração -----------------------------------------------------------
 
 
@@ -522,6 +601,7 @@ def gerar_alertas_completos(
     entidades_conectadas: dict[str, dict[str, Any]],
     emendas_raw: list[dict[str, Any]],
     perfil: _PerfilComEmpresas | None = None,
+    emendas_tipadas: list[Emenda] | None = None,
 ) -> list[dict[str, str]]:
     """Orquestra análises de patrimônio + emendas + conexões.
 
@@ -546,6 +626,8 @@ def gerar_alertas_completos(
     # opt-in pra não quebrar chamadas antigas que passam só ``entidade``.
     if perfil is not None:
         alertas.extend(analisar_cnpj_baixados(perfil))
+        if emendas_tipadas:
+            alertas.extend(analisar_doador_beneficiario(perfil, emendas_tipadas))
 
     if not alertas:
         alertas.append({

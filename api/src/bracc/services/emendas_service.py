@@ -48,6 +48,8 @@ def _record_to_emenda(record: Record) -> Emenda:
     uf_raw = record["uf"]
     valor_empenhado = float(record["valor_empenhado"] or 0)
     valor_pago = float(record["valor_pago"] or 0)
+    beneficiario_cnpj_raw = record.get("beneficiario_cnpj")
+    beneficiario_nome_raw = record.get("beneficiario_nome")
 
     return Emenda(
         id=amendment_id,
@@ -71,6 +73,16 @@ def _record_to_emenda(record: Record) -> Emenda:
         valor_empenhado_fmt=fmt_brl(valor_empenhado),
         valor_pago=valor_pago,
         valor_pago_fmt=fmt_brl(valor_pago),
+        beneficiario_cnpj=(
+            str(beneficiario_cnpj_raw).strip() or None
+            if beneficiario_cnpj_raw is not None
+            else None
+        ),
+        beneficiario_nome=(
+            str(beneficiario_nome_raw).strip() or None
+            if beneficiario_nome_raw is not None
+            else None
+        ),
     )
 
 

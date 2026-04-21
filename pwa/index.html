@@ -501,20 +501,6 @@
       padding-top: 5px;
     }
 
-    .alerta-grupo-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin: 12px 0 6px;
-      padding-left: 2px;
-    }
-    .alerta-grupo-label:first-child { margin-top: 0; }
-    .alerta-grupo-grave   { color: var(--danger); }
-    .alerta-grupo-atencao { color: var(--warning); }
-    .alerta-grupo-info    { color: var(--text-muted); }
-    .alerta-grupo-ok      { color: var(--ok, #00e5a0); }
-
     /* === COMPARACAO CIDADA === */
     .cidadao-card {
       background: var(--bg-card);
@@ -2275,7 +2261,6 @@ function renderPerfil(d) {
         <span class="badge badge-${badgeCls}">${d.alertas.length}</span>
       </div>`;
     grupos.forEach(g => {
-      html += `<div class="alerta-grupo-label alerta-grupo-${g.tipo}">${g.label} (${g.alertas.length})</div>`;
       g.alertas.forEach(a => {
         const icon = alertaIcons[a.icone] || "&#9432;";
         html += `<div class="alerta-card ${a.tipo}">

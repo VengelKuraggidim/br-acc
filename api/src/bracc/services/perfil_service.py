@@ -696,6 +696,9 @@ async def obter_perfil(
         perfil=resultado,  # Duck-typed: ConexoesClassificadas tem
                             # .doadores_empresa + .socios com campo
                             # ``situacao`` já propagado pelo grafo.
+        emendas_tipadas=emendas,  # Typed list: permite cross-check
+                            # doador↔beneficiário sem perder beneficiario_cnpj
+                            # (que _emendas_to_raw_dicts dropa).
     )
 
     # Alerta sobre teto de gastos (grave se ultrapassou, info/atenção

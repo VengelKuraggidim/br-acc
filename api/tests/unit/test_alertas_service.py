@@ -5,13 +5,14 @@ Testa cada regra de alerta individualmente + orquestração.
 
 from __future__ import annotations
 
-from bracc.models.perfil import DoadorEmpresa, SocioConectado, TetoGastos
+from bracc.models.perfil import DoadorEmpresa, Emenda, SocioConectado, TetoGastos
 from bracc.services.alertas_service import (
     COTA_CEAP_MENSAL,
     analisar_cnpj_baixados,
     analisar_conexoes,
     analisar_despesas_gabinete,
     analisar_despesas_vs_media,
+    analisar_doador_beneficiario,
     analisar_emendas,
     analisar_patrimonio,
     analisar_picos_mensais,
@@ -77,7 +78,10 @@ class TestAnalisarEmendas:
             {"municipality": "Goiania", "value_committed": 500_000, "value_paid": 0},
         ]
         alertas = analisar_emendas(emendas)
-        assert any("nao paga" in a["texto"] for a in alertas)
+        assert any(
+            a["tipo"] == "atencao" and "demoram" in a["texto"]
+            for a in alertas
+        )
 
     def test_pagas_parcialmente(self) -> None:
         emendas = [
@@ -323,6 +327,97 @@ class TestAnalisarCnpjBaixados:
         assert analisar_cnpj_baixados(perfil) == []
 
 
+def _emenda(
+    amendment_id: str,
+    beneficiario_cnpj: str | None,
+    valor_pago: float = 0.0,
+    valor_empenhado: float = 0.0,
+) -> Emenda:
+    return Emenda(
+        id=amendment_id,
+        tipo="Individual",
+        funcao="Saude",
+        municipio="Goiania",
+        uf="GO",
+        valor_empenhado=valor_empenhado,
+        valor_empenhado_fmt=f"R$ {valor_empenhado:.2f}",
+        valor_pago=valor_pago,
+        valor_pago_fmt=f"R$ {valor_pago:.2f}",
+        beneficiario_cnpj=beneficiario_cnpj,
+        beneficiario_nome="Empresa Teste LTDA" if beneficiario_cnpj else None,
+    )
+
+
+class TestAnalisarDoadorBeneficiario:
+    def test_sem_emendas_vazio(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA")],
+        )
+        assert analisar_doador_beneficiario(perfil, []) == []
+
+    def test_sem_doadores_vazio(self) -> None:
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        assert analisar_doador_beneficiario(_PerfilDuck(), emendas) == []
+
+    def test_doador_sem_cruzamento_vazio(self) -> None:
+        """Doador e beneficiario com CNPJs diferentes nao disparam."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA")],
+        )
+        emendas = [_emenda("E1", "99999999000199", valor_pago=500_000)]
+        assert analisar_doador_beneficiario(perfil, emendas) == []
+
+    def test_doador_sem_cnpj_nao_cruza(self) -> None:
+        """Doador com CNPJ None nao gera match espurio com beneficiario None."""
+        doador = _doador("00000000000000", "ATIVA")
+        doador.cnpj = None
+        perfil = _PerfilDuck(doadores_empresa=[doador])
+        emendas = [_emenda("E1", None, valor_pago=500_000)]
+        assert analisar_doador_beneficiario(perfil, emendas) == []
+
+    def test_match_simples_dispara_grave(self) -> None:
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA", valor=50_000)],
+        )
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        alertas = analisar_doador_beneficiario(perfil, emendas)
+        assert len(alertas) == 1
+        alerta = alertas[0]
+        assert alerta["tipo"] == "grave"
+        assert "doou" in alerta["texto"].lower()
+        assert "emenda" in alerta["texto"].lower()
+
+    def test_cnpj_formatado_casa_com_cru(self) -> None:
+        """CNPJ com mascara no doador x cru no beneficiario tem que bater."""
+        doador = _doador("11111111000101", "ATIVA")
+        doador.cnpj = "11.111.111/0001-01"
+        perfil = _PerfilDuck(doadores_empresa=[doador])
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        alertas = analisar_doador_beneficiario(perfil, emendas)
+        assert len(alertas) == 1
+
+    def test_multiplas_emendas_mesmo_doador_agregam(self) -> None:
+        """Varias emendas p/ mesmo CNPJ somam num unico alerta com total."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA")],
+        )
+        emendas = [
+            _emenda("E1", "11111111000101", valor_pago=300_000),
+            _emenda("E2", "11111111000101", valor_pago=200_000),
+        ]
+        alertas = analisar_doador_beneficiario(perfil, emendas)
+        assert len(alertas) == 1  # Um alerta agregado, nao dois.
+
+    def test_fallback_valor_empenhado_quando_sem_pago(self) -> None:
+        """Sem valor_pago, usa valor_empenhado pra somar."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA")],
+        )
+        emendas = [_emenda("E1", "11111111000101", valor_empenhado=800_000)]
+        alertas = analisar_doador_beneficiario(perfil, emendas)
+        assert len(alertas) == 1
+
+
 class TestGerarAlertasCompletosComPerfil:
     def test_perfil_none_nao_quebra_compat(self) -> None:
         """Sem perfil: funcao antiga continua funcionando igual."""
@@ -338,6 +433,21 @@ class TestGerarAlertasCompletosComPerfil:
         )
         assert any(
             a["tipo"] == "grave" and "baixada" in a["texto"].lower()
+            for a in alertas
+        )
+
+    def test_perfil_com_doador_beneficiario_injeta_alerta_grave(self) -> None:
+        """Cross-check TSE-doador x Transferegov-beneficiario entra no output."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA")],
+        )
+        emendas = [_emenda("E1", "11111111000101", valor_pago=500_000)]
+        alertas = gerar_alertas_completos(
+            {"properties": {}}, [], {}, [],
+            perfil=perfil, emendas_tipadas=emendas,
+        )
+        assert any(
+            a["tipo"] == "grave" and "doou" in a["texto"].lower()
             for a in alertas
         )
 
