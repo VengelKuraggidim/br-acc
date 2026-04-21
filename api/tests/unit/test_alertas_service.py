@@ -5,9 +5,13 @@ Testa cada regra de alerta individualmente + orquestração.
 
 from __future__ import annotations
 
+from datetime import date
+
 from bracc.models.perfil import DoadorEmpresa, Emenda, SocioConectado, TetoGastos
 from bracc.services.alertas_service import (
+    BENEFICIARIO_NOVO_VALOR_MIN,
     COTA_CEAP_MENSAL,
+    analisar_beneficiario_novo,
     analisar_cnpj_baixados,
     analisar_conexoes,
     analisar_despesas_gabinete,
@@ -332,6 +336,7 @@ def _emenda(
     beneficiario_cnpj: str | None,
     valor_pago: float = 0.0,
     valor_empenhado: float = 0.0,
+    beneficiario_data_abertura: str | None = None,
 ) -> Emenda:
     return Emenda(
         id=amendment_id,
@@ -345,6 +350,7 @@ def _emenda(
         valor_pago_fmt=f"R$ {valor_pago:.2f}",
         beneficiario_cnpj=beneficiario_cnpj,
         beneficiario_nome="Empresa Teste LTDA" if beneficiario_cnpj else None,
+        beneficiario_data_abertura=beneficiario_data_abertura,
     )
 
 
@@ -416,6 +422,71 @@ class TestAnalisarDoadorBeneficiario:
         emendas = [_emenda("E1", "11111111000101", valor_empenhado=800_000)]
         alertas = analisar_doador_beneficiario(perfil, emendas)
         assert len(alertas) == 1
+
+
+class TestAnalisarBeneficiarioNovo:
+    REF = date(2026, 4, 20)
+
+    def test_sem_emendas_vazio(self) -> None:
+        assert analisar_beneficiario_novo([], referencia=self.REF) == []
+
+    def test_cnpj_velho_sem_alerta(self) -> None:
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_pago=BENEFICIARIO_NOVO_VALOR_MIN + 100_000,
+            beneficiario_data_abertura="2010-01-15",
+        )]
+        assert analisar_beneficiario_novo(emendas, referencia=self.REF) == []
+
+    def test_cnpj_sem_data_nao_alerta(self) -> None:
+        """Data ausente (pipeline nao rodou) nao dispara ruido."""
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_pago=BENEFICIARIO_NOVO_VALOR_MIN + 100_000,
+            beneficiario_data_abertura=None,
+        )]
+        assert analisar_beneficiario_novo(emendas, referencia=self.REF) == []
+
+    def test_cnpj_novo_valor_alto_dispara(self) -> None:
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_pago=BENEFICIARIO_NOVO_VALOR_MIN + 500_000,
+            beneficiario_data_abertura="2025-06-15",  # <1 ano
+        )]
+        alertas = analisar_beneficiario_novo(emendas, referencia=self.REF)
+        assert len(alertas) == 1
+        alerta = alertas[0]
+        assert alerta["tipo"] == "atencao"
+        assert "cnpj" in alerta["texto"].lower()
+        assert "aberto" in alerta["texto"].lower()
+
+    def test_cnpj_novo_mas_valor_pequeno_nao_alerta(self) -> None:
+        """Abaixo do valor minimo: nao alerta (ruido de servico pontual)."""
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_pago=50_000.0,
+            beneficiario_data_abertura="2025-06-15",
+        )]
+        assert analisar_beneficiario_novo(emendas, referencia=self.REF) == []
+
+    def test_data_mal_formada_silenciosa(self) -> None:
+        """Data invalida nao crasha, so vira None-like e pula."""
+        emendas = [_emenda(
+            "E1", "11111111000101",
+            valor_pago=BENEFICIARIO_NOVO_VALOR_MIN + 100_000,
+            beneficiario_data_abertura="invalid-date",
+        )]
+        assert analisar_beneficiario_novo(emendas, referencia=self.REF) == []
+
+    def test_multiplas_emendas_mesmo_cnpj_agregam(self) -> None:
+        emendas = [
+            _emenda("E1", "11111111000101", valor_pago=300_000,
+                    beneficiario_data_abertura="2025-06-15"),
+            _emenda("E2", "11111111000101", valor_pago=400_000,
+                    beneficiario_data_abertura="2025-06-15"),
+        ]
+        alertas = analisar_beneficiario_novo(emendas, referencia=self.REF)
+        assert len(alertas) == 1  # Agregado.
 
 
 class TestGerarAlertasCompletosComPerfil:

@@ -15,6 +15,7 @@ recebe valores já computados; a busca em si é 04.D.
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from bracc.services.formatacao_service import fmt_brl, nomear_mes
@@ -529,6 +530,118 @@ def _cnpj_digitos(cnpj: str | None) -> str | None:
     return digitos or None
 
 
+def _parse_data_abertura(raw: str | None) -> date | None:
+    """Parse ISO ``YYYY-MM-DD`` (formato BrasilAPI) pro tipo ``date``.
+
+    Retorna ``None`` em qualquer input inválido — sinal de CNPJ legado
+    sem o pipeline ``brasilapi_cnpj_status`` ter rodado, não erro.
+    """
+    if not raw:
+        return None
+    s = raw.strip()
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+# Limiares do alerta "CNPJ novinho recebendo emenda".
+#
+# * ``BENEFICIARIO_NOVO_ANOS``: janela de "juventude" do CNPJ. 2 anos é o
+#   corte canônico em investigações de ONGs e empresas de fachada —
+#   abaixo disso a empresa raramente consegue ter CNAE operacional,
+#   acervo técnico e estrutura pra entregar obra/serviço de vulto. Acima
+#   disso a presunção de capacidade sobe e o sinal vira ruído.
+# * ``BENEFICIARIO_NOVO_VALOR_MIN``: R$ 500k filtra ruído. Emenda de
+#   R$ 10k pra CNPJ novinho é muito comum (prestação de serviço pontual)
+#   e não justifica alerta. Acima disso a assimetria entre valor e
+#   maturidade da empresa começa a pesar.
+BENEFICIARIO_NOVO_ANOS = 2
+BENEFICIARIO_NOVO_VALOR_MIN = 500_000.0
+
+
+def analisar_beneficiario_novo(
+    emendas: list[Emenda],
+    referencia: date | None = None,
+) -> list[dict[str, str]]:
+    """Alerta: CNPJ recém-aberto (< 2 anos) recebendo emenda relevante.
+
+    ONGs/empresas criadas pouco antes de ganhar contrato público são um
+    sinal clássico de fachada/laranja — ainda mais quando o volume é
+    desproporcional à maturidade (empresa que mal teve tempo de
+    estruturar CNAE operacional recebendo meio milhão de reais).
+
+    Parâmetros
+    ----------
+    emendas:
+        Lista tipada com ``beneficiario_data_abertura`` preenchida
+        (vem do pipeline ``brasilapi_cnpj_status`` no nó :Company).
+    referencia:
+        Data de referência pro cálculo de "anos desde abertura". Default
+        é ``date.today()`` — aceita override só pra tornar o teste
+        determinístico.
+
+    Aparecer aqui não prova irregularidade — empresa nova pode ser
+    legítima. É um sinal que combinado com outros (doador-beneficiário,
+    sócio comum, etc.) forma o caso investigável. Severidade ``atencao``
+    (não ``grave``), pra refletir que o sinal sozinho é fraco.
+    """
+    if not emendas:
+        return []
+
+    hoje = referencia or date.today()
+    # Agrega primeiro por CNPJ, filtra por valor depois. Motivo: a mesma
+    # empresa pode receber 3 emendas de R$ 300k — individualmente cada
+    # uma é "serviço pontual", mas a soma (R$ 900k) pra empresa nova é
+    # o padrão que queremos pegar. Filtrar antes de agregar subestima.
+    agregados: dict[str, tuple[str, date, float]] = {}
+    for emenda in emendas:
+        abertura = _parse_data_abertura(emenda.beneficiario_data_abertura)
+        if abertura is None:
+            continue
+        anos = (hoje - abertura).days / 365.25
+        if anos >= BENEFICIARIO_NOVO_ANOS:
+            continue
+        valor = emenda.valor_pago or emenda.valor_empenhado or 0.0
+        if valor <= 0:
+            continue
+        chave = emenda.beneficiario_cnpj or emenda.beneficiario_nome or emenda.id
+        nome, _abertura, acumulado = agregados.get(
+            chave, (emenda.beneficiario_nome or "Empresa sem nome", abertura, 0.0),
+        )
+        agregados[chave] = (nome, abertura, acumulado + valor)
+
+    matches = {
+        k: v for k, v in agregados.items()
+        if v[2] >= BENEFICIARIO_NOVO_VALOR_MIN
+    }
+    if not matches:
+        return []
+
+    alertas: list[dict[str, str]] = []
+    for nome, abertura, valor_total in matches.values():
+        meses = (hoje.year - abertura.year) * 12 + (hoje.month - abertura.month)
+        idade_txt = (
+            f"{meses} mes(es)"
+            if meses < 24
+            else f"{meses // 12} ano(s) e {meses % 12} mes(es)"
+        )
+        alertas.append({
+            "tipo": "atencao",
+            "icone": "empresa",
+            "texto": (
+                f"{nome} recebeu {fmt_brl(valor_total)} em emenda(s) com "
+                f"CNPJ aberto ha {idade_txt} (aberto em "
+                f"{abertura.strftime('%d/%m/%Y')}) — empresa nova recebendo "
+                "valor relevante merece conferencia de capacidade tecnica "
+                "e acervo pra executar o objeto"
+            ),
+        })
+    return alertas
+
+
 def analisar_doador_beneficiario(
     perfil: _PerfilComEmpresas,
     emendas: list[Emenda],
@@ -628,6 +741,8 @@ def gerar_alertas_completos(
         alertas.extend(analisar_cnpj_baixados(perfil))
         if emendas_tipadas:
             alertas.extend(analisar_doador_beneficiario(perfil, emendas_tipadas))
+    if emendas_tipadas:
+        alertas.extend(analisar_beneficiario_novo(emendas_tipadas))
 
     if not alertas:
         alertas.append({

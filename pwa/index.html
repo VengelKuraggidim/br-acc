@@ -741,6 +741,59 @@
       margin-top: 6px;
     }
 
+    .emenda-beneficiario {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+    .emenda-beneficiario strong { color: var(--text-primary); }
+    .emenda-cnpj-novo {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1px solid rgba(255, 182, 39, 0.4);
+    }
+
+    .emenda-flag-doador {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--danger-bg);
+      border: 1px solid rgba(255, 59, 92, 0.35);
+      color: var(--danger);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .emenda-flag-doador strong { color: var(--danger); font-weight: 700; }
+    .emenda-card.alert-doador { border-left: 3px solid var(--danger); }
+
+    .emenda-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .emenda-tag.pix {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1px solid rgba(255, 182, 39, 0.4);
+    }
+    .emenda-tag.relator {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(255, 59, 92, 0.4);
+    }
+
     /* === CONEXAO CARD === */
     .conexao-card {
       display: flex;
@@ -2277,6 +2330,17 @@ function renderPerfil(d) {
     const fonteLabel = d.fonte_emendas === 'transparencia'
       ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real do Portal da Transparência</div>'
       : '';
+    // Cross-check doador x beneficiário: monta Map CNPJ normalizado -> doador.
+    // Alinha com o backend (analisar_doador_beneficiario): só dígitos, ignora
+    // entradas vazias. Usado no render de cada emenda pra pintar o red flag
+    // "empresa doadora virou beneficiária" — o alerta global já cobre o perfil,
+    // esse badge mostra EM QUAL emenda o cruzamento aconteceu.
+    const cnpjDigitos = s => (s || '').replace(/\D/g, '');
+    const doadoresPorCnpj = new Map();
+    (d.doadores_empresa || []).forEach(doador => {
+      const chave = cnpjDigitos(doador.cnpj);
+      if (chave) doadoresPorCnpj.set(chave, doador);
+    });
     const totalEmp = d.emendas.reduce((s, e) => s + (e.valor_empenhado || 0), 0);
     const totalPago = d.emendas.reduce((s, e) => s + (e.valor_pago || 0), 0);
     const gap = totalEmp - totalPago;
@@ -2332,9 +2396,55 @@ function renderPerfil(d) {
         const pct = Math.round((pago / emp) * 100);
         statusHtml = `<div class="emenda-status warning">&#9888; Pago parcial (${pct}% do empenhado)</div>`;
       }
+      // Beneficiário: mostra sempre que vier, dá contexto ao leitor.
+      const benefCnpjDigitos = cnpjDigitos(e.beneficiario_cnpj);
+      const doadorMatch = benefCnpjDigitos
+        ? doadoresPorCnpj.get(benefCnpjDigitos)
+        : null;
+      // Idade do CNPJ: se < 2 anos, marcamos como "CNPJ novo" (amarelo).
+      // Alinhado com BENEFICIARIO_NOVO_ANOS no backend. Data chega em ISO
+      // ``YYYY-MM-DD`` (BrasilAPI); parseamos só a parte da data.
+      let cnpjNovoHtml = '';
+      if (e.beneficiario_data_abertura) {
+        const abertura = new Date(e.beneficiario_data_abertura.slice(0, 10));
+        if (!isNaN(abertura.getTime())) {
+          const anos = (Date.now() - abertura.getTime()) / (365.25 * 86400000);
+          if (anos < 2) {
+            const meses = Math.max(0, Math.round(anos * 12));
+            cnpjNovoHtml = `<span class="emenda-cnpj-novo" title="Empresa aberta em ${abertura.toLocaleDateString('pt-BR')} — capacidade técnica pode ser limitada">CNPJ novo (${meses} meses)</span>`;
+          }
+        }
+      }
+      const beneficiarioHtml = e.beneficiario_nome || e.beneficiario_cnpj
+        ? `<div class="emenda-beneficiario">&#127970; Beneficiário: <strong>${e.beneficiario_nome || e.beneficiario_cnpj}</strong>${cnpjNovoHtml}</div>`
+        : '';
+      // Red flag: doou pra campanha E recebeu emenda. Sobrepõe o cardCls
+      // (doador-beneficiário é um flag mais crítico que "não pago").
+      let flagDoadorHtml = '';
+      if (doadorMatch) {
+        cardCls = ' alert-doador';
+        flagDoadorHtml = `<div class="emenda-flag-doador">
+          &#128681; <strong>Doador de campanha recebeu esta emenda.</strong>
+          Empresa doou ${doadorMatch.valor_total_fmt} na campanha e foi
+          beneficiada por esta emenda. Vale conferir objeto do convênio e
+          processo licitatório.
+        </div>`;
+      }
+      // Tags de tipo: PIX e relator são mais opacos/sensíveis. A string
+      // ``e.tipo`` já vem traduzida ("Emenda Pix (...)", "Emenda de relator (...)"),
+      // mas as keywords ``pix`` e ``relator`` se preservam — basta match
+      // case-insensitive. PIX = opacidade (rastreio ruim); relator = grave
+      // (orçamento secreto extinto mas ainda no histórico).
+      const tipoLower = (e.tipo || '').toLowerCase();
+      let tipoTag = '';
+      if (tipoLower.includes('pix')) {
+        tipoTag = '<span class="emenda-tag pix" title="Transferência direta ao município — rastreabilidade da execução é limitada">PIX</span>';
+      } else if (tipoLower.includes('relator')) {
+        tipoTag = '<span class="emenda-tag relator" title="Orçamento secreto — modalidade extinta pelo STF em 2022">RP9</span>';
+      }
       const emendaInner = `<div class="emenda-top">
           <div class="emenda-funcao">${e.funcao}</div>
-          <span class="emenda-tipo">${e.tipo}</span>
+          <span class="emenda-tipo">${e.tipo}${tipoTag}</span>
         </div>
         <div class="emenda-valores">
           <div class="emenda-valor-box">
@@ -2347,6 +2457,8 @@ function renderPerfil(d) {
           </div>
         </div>
         ${statusHtml}
+        ${flagDoadorHtml}
+        ${beneficiarioHtml}
         ${e.municipio ? `<div class="emenda-local">&#128205; ${e.municipio}${e.uf ? ', '+e.uf : ''}</div>` : ''}
         ${renderChipFonte(e.provenance, "sub")}`;
       if (e.provenance) {

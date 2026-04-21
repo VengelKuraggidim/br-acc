@@ -69,6 +69,7 @@ class Emenda(BaseModel):
     valor_pago_fmt: str
     beneficiario_cnpj: str | None = None
     beneficiario_nome: str | None = None
+    beneficiario_data_abertura: str | None = None
     provenance: ProvenanceBlock | None = None
 
 

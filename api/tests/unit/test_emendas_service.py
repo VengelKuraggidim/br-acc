@@ -25,6 +25,10 @@ def _mock_record(data: dict[str, object]) -> MagicMock:
     record.__getitem__ = lambda self, key: data[key]
     record.__iter__ = lambda self: iter(data.keys())
     record.__contains__ = lambda self, key: key in data
+    # .get() deve devolver None pra chave ausente (comportamento do
+    # Record real do driver neo4j) — MagicMock por default devolve outro
+    # MagicMock, o que mascara bugs em código que usa record.get().
+    record.get = lambda key, default=None: data.get(key, default)
     return record
 
 
@@ -56,6 +60,44 @@ class TestRecordToEmenda:
         assert "mil" in emenda.valor_empenhado_fmt
         assert emenda.valor_pago == 250_000.0
         assert "mil" in emenda.valor_pago_fmt
+
+    def test_beneficiario_populado(self) -> None:
+        """Beneficiário (CNPJ + razão social) é mapeado quando presente."""
+        record = _mock_record({
+            "id": "pte_xyz",
+            "tipo": "individual",
+            "funcao": "saude",
+            "municipio": "Goiania",
+            "uf": "GO",
+            "valor_empenhado": 100_000.0,
+            "valor_pago": 0.0,
+            "ano": 2024,
+            "beneficiario_cnpj": "11111111000101",
+            "beneficiario_nome": "ONG Exemplo",
+        })
+
+        emenda = _record_to_emenda(record)
+        assert emenda.beneficiario_cnpj == "11111111000101"
+        assert emenda.beneficiario_nome == "ONG Exemplo"
+
+    def test_beneficiario_ausente_retorna_none(self) -> None:
+        """Sem beneficiário no grafo (emenda sem convênio) → fields=None."""
+        record = _mock_record({
+            "id": "pte_xyz",
+            "tipo": "individual",
+            "funcao": "saude",
+            "municipio": None,
+            "uf": None,
+            "valor_empenhado": 100_000.0,
+            "valor_pago": 0.0,
+            "ano": 2024,
+            "beneficiario_cnpj": None,
+            "beneficiario_nome": None,
+        })
+
+        emenda = _record_to_emenda(record)
+        assert emenda.beneficiario_cnpj is None
+        assert emenda.beneficiario_nome is None
 
     def test_tipo_none_fallback(self) -> None:
         record = _mock_record({

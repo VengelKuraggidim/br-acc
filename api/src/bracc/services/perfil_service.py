@@ -607,16 +607,22 @@ async def obter_perfil(
             except Exception as exc:  # noqa: BLE001
                 raise DriverError(str(exc)) from exc
 
-    # Se a query ``perfil_politico_connections`` já trouxe emendas via
-    # grafo (rel ``AUTOR_EMENDA``), usa aquelas — caso contrário, as do
-    # pipeline dedicado ``camara_politicos_go`` (obter_emendas_deputado).
+    # Fonte de emendas: mescla as duas fontes disponíveis por id. A query
+    # dedicada ``perfil_emendas_deputado`` enriquece com
+    # ``beneficiario_cnpj``/``beneficiario_nome`` via OPTIONAL MATCH em
+    # ``:BENEFICIOU`` — dado essencial pro cross-check
+    # doador↔beneficiário. ``conexoes_service`` pega qualquer edge
+    # depth-1 (``PROPOS``/``AUTOR_EMENDA``) mas não carrega o
+    # beneficiário. Por isso preferimos a versão enriquecida quando o id
+    # aparece nas duas; caímos na classificação pro resto (edges que a
+    # dedicated query não cobre).
     emendas: list[Emenda]
-    if resultado.emendas:
-        emendas = list(resultado.emendas)
+    if resultado.emendas or emendas_grafo:
+        por_id: dict[str, Emenda] = {e.id: e for e in resultado.emendas}
+        for e in emendas_grafo:
+            por_id[e.id] = e  # Sobrescreve quando dedicated query cobre.
+        emendas = list(por_id.values())
         fonte_emendas: str | None = "bracc"
-    elif emendas_grafo:
-        emendas = emendas_grafo
-        fonte_emendas = "bracc"
     else:
         emendas = []
         fonte_emendas = None
