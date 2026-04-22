@@ -695,4 +695,13 @@ class CamaraPoliticosGoPipeline(Pipeline):
                 source_key="legislator_id",
                 target_label="LegislativeExpense",
                 target_key="expense_id",
+                properties=[
+                    "tipo",
+                    "ano",
+                    "mes",
+                    "valor_liquido",
+                    "documento",
+                    "fornecedor_cnpj",
+                    "fornecedor_nome",
+                ],
             )
