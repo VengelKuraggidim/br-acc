@@ -1,6 +1,28 @@
-# TCM-GO "Impedidos de licitar" via scraper JSF — 🔧 CODIGO ENTREGUE (2026-04-22)
+# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22)
 
-> Commit `0f1b3c6` entrega o scraper completo:
+> Commit `0f1b3c6` entrega o scraper completo (detalhes abaixo).
+>
+> **Produção barrada**: verificado em 2026-04-22, `https://tcmgo.tc.br/robots.txt`
+> termina com `User-agent: *\nDisallow: /`. Sob a interpretação conservadora
+> de combinar grupos com mesmo User-agent (Google/RFC 9309 em caso de
+> conflito), isso proíbe crawling de qualquer path do subdomínio — inclusive
+> o widget `/portalwidgets/xhtml/impedimento/impedimento.jsf`. O scraper
+> não deve ser executado contra este host enquanto o robots.txt estiver
+> nesse estado.
+>
+> **Fallback indicado pela própria TODO**: pedido LAI / e-SIC ao TCM-GO
+> (`ouvidoria@tcmgo.tc.br`) requisitando export da lista em CSV. Quando
+> chegar, dropar o CSV em `data/tcmgo_sancoes/impedidos_licitar.csv`
+> e rodar o pipeline normalmente (caminho de ingestão já existe).
+>
+> **O scraper fica guardado**: não foi removido do código porque:
+>   1. A TODO histórica permanece útil como referência de padrão JSF
+>      PrimeFaces (ViewState + partial-response XML) que outros
+>      pipelines do repo podem reaproveitar.
+>   2. Se o TCM-GO relaxar o robots.txt no futuro (já aconteceu com outros
+>      portais GO), re-habilitar basta remover este aviso.
+>
+> ### Entregue em `0f1b3c6`:
 >
 > - `fetch_impedidos_jsf(output_dir, client=?)` em `tcmgo_sancoes.py` — GET
 >   inicial pra ViewState + POST pagination PrimeFaces ate empty sentinel
@@ -14,11 +36,6 @@
 > - 3 fixtures offline (HTML inicial + XML partial-response com dados +
 >   XML empty) + 9 unit tests novos cobrindo parser + scraper end-to-end
 >   com MockTransport.
->
-> Nao rodado em producao ainda — robots.txt do subdominio tcmgo.tc.br
-> precisa ser verificado antes do primeiro fetch real. Se OK, rodar:
-> `uv run python scripts/download_tcmgo_sancoes.py --jsf-only --output-dir data/tcmgo_sancoes --limit 50`
-> pra smoke test, depois full run com `--include-impedidos-jsf`.
 
 ## Original
 
