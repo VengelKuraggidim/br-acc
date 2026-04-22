@@ -278,6 +278,10 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         self.donation_rels: list[dict[str, Any]] = []
         self.expenses: list[dict[str, Any]] = []
         self.expense_rels: list[dict[str, Any]] = []
+        # Comites de campanha (CNAE 9492-8/00) deduped por CNPJ prestador.
+        # Marca ``:Company`` nodes com ``tipo_entidade='comite_campanha'`` pra
+        # classificacao deterministica no PWA (substitui regex no nome).
+        self.committees: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # extract
@@ -413,6 +417,13 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         # ``(SQ_PRESTADOR_CONTAS, SQ_DESPESA)``.
         fornecedor_map: dict[tuple[str, str], dict[str, str]] = {}
 
+        # Dedupe de comites de campanha (CNAE 9492-8/00) por CNPJ prestador.
+        # Cada candidato tem um CNPJ de comite registrado na RFB; a receitas
+        # CSV tem uma linha por doacao, entao agrupamos pra uma entrada por
+        # comite. Primeira ocorrencia vence — cargo/candidato sao invariantes
+        # por CNPJ dentro do mesmo ano.
+        by_committee_cnpj: dict[str, dict[str, Any]] = {}
+
         def _ensure(cpf_formatted: str, cpf_digits: str, nome: str, sq: str) -> dict[str, Any]:
             entry = by_cpf.get(cpf_formatted)
             if entry is None:
@@ -491,6 +502,23 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                     "name": nome,
                     "sq_candidato": sq,
                     "cargo": cargo_raw,
+                }
+
+            # Committee CNPJ (CNAE 9492-8/00). NR_CNPJ_PRESTADOR_CONTA vem
+            # com 14 digitos (sem pontuacao) direto do TSE. Primeira ocorrencia
+            # vence — dentro do mesmo ano/eleicao o CNPJ mapeia 1:1 pro
+            # candidato.
+            cnpj_prestador = strip_document(
+                row.get("NR_CNPJ_PRESTADOR_CONTA") or "",
+            )
+            if len(cnpj_prestador) == 14 and cnpj_prestador not in by_committee_cnpj:
+                by_committee_cnpj[cnpj_prestador] = {
+                    "cnpj": cnpj_prestador,
+                    "cargo_candidatura": cargo_raw,
+                    "ano_eleicao": year,
+                    "cpf_candidato": cpf_formatted,
+                    "nome_candidato": nome,
+                    "sq_candidato": sq,
                 }
 
             # Node :CampaignDonation (opcional — mantido pra phase-2 tie-in).
@@ -785,6 +813,17 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             )
             self.persons.append(node_row)
 
+        # Materializa comites de campanha (dedupe por CNPJ) com provenance.
+        for committee in by_committee_cnpj.values():
+            self.committees.append(
+                self.attach_provenance(
+                    committee,
+                    record_id=f"{committee['cnpj']}:{year}:comite",
+                    record_url=self._zip_url,
+                    snapshot_uri=self._snapshot_uri,
+                ),
+            )
+
         self.persons = deduplicate_rows(self.persons, ["cpf"])
         self.donations = deduplicate_rows(self.donations, ["donation_id"])
         self.donation_rels = deduplicate_rows(
@@ -794,17 +833,20 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         self.expense_rels = deduplicate_rows(
             self.expense_rels, ["source_key", "target_key"],
         )
+        self.committees = deduplicate_rows(self.committees, ["cnpj"])
         self.rows_loaded = (
             len(self.persons)
             + len(self.donations) + len(self.donation_rels)
             + len(self.expenses) + len(self.expense_rels)
+            + len(self.committees)
         )
         logger.info(
             "[tse_prestacao_contas_go] transformed persons=%d donations=%d "
-            "expenses=%d rels=%d",
+            "expenses=%d committees=%d rels=%d",
             len(self.persons),
             len(self.donations),
             len(self.expenses),
+            len(self.committees),
             len(self.donation_rels) + len(self.expense_rels),
         )
 
@@ -903,7 +945,34 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 target_key="expense_id",
             )
 
+        # :Company (comite de campanha) — MERGE pelo CNPJ. Marca CNAE
+        # 9492-8/00 + tipo_entidade pra que o PWA classifique comites sem
+        # depender de regex em nome (doador com razao social tipo "ELEICAO
+        # 2022 FULANO" ou "MAGDA MOFATTO" que nao casam no regex atual).
+        if self.committees:
+            query = (
+                "UNWIND $rows AS row "
+                "MERGE (c:Company {cnpj: row.cnpj}) "
+                "SET c.tipo_entidade = 'comite_campanha', "
+                "    c.cnae_principal = '9492-8/00', "
+                "    c.cnae_descricao = "
+                "      'Atividades de organizacoes politicas', "
+                "    c.cargo_candidatura = row.cargo_candidatura, "
+                "    c.ano_eleicao = row.ano_eleicao, "
+                "    c.cpf_candidato = row.cpf_candidato, "
+                "    c.nome_candidato = row.nome_candidato, "
+                "    c.source_id = row.source_id, "
+                "    c.source_record_id = row.source_record_id, "
+                "    c.source_url = row.source_url, "
+                "    c.source_snapshot_uri = row.source_snapshot_uri, "
+                "    c.ingested_at = row.ingested_at, "
+                "    c.run_id = row.run_id"
+            )
+            loader.run_query_with_retry(query, self.committees)
+
         logger.info(
-            "[tse_prestacao_contas_go] loaded persons=%d donations=%d expenses=%d",
+            "[tse_prestacao_contas_go] loaded persons=%d donations=%d "
+            "expenses=%d committees=%d",
             len(self.persons), len(self.donations), len(self.expenses),
+            len(self.committees),
         )

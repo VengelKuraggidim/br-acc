@@ -811,6 +811,34 @@ class TestTransform:
             assert d["source_snapshot_uri"].startswith(f"{_SOURCE_ID}/")
             assert d["source_url"].startswith("https://cdn.tse.jus.br")
 
+    def test_committees_produced(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        """Fase 1 do TODO 07 — comites de campanha CNAE 9492-8/00.
+
+        Espera 1 commitee por candidato GO (3 candidatos -> 3 CNPJs unicos),
+        dedupe por CNPJ mesmo com N linhas de receitas no mesmo comite, e
+        candidatos SP ficam de fora pelo filtro UF.
+        """
+        pipeline.extract()
+        pipeline.transform()
+
+        cnpjs_go = {_C1["cnpj_prestador"], _C2["cnpj_prestador"], _C3["cnpj_prestador"]}
+        cnpjs_produced = {c["cnpj"] for c in pipeline.committees}
+
+        assert cnpjs_produced == cnpjs_go
+        assert _SP["cnpj_prestador"] not in cnpjs_produced  # filtro UF aplica
+
+        # Campos estruturais presentes em todo committee + provenance.
+        by_cnpj = {c["cnpj"]: c for c in pipeline.committees}
+        for cand in (_C1, _C2, _C3):
+            c = by_cnpj[cand["cnpj_prestador"]]
+            assert c["cargo_candidatura"] == cand["cargo"]
+            assert c["ano_eleicao"] == 2022
+            assert c["nome_candidato"] == cand["nome"]
+            assert c["source_id"] == _SOURCE_ID
+            assert c["source_snapshot_uri"].startswith(f"{_SOURCE_ID}/")
+
     def test_expenses_produced(
         self, pipeline: TsePrestacaoContasGoPipeline,
     ) -> None:
@@ -1030,6 +1058,26 @@ class TestLoad:
         # Person + donation nodes + donation rels + expense nodes +
         # expense rels — mínimo 3 chamadas ao session.
         assert mock_session(pipeline).run.call_count >= 3
+
+    def test_load_marks_committees_with_cnae(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        """Fase 1 do TODO 07 — Cypher MERGE carimba Company com CNAE 9492-8/00."""
+        pipeline.extract()
+        pipeline.transform()
+        pipeline.load()
+
+        session = mock_session(pipeline)
+        committee_calls = [
+            call for call in session.run.call_args_list
+            if "tipo_entidade = 'comite_campanha'" in str(call)
+        ]
+        assert committee_calls, "Cypher MERGE de committee nao foi disparado"
+        query_str = str(committee_calls[0][0][0])
+        assert "MERGE (c:Company {cnpj: row.cnpj})" in query_str
+        assert "c.cnae_principal = '9492-8/00'" in query_str
+        assert "c.cargo_candidatura = row.cargo_candidatura" in query_str
+        assert "c.ano_eleicao = row.ano_eleicao" in query_str
 
 
 class TestDonatedAt:

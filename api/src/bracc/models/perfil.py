@@ -154,6 +154,13 @@ class DoadorEmpresa(BaseModel):
     data_ultima_doacao_fmt: str | None = None
     doacoes: list[DoacaoItem] = []
     provenance: ProvenanceBlock | None = None
+    # Classificacao deterministica vinda do grafo (todo 07 Fase 1).
+    # ``tipo_entidade='comite_campanha'`` + ``cnae_principal='9492-8/00'`` sao
+    # carimbados pelo pipeline ``tse_prestacao_contas_go`` no Company do
+    # prestador de contas. Permite ao PWA classificar comites sem depender
+    # do regex de razao social.
+    tipo_entidade: str | None = None
+    cnae_principal: str | None = None
 
 
 class DoadorPessoa(BaseModel):

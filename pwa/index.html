@@ -1692,7 +1692,15 @@ function _fmtBRLDoador(v) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
-function _classificarCNPJDoador(nome) {
+function _classificarCNPJDoador(nome, tipoEntidade, cnaePrincipal) {
+  // Source of truth: tipo_entidade/cnae_principal carimbados pelo pipeline
+  // tse_prestacao_contas_go no :Company do comite. Quando presentes sao
+  // deterministicos e cobrem comites com razao social atipica (ex. MAGDA
+  // MOFATTO, HUMBERTO TEOFILO) que o regex abaixo nao captura. Fallback
+  // pro regex so quando o grafo ainda nao carimbou o CNPJ.
+  if (tipoEntidade === 'comite_campanha' || cnaePrincipal === '9492-8/00') {
+    return 'comite';
+  }
   const n = (nome || '').toUpperCase();
   if (!n) return 'outro';
   if (n.includes('DIRECAO NACIONAL') || n.includes('DIRECAO ESTADUAL') || n.includes('DIRECAO MUNICIPAL') || n.includes('DIRETORIO') || n.includes('EXECUTIVA NACIONAL') || n.includes('COMISSAO PROVISORIA')) return 'partido';
@@ -1836,7 +1844,7 @@ function renderDoadoresGrupos(empresas, pessoas, state) {
   state = state || { busca: '', ordem: 'valor_desc', soPos2015: false };
 
   let arrEmpresas = (empresas || []).map(e => {
-    const cat = _classificarCNPJDoador(e.nome);
+    const cat = _classificarCNPJDoador(e.nome, e.tipo_entidade, e.cnae_principal);
     return Object.assign({}, e, { _categoria: cat });
   });
   let arrPessoas = (pessoas || []).slice();

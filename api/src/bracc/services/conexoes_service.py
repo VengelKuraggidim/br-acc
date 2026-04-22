@@ -239,6 +239,12 @@ class _DoacaoEmpresaAcc:
     data_primeira_iso: str | None = None
     data_ultima_iso: str | None = None
     doacoes: list[DoacaoItem] = field(default_factory=list)
+    # Classificacao deterministica vinda do grafo (todo 07 Fase 1).
+    # Quando ``tipo_entidade='comite_campanha'`` o PWA classifica sem cair
+    # no regex do nome — cobre comites com razao social atipica (ex.:
+    # MAGDA MOFATTO, HUMBERTO TEOFILO).
+    tipo_entidade: str | None = None
+    cnae_principal: str | None = None
 
 
 @dataclass
@@ -469,6 +475,10 @@ def classificar(
                         situacao_verified_at=verified_at,
                         provenance=prov_block,
                         provenance_ingested_at=prov_ingested,
+                        tipo_entidade=as_str(target_props, "tipo_entidade") or None,
+                        cnae_principal=(
+                            as_str(target_props, "cnae_principal") or None
+                        ),
                     ),
                 )
                 # Se a primeira doação vista não trazia situacao (props
@@ -715,6 +725,8 @@ def classificar(
             data_ultima_doacao_fmt=fmt_data_br(acc.data_ultima_iso),
             doacoes=_ordenar_doacoes(acc.doacoes),
             provenance=acc.provenance,
+            tipo_entidade=acc.tipo_entidade,
+            cnae_principal=acc.cnae_principal,
         )
         for acc in doacoes_empresa.values()
     ]
