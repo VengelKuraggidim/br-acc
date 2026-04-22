@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Snippet simplificado da resposta PrimeFaces partial-response (paginacao via
+  POST javax.faces.partial.ajax). Usado pelo scraper quando o override
+  _rows=9999 nao funciona e ele tem que paginar em _first=20 etc.
+-->
+<partial-response id="j_id1">
+<changes>
+<update id="form:impedimentos"><![CDATA[
+<div id="form:impedimentos" class="ui-datatable ui-widget">
+<table role="grid">
+<thead><tr>
+<th>Nome</th><th>CPF/CNPJ</th><th>Inicio</th><th>Termino</th><th>Orgao</th><th>Processo</th><th>Situacao</th>
+</tr></thead>
+<tbody id="form:impedimentos_data">
+<tr class="ui-widget-content ui-datatable-even" role="row">
+<td>TERCEIRA EMPRESA FAKE LTDA</td>
+<td>99.888.777/0001-66</td>
+<td>10/05/2025</td>
+<td>10/05/2027</td>
+<td>PREFEITURA DE RIO VERDE</td>
+<td>00555/2024</td>
+<td>IMPEDIDO DE LICITAR</td>
+</tr>
+</tbody>
+</table>
+</div>
+]]></update>
+<update id="j_id1:javax.faces.ViewState:0"><![CDATA[FAKE_UPDATED_VIEWSTATE_b4e2d1]]></update>
+</changes>
+</partial-response>

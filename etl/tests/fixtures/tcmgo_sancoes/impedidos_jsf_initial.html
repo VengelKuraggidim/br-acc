@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<!--
+  Snippet simplificado da pagina inicial do widget JSF
+  https://tcmgo.tc.br/portalwidgets/xhtml/impedimento/impedimento.jsf
+  capturado pra teste offline do scraper PrimeFaces.
+
+  Mantem apenas o que o parser precisa:
+    - ViewState hidden (pra identificar a sessao JSF)
+    - tbody com 2 linhas de exemplo (1 CNPJ + 1 CPF pre-mascarado)
+-->
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Impedidos de Licitar - TCM-GO</title></head>
+<body>
+<form id="form" method="post" action="/portalwidgets/xhtml/impedimento/impedimento.jsf" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="javax.faces.ViewState" id="j_id1:javax.faces.ViewState:0" value="FAKE_INITIAL_VIEWSTATE_7f3a9c" />
+<div id="form:impedimentos" class="ui-datatable ui-widget">
+<div class="ui-datatable-tablewrapper">
+<table role="grid">
+<thead><tr>
+<th>Nome</th><th>CPF/CNPJ</th><th>Inicio</th><th>Termino</th><th>Orgao</th><th>Processo</th><th>Situacao</th>
+</tr></thead>
+<tbody id="form:impedimentos_data">
+<tr class="ui-widget-content ui-datatable-even" role="row">
+<td>EMPRESA FAKE LTDA</td>
+<td>11.222.333/0001-81</td>
+<td>01/01/2025</td>
+<td>31/12/2025</td>
+<td>PREFEITURA DE GOIANIA</td>
+<td>00001/2024</td>
+<td>IMPEDIDO DE LICITAR</td>
+</tr>
+<tr class="ui-widget-content ui-datatable-odd" role="row">
+<td>FULANO FAKE PRE MASCARADO</td>
+<td>76***.***-***</td>
+<td>15/03/2025</td>
+<td>15/03/2027</td>
+<td>PREFEITURA DE ANAPOLIS</td>
+<td>00123/2023</td>
+<td>IMPEDIDO</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</form>
+</body>
+</html>

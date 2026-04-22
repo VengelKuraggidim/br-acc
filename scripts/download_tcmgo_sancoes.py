@@ -39,6 +39,7 @@ from pathlib import Path
 
 from bracc_etl.pipelines.tcmgo_sancoes import (
     CONTAS_IRREGULARES_URL,
+    fetch_impedidos_jsf,
     fetch_to_disk,
 )
 
@@ -83,6 +84,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=60.0,
         help="HTTP timeout in seconds (default: 60).",
     )
+    parser.add_argument(
+        "--include-impedidos-jsf",
+        action="store_true",
+        help=(
+            "Also scrape the PrimeFaces widget at tcmgo.tc.br/portalwidgets/"
+            "xhtml/impedimento/impedimento.jsf and write impedidos_licitar.csv. "
+            "Distinct from the REST CSV (contas-irregulares). Respects "
+            "--limit and writes under --output-dir."
+        ),
+    )
+    parser.add_argument(
+        "--jsf-only",
+        action="store_true",
+        help=(
+            "Skip the REST CSV fetch and scrape only the JSF widget. Useful "
+            "for smoke-testing the scraper without re-downloading the REST "
+            "data. Implies --include-impedidos-jsf."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -95,12 +115,23 @@ def main(argv: list[str] | None = None) -> int:
         stream=sys.stdout,
     )
 
-    written = fetch_to_disk(
-        output_dir=args.output_dir,
-        limit=args.limit,
-        url=args.url,
-        timeout=args.timeout,
-    )
+    written: list[Path] = []
+    if not args.jsf_only:
+        written.extend(
+            fetch_to_disk(
+                output_dir=args.output_dir,
+                limit=args.limit,
+                url=args.url,
+                timeout=args.timeout,
+            ),
+        )
+    if args.jsf_only or args.include_impedidos_jsf:
+        jsf_csv = fetch_impedidos_jsf(
+            output_dir=args.output_dir,
+            limit=args.limit,
+            timeout=args.timeout,
+        )
+        written.append(jsf_csv)
 
     print(f"Wrote {len(written)} file(s) to {args.output_dir.resolve()}:")
     for path in written:

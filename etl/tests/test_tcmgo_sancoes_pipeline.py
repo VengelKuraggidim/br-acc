@@ -10,7 +10,14 @@ import httpx
 import pytest
 
 from bracc_etl.archival import restore_snapshot
-from bracc_etl.pipelines.tcmgo_sancoes import TcmgoSancoesPipeline
+from bracc_etl.pipelines.tcmgo_sancoes import (
+    TcmgoSancoesPipeline,
+    _build_ajax_payload,
+    _extract_viewstate,
+    _parse_jsf_table,
+    _parse_partial_response,
+    fetch_impedidos_jsf,
+)
 from tests._mock_helpers import mock_session
 
 if TYPE_CHECKING:
@@ -42,8 +49,10 @@ class TestTransform:
         pipeline = _make_pipeline()
         pipeline.extract()
         pipeline.transform()
-        # 1 CNPJ + 1 CPF cru + 1 CPF pre-mascarado (upstream TCM-GO).
-        assert len(pipeline.impedidos) == 3
+        # 3 do CSV REST (contas-irregulares: 1 CNPJ + 1 CPF cru + 1 CPF
+        # pre-mascarado) + 3 do CSV JSF (impedidos_licitar: 2 CNPJ + 1 CPF
+        # pre-mascarado).
+        assert len(pipeline.impedidos) == 6
 
     def test_rejected_accounts_count(self) -> None:
         pipeline = _make_pipeline()
@@ -57,6 +66,20 @@ class TestTransform:
         pipeline.transform()
         kinds = {r["document_kind"] for r in pipeline.impedidos}
         assert kinds == {"CNPJ", "CPF"}
+
+    def test_list_kind_carimbado_nos_dois_fluxos(self) -> None:
+        """Impedidos do CSV REST ganham list_kind='contas_irregulares';
+        do CSV JSF ganham list_kind='impedidos_licitar' — permite query
+        de API distinguir as duas populacoes."""
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        kinds = {r["list_kind"] for r in pipeline.impedidos}
+        assert kinds == {"contas_irregulares", "impedidos_licitar"}
+        contas = [r for r in pipeline.impedidos if r["list_kind"] == "contas_irregulares"]
+        impedidos_jsf = [r for r in pipeline.impedidos if r["list_kind"] == "impedidos_licitar"]
+        assert len(contas) == 3
+        assert len(impedidos_jsf) == 3
 
     def test_cpf_masked(self) -> None:
         pipeline = _make_pipeline()
@@ -89,8 +112,12 @@ class TestTransform:
         pipeline = _make_pipeline()
         pipeline.extract()
         pipeline.transform()
-        # Only the CNPJ row should produce a relationship.
-        assert len(pipeline.impedido_rels) == 1
+        # 1 rel do CSV REST (1 CNPJ) + 2 rels do CSV JSF (2 CNPJs — linhas 1
+        # e 3 da fixture impedidos_licitar.csv).
+        assert len(pipeline.impedido_rels) == 3
+        # list_kind fica gravado na rel tambem pra permitir query filtrar.
+        kinds = {r.get("list_kind") for r in pipeline.impedido_rels}
+        assert kinds == {"contas_irregulares", "impedidos_licitar"}
 
     def test_uf_and_source(self) -> None:
         pipeline = _make_pipeline()
@@ -239,12 +266,16 @@ class TestArchivalRetrofit:
         online_pipeline.extract()
         online_pipeline.transform()
 
-        # Todas as rows de impedidos (fixture: 1 CNPJ + 1 CPF) saem do
-        # mesmo CSV de contas-irregulares archivado, então compartilham
-        # a mesma URI.
-        assert online_pipeline.impedidos
+        # Apenas os impedidos do CSV REST (contas-irregulares) ganham URI
+        # de snapshot — o fluxo JSF tem fluxo de archival separado e fica
+        # sem URI nesse teste.
+        contas_rows = [
+            imp for imp in online_pipeline.impedidos
+            if imp.get("list_kind") == "contas_irregulares"
+        ]
+        assert contas_rows
         expected_uri: str | None = None
-        for imp in online_pipeline.impedidos:
+        for imp in contas_rows:
             uri = imp.get("source_snapshot_uri")
             assert isinstance(uri, str) and uri
             # Shape: ``tcmgo_sancoes/YYYY-MM/hash12.csv``.
@@ -257,9 +288,21 @@ class TestArchivalRetrofit:
             else:
                 assert uri == expected_uri
 
-        # impedido_rels (CNPJ-only) replicam a URI do impedido-pai.
-        assert online_pipeline.impedido_rels
-        for rel in online_pipeline.impedido_rels:
+        # Rows do fluxo JSF nao recebem URI do archival online (fluxo distinto).
+        jsf_rows = [
+            imp for imp in online_pipeline.impedidos
+            if imp.get("list_kind") == "impedidos_licitar"
+        ]
+        for imp in jsf_rows:
+            assert "source_snapshot_uri" not in imp
+
+        # impedido_rels derivadas do CSV REST replicam a URI do impedido-pai.
+        contas_rels = [
+            r for r in online_pipeline.impedido_rels
+            if r.get("list_kind") == "contas_irregulares"
+        ]
+        assert contas_rels
+        for rel in contas_rels:
             assert rel.get("source_snapshot_uri") == expected_uri
 
         # rejeitados.csv não tem fonte pública — row continua sem URI.
@@ -292,3 +335,158 @@ class TestArchivalRetrofit:
             assert "source_snapshot_uri" not in rel
         for rej in pipeline.rejected_accounts:
             assert "source_snapshot_uri" not in rej
+
+
+# ---------------------------------------------------------------------------
+# JSF scraper — impedidos-de-licitar (widget PrimeFaces)
+#
+# Scraping 100% testado offline via fixtures HTML/XML. A funcao fetch_impedidos_jsf
+# aceita um httpx.Client injetado — em producao roda com cliente real, em teste
+# com MockTransport devolvendo as fixtures abaixo.
+# ---------------------------------------------------------------------------
+
+
+class TestJsfParserHelpers:
+    def test_extract_viewstate_encontra_token_no_html_inicial(self) -> None:
+        html = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_initial.html").read_text(
+            encoding="utf-8",
+        )
+        vs = _extract_viewstate(html)
+        assert vs == "FAKE_INITIAL_VIEWSTATE_7f3a9c"
+
+    def test_extract_viewstate_retorna_none_quando_ausente(self) -> None:
+        assert _extract_viewstate("<html><body>sem token</body></html>") is None
+
+    def test_parse_jsf_table_extrai_colunas(self) -> None:
+        html = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_initial.html").read_text(
+            encoding="utf-8",
+        )
+        rows = _parse_jsf_table(html)
+        assert len(rows) == 2
+        assert rows[0]["nome"] == "EMPRESA FAKE LTDA"
+        assert rows[0]["cpf_cnpj"] == "11.222.333/0001-81"
+        assert rows[0]["processo"] == "00001/2024"
+        assert rows[1]["cpf_cnpj"] == "76***.***-***"
+
+    def test_parse_jsf_table_ignora_linhas_com_menos_colunas(self) -> None:
+        fragment = (
+            "<table><tbody>"
+            "<tr><td>Nome</td><td>Cpf</td></tr>"  # so 2 colunas
+            "</tbody></table>"
+        )
+        assert _parse_jsf_table(fragment) == []
+
+    def test_parse_partial_response_devolve_rows_e_viewstate(self) -> None:
+        xml = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_page2.xml").read_text(
+            encoding="utf-8",
+        )
+        rows, vs = _parse_partial_response(xml)
+        assert len(rows) == 1
+        assert rows[0]["cpf_cnpj"] == "99.888.777/0001-66"
+        assert vs == "FAKE_UPDATED_VIEWSTATE_b4e2d1"
+
+    def test_parse_partial_response_sinaliza_fim_via_lista_vazia(self) -> None:
+        xml = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_empty.xml").read_text(
+            encoding="utf-8",
+        )
+        rows, vs = _parse_partial_response(xml)
+        assert rows == []
+        assert vs == "FAKE_UPDATED_VIEWSTATE_final"
+
+    def test_build_ajax_payload_tem_campos_obrigatorios(self) -> None:
+        payload = _build_ajax_payload("VS123", first=40, rows_per_page=20)
+        assert payload["javax.faces.ViewState"] == "VS123"
+        assert payload["form:impedimentos_first"] == "40"
+        assert payload["form:impedimentos_rows"] == "20"
+        assert payload["javax.faces.partial.ajax"] == "true"
+        assert payload["javax.faces.source"] == "form:impedimentos"
+
+
+class TestFetchImpedidosJsf:
+    """Ponta a ponta: GET inicial + POST pagina2 + POST pagina3 (vazia)."""
+
+    def _handler_factory(self, initial_html: str, pages_xml: list[str]) -> httpx.MockTransport:
+        """MockTransport que responde GET inicial + POSTs paginados em ordem."""
+        pages_iter = iter(pages_xml)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    content=initial_html.encode("utf-8"),
+                    headers={"content-type": "text/html; charset=utf-8"},
+                )
+            if request.method == "POST":
+                try:
+                    xml = next(pages_iter)
+                except StopIteration:
+                    xml = ""
+                return httpx.Response(
+                    200,
+                    content=xml.encode("utf-8"),
+                    headers={"content-type": "application/xml; charset=utf-8"},
+                )
+            return httpx.Response(405)
+
+        return httpx.MockTransport(handler)
+
+    def test_scraper_pagina_inicial_mais_paginas_posteriores(
+        self, tmp_path: Path,
+    ) -> None:
+        initial = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_initial.html").read_text(
+            encoding="utf-8",
+        )
+        page2 = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_page2.xml").read_text(
+            encoding="utf-8",
+        )
+        empty = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_empty.xml").read_text(
+            encoding="utf-8",
+        )
+
+        transport = self._handler_factory(initial, [page2, empty])
+        with httpx.Client(transport=transport) as client:
+            out_csv = fetch_impedidos_jsf(
+                tmp_path,
+                client=client,
+                rate_limit_seconds=0.0,  # desliga sleep pra testes rapidos.
+            )
+
+        assert out_csv.exists()
+        assert out_csv.name == "impedidos_licitar.csv"
+        content = out_csv.read_text(encoding="utf-8")
+        # 3 linhas (2 da inicial + 1 da pagina 2) + header.
+        assert content.count("\n") == 4
+        assert "EMPRESA FAKE LTDA" in content
+        assert "TERCEIRA EMPRESA FAKE LTDA" in content
+        assert "76***.***-***" in content
+
+    def test_scraper_respeita_limit(self, tmp_path: Path) -> None:
+        initial = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_initial.html").read_text(
+            encoding="utf-8",
+        )
+        empty = (FIXTURES / "tcmgo_sancoes" / "impedidos_jsf_empty.xml").read_text(
+            encoding="utf-8",
+        )
+        transport = self._handler_factory(initial, [empty])
+        with httpx.Client(transport=transport) as client:
+            out_csv = fetch_impedidos_jsf(
+                tmp_path, client=client, limit=1, rate_limit_seconds=0.0,
+            )
+        content = out_csv.read_text(encoding="utf-8")
+        # 1 linha + header.
+        assert content.count("\n") == 2
+
+    def test_scraper_aborta_se_viewstate_ausente(self, tmp_path: Path) -> None:
+        """GET inicial sem token ViewState → RuntimeError (widget mudou)."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                content=b"<html><body>pagina sem viewstate</body></html>",
+                headers={"content-type": "text/html"},
+            )
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport) as client:
+            with pytest.raises(RuntimeError, match="sem ViewState"):
+                fetch_impedidos_jsf(
+                    tmp_path, client=client, rate_limit_seconds=0.0,
+                )
