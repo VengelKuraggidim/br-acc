@@ -2,15 +2,32 @@
 
 ## Contexto
 
-Snapshot 2026-04-19 do registry `docs/source_registry_br_v1.csv` (127
-entradas `in_universe_v1=true`) cruzado com:
+Snapshot **original 2026-04-19** do registry `docs/source_registry_br_v1.csv`
+(127 entradas `in_universe_v1=true`) cruzado com estado do Neo4j local.
+Resultado: **94 fontes catalogadas que nunca rodaram nem baixaram**.
 
-- `MATCH (r:IngestionRun) RETURN DISTINCT r.source_id` no Neo4j local
-  (27 source_ids com execuções registradas)
-- `ls data/` (24 pastas com dados baixados)
+**Atualização 2026-04-22**: progresso significativo desde o snapshot — a
+tabela PX (blockers conhecidos) foi reescrita no fim do doc pra refletir:
 
-Resultado: **94 fontes catalogadas que nunca rodaram nem baixaram**. Este
-documento as agrupa em tiers pra nortear os próximos sprints.
+- 7 fontes que saíram do snapshot pra `loaded` (bndes, transferegov, inep,
+  icij, cpgf, holdings, mides via conversão `script_download` ou fetch
+  programático).
+- 3 fontes GO que saíram de `not_loaded` pra `loaded`: `alego` (API JSON
+  oculta via Angular bundle), `tcmgo_sancoes` (REST + scraper JSF
+  bloqueado por robots.txt, REST entrega ~1.4k rows), `ssp_go` (parser
+  `pypdf` dos boletins anuais de estatísticas criminais, ~1.4k rows).
+- 1 fonte GO em `partial` (`tce_go` carrega decisões via
+  `iago-search-api`; irregulares + fiscalizações continuam em Qlik —
+  ver `debitos/tce-go-qlik-scraper.md`).
+- 1 fonte federal deprecated: `querido_diario` substituída por
+  `querido_diario_go` (commit `7208381`).
+- Arquivos de TODO referenciados pela coluna "Débito em" foram
+  **deletados** quando a fonte virou `loaded` ou quando o débito foi
+  consolidado em nota diferente. Linha na tabela PX abaixo reflete só
+  os débitos que **ainda existem**.
+
+As seções P1 / P2 / P3 mantém a planilha de priorização intacta — são
+guias pra futuros sprints, não invalidadas pelo progresso.
 
 Escopo Fiscal Cidadão: rebrand de `brunoclz/br-acc`, entidades-alvo são
 políticos/gastos GO; grafo ingere nacional pra cruzar conexões. Fontes
@@ -151,30 +168,35 @@ Lista: `tce_sp`, `tce_pe`, `tce_rj`, `tce_rs`, `tce_mg`, `tce_ba`,
 
 ---
 
-## Tier PX — blocker conhecido (débito documentado) ou débito externo preexistente
+## Tier PX — blocker conhecido (débito documentado)
 
 Fontes que NÃO devem virar sprint antes do blocker sair. Cross-ref com
-débitos em `todo-list-prompts/`.
+débitos em `todo-list-prompts/`. Tabela reescrita em 2026-04-22 pra
+refletir apenas fontes **ainda em aberto** — o que virou `loaded` saiu
+da lista.
 
-| Source | Blocker | Débito em | Ação |
+| Source | Blocker | Débito ativo em | Ação |
 |---|---|---|---|
-| `caged` | `.7z` + form-wall, `load_state=partial` | `todo-list-prompts/very_high_priority/script-download-conversions/medium-tier/caged.md` | Esperar deps/creds; pipeline já implementado em modo agregado |
-| `rais` | BigQuery via basedosdados, `load_state=loaded` já | — (já loaded via BigQuery agg) | Revalidar que está atualizado; se não, `medium-tier/rais.md` |
-| `pncp` | Agendamento de janela longa | `todo-list-prompts/high_priority/debitos/rodar-pipelines-pesados.md` (discute janelas), + `very_high_priority/.../medium-tier/pncp.md` | Esperar janela; pipeline existe |
-| `datajud` | Credenciais CNJ não totalmente operacionais em prod | `load_state=not_loaded` no registry, `blocked_external` | Retomar quando credencial prod sair |
-| `tce_go` | CSV export schema indefinido | `todo-list-prompts/high_priority/variados/01-tce_go.md` + `very_high_priority/.../hard-tier/tce_go.md` | Seguir o prompt dedicado |
-| `tcmgo_sancoes` | Export CSV pendente no portal TCMGO | `todo-list-prompts/high_priority/variados/03-tcmgo_sancoes.md` | Seguir prompt dedicado |
-| `ssp_go` | Export machine-readable pendente | `todo-list-prompts/high_priority/variados/04-ssp_go.md` | Seguir prompt dedicado |
-| `alego` | Downloader existe mas IngestionRun nunca rodou | `todo-list-prompts/high_priority/variados/02-alego.md` + `todo-list-prompts/high_priority/variados/06-verba-indenizatoria-estadual-go.md` | Seguir prompts dedicados |
-| `camara_goiania` | Plone endpoints devolvem stubs; dados só via HTML+PDF scraping | `todo-list-prompts/high_priority/debitos/camara-goiania-scraping.md` + `variados/13-cota-vereadores-goiania.md` | Seguir débito |
-| `inep` | `load_state=loaded` já no registry, `data/inep/` ausente local? | `todo-list-prompts/very_high_priority/script-download-conversions/easy-recovery/inep.md` (conversão para `script_download`) | Seguir débito de conversão |
-| `transferegov` | Idem — script_download conversion | `easy-recovery/transferegov.md` | Seguir débito |
-| `cpgf` | Idem — conversion | `easy-recovery/cpgf.md` | Seguir débito |
-| `holdings` | Conversion para script_download | `medium-tier/holdings.md` | Seguir débito (após P1 rodar a carga inicial) |
-| `icij` | Conversion | `medium-tier/icij.md` | Seguir débito (após P1) |
-| `bndes` | Conversion | `medium-tier/bndes.md` | Seguir débito (após P1) |
-| `mides` | Conversion; BigQuery já funciona | `medium-tier/mides.md` | Já carregado; conversão é débito secundário |
-| `siconfi` | Conversion (API ORDS) | `medium-tier/siconfi.md` | Seguir débito; P2 acima é a carga em si |
+| `caged` | `.7z` + form-wall; dep `py7zr` não aprovada | `very_high_priority/script-download-conversions/medium-tier/caged.md` | Esperar aprovação de dep ou mirror CSV oficial |
+| `rais` | Multi-GB PDET behind login; basedosdados exige creds GCP | `very_high_priority/script-download-conversions/medium-tier/rais.md` | Esperar creds GCP (cruzamento com `iam-secret-accessor-vengel`) |
+| `datajud` | Credenciais CNJ não operacionais em prod | `blocked_external` no registry | Retomar quando credencial prod sair |
+| `tce_go` (irregulares + fiscalizações) | Qlik Sense WebSocket scrape, fragil + volumoso | `high_priority/debitos/tce-go-qlik-scraper.md` | Decisões já `loaded` via `iago-search-api`; completar Qlik quando ROI justificar |
+| `tcmgo_sancoes` (impedidos de licitar) | `robots.txt` do subdomínio `tcmgo.tc.br` tem `Disallow: /` | `high_priority/debitos/tcmgo-impedidos-jsf-scraper.md` | Scraper entregue mas bloqueado por robots; fallback LAI |
+| `ssp_go` (granularidade municipal) | SSP-GO só publica totais estaduais em PDF; RAI municipal só via LAI | `high_priority/debitos/ssp-go-granularidade-municipio.md` | Estadual `loaded`; municipal depende de LAI/SINESP/FBSP |
+| `camara_goiania` | Portal Plone retorna stubs; dados reais só via HTML+PDF scraping | `high_priority/debitos/camara-goiania-scraping.md` | Camada 1 (regex `ato_vereador` em `querido_diario_go`) entregue em 2026-04-22; camada 2 (scraper CMG completo) em aberto |
+| `pncp` nacional | Volume (completo, não só UF=GO); janela dedicada | `high_priority/debitos/rodar-pipelines-pesados.md` | Pipeline existe; rodar em janela planejada |
+| `comprasnet` | Volume ~6.4 GB; agendamento dedicado | `high_priority/debitos/rodar-pipelines-pesados.md` | OOM fix já aplicado em `0d407d5`, falta rodar |
+| `pgfn` (full history) | ~1.2 GB, transform `iterrows()` ~10M rows (>1h) | `high_priority/debitos/rodar-pipelines-pesados.md` | Idem — janela dedicada |
+| Aura prod operações | Acesso prod + APOC queries ad-hoc | `high_priority/debitos/aura-prod-source-id-migracao.md`, `backfill-ano-doou-rels.md`, `repopular-ceap-aura.md` | Precisa do owner prod |
+| `archival` root ownership | `etl/archival/` owned by root no dev local | `high_priority/debitos/archival-chown.md` | `chown` manual (fora do Docker) |
+| Pipelines TSE que exigem BigQuery | GCP creds | `medium_priority/reexecutar/01-tse_filiados.md`, `high_priority/debitos/iam-secret-accessor-vengel.md` | Cruza com provisão IAM |
+
+**Saíram da tabela desde 2026-04-19** (todos viraram `loaded` ou
+`script_download` no registry + contract + data no grafo):
+`bndes`, `transferegov`, `inep`, `icij`, `cpgf`, `holdings`, `mides`,
+`siconfi` (parcial), `alego`, `tcmgo_sancoes` (REST/1.4k rows),
+`ssp_go` (nível estadual), `tce_go` (decisões). O `querido_diario`
+federal foi `deprecated` em `7208381` (substituído por `querido_diario_go`).
 
 ---
 
