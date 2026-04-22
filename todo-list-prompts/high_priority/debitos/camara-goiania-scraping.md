@@ -78,10 +78,71 @@ CSS + PDF parsing sem contrato estavel da fonte gera debito crescente.
   (fixtures offline cobrem o caso "registros presentes no disco").
 - Nenhum codigo novo — commit inteiramente de docs.
 
-## Criterio de desbloqueio
+## Audit 2026-04-22 — viabilidade da opção 1 (querido_diario_go)
 
-Quando alguma das fontes (1)(2)(3) materializar dados equivalentes
-(vereadores ativos + despesas de gabinete de Goiania), trocar por la
-sem tocar em `camara_goiania.py`. Se ninguem materializar em 6 meses
-e o projeto precisar do dado, aprovar a opcao (4) como nova feature
-explicitamente (prompt dedicado + semana de trabalho).
+Recon via `api.queridodiario.ok.org.br`:
+
+- **Cobertura**: Goiânia aparece no QD com `territory_id=5208707`,
+  `level=3` (full-text search habilitado), disponível desde 2020-11-24.
+  `publication_urls` aponta **APENAS** pra
+  `https://www.goiania.go.gov.br/casa-civil/diario-oficial/` — ou seja,
+  **Diário da Prefeitura** (executivo). A CMG **não tem Diário Oficial
+  autônomo** (confirmado em `goiania.go.leg.br/` — só "Atos Normativos"
+  em HTML) e também não tem `territory_id` separado no QD.
+- **Quantidade de matches** (queries full-text pelo endpoint público):
+
+  | Query | Total gazettes | Fonte |
+  |---|---:|---|
+  | `"Câmara Municipal" vereador` | 5.285 | Prefeitura diário |
+  | `"verba indenizatória"` | 1.173 | Prefeitura diário |
+  | `"subsídio vereador"` | 3.357 | Prefeitura diário |
+  | `"resolução da Mesa"` | 8.063 | Prefeitura diário |
+
+  O diário da Prefeitura **inclui** acts CMG-referenciados (transferências
+  pro Legislativo, resoluções da Mesa publicadas cruzadas com executivo,
+  subsídios fixados por lei municipal). Não substitui o portal CMG, mas
+  preenche parte do buraco.
+
+### O que QD pode entregar (com retrofit de `querido_diario_go`)
+
+Adicionar em `_ACT_TYPE_PATTERNS` (hoje cobre só nomeação / exoneração
+/ contrato / licitação):
+
+```python
+("ato_vereador", re.compile(
+    r"verba\s+indenizat[oó]ria|subs[ií]dio\s+vereador|"
+    r"resolu[cç][aã]o\s+da\s+Mesa",
+    re.IGNORECASE,
+)),
+```
+
+Com isso, `MunicipalGazetteAct` ganha rows com `act_type='ato_vereador'`
+cobrindo **parcialmente** (1) fixação de subsídios por lei municipal e
+(2) transferências de verba indenizatória publicadas no executivo.
+
+### O que QD **NÃO** entrega (ainda precisa scraper CMG próprio)
+
+| Necessidade | Por quê não está no QD |
+|---|---|
+| Listagem ativa de vereadores (28 da legislatura atual) | CMG publica em seu próprio portal (`/institucional/parlamentares/`), não no diário executivo |
+| Detalhe por-vereador (foto, biografia, partido corrente) | idem — só HTML do portal CMG |
+| Proposições (PL, PD, PR) | Tramitam só em `camaragoiania.sapl.com.br` ou equivalente; não viram acto de executivo |
+| Despesas por fornecedor × vereador | Publicadas por resolução em PDF no portal CMG (`/transparencia/...pdf`), raramente replicadas no diário executivo |
+
+## Criterio de desbloqueio (revisado 2026-04-22)
+
+Plano em duas camadas:
+
+**Camada 1 — quick win (~1h)**: retrofit do `querido_diario_go` adicionando
+regex `ato_vereador` como descrito acima. Não resolve o produto "perfil de
+vereador", mas bota sinais CMG-fuzzy-matched no grafo (`MunicipalGazetteAct
+{act_type='ato_vereador'}`), consultáveis por quem investigar.
+
+**Camada 2 — solução completa**: continua valendo a opção (4) — scraper
+dedicado do portal CMG. Re-avaliar ROI a cada 6 meses; escopo (a) listagem
+parlamentares via HTML simples, (b) PDF parser pras despesas via `pypdf`
+(já dep), (c) archival por URL.
+
+Se alguma das fontes alternativas materializar mais dado equivalente
+(basedosdados.org `vereador_goiania_despesas` é o candidato mais realista
+à médio prazo), a camada 2 vira deletable.

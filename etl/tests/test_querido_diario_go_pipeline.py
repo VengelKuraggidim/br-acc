@@ -67,6 +67,35 @@ class TestHelpers:
     def test_classify_act_outro(self) -> None:
         assert _classify_act("publicação genérica sem palavras-chave") == "outro"
 
+    def test_classify_act_ato_vereador_verba(self) -> None:
+        """CMG signals devem ser classificados como ato_vereador."""
+        assert (
+            _classify_act("Repasse de verba indenizatória aos vereadores")
+            == "ato_vereador"
+        )
+
+    def test_classify_act_ato_vereador_subsidio(self) -> None:
+        assert (
+            _classify_act("Fica fixado o subsídio de vereador em R$ ...")
+            == "ato_vereador"
+        )
+
+    def test_classify_act_ato_vereador_resolucao_mesa(self) -> None:
+        assert (
+            _classify_act("Resolução da Mesa nº 42/2025 dispõe sobre ...")
+            == "ato_vereador"
+        )
+
+    def test_classify_act_ato_vereador_beats_nomeacao(self) -> None:
+        """ato_vereador tem prioridade sobre nomeacao quando ambos bateriam."""
+        # Sem o reorder o "nomear" casaria primeiro e perderia o sinal CMG.
+        assert (
+            _classify_act(
+                "nomear servidor para cargo na Câmara Municipal de Goiânia",
+            )
+            == "ato_vereador"
+        )
+
     def test_extract_cnpjs(self) -> None:
         text = "Empresa 12.345.678/0001-95 contratada."
         results = _extract_cnpjs(text)

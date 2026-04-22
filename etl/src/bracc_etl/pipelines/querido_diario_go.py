@@ -54,7 +54,19 @@ _CPF_RE = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
 _APPOINTMENT_KEYWORDS = ["nomear", "nomeação", "cargo comissionado", "exoneração"]
 _APPOINTMENT_SEARCH = "|".join(_APPOINTMENT_KEYWORDS)
 
+# "ato_vereador" vem PRIMEIRO porque rouba matches genéricos (nomeacao,
+# contrato) quando o acto é especificamente da Câmara Municipal — CMG
+# não tem diário autônomo, mas subsídios / verba indenizatória /
+# resoluções da Mesa são publicadas no diário da Prefeitura. Sem prioridade,
+# "nomear vereador X" classifica como "nomeacao" e perde o sinal CMG.
+# Classificação aproximada (high recall, accept false positives); o grafo
+# só usa act_type pra filtragem por categoria, não pra decisão de negócio.
 _ACT_TYPE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("ato_vereador", re.compile(
+        r"verba\s+indenizat[oó]ria|subs[ií]dio\s+(?:de\s+)?vereador|"
+        r"resolu[cç][aã]o\s+da\s+mesa|c[aâ]mara\s+municipal\s+de\s+goi[aâ]nia",
+        re.IGNORECASE,
+    )),
     ("nomeacao", re.compile(r"nomea[rç]|nomeação", re.IGNORECASE)),
     ("exoneracao", re.compile(r"exonera[rç]|exoneração", re.IGNORECASE)),
     ("contrato", re.compile(r"contrat[oa]|licitação|pregão", re.IGNORECASE)),
