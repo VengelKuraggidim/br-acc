@@ -98,6 +98,19 @@ def _hash_id(*parts: str, length: int = 20) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
+def _is_premasked_cpf(raw: str) -> bool:
+    """Match upstream TCM-GO's pre-masked CPF format (``NN***.***-***``).
+
+    O TCM-GO usa o shape abreviado ``NN***.***-***`` (1 ponto + 1 traco,
+    nao o CPF pontuado tradicional). Exige asterisco, ponto e traco pra
+    nao colidir com strings aleatorias.
+    """
+    if not raw:
+        return False
+    s = raw.strip()
+    return "*" in s and "." in s and "-" in s
+
+
 def _rewrite_contas_csv(
     raw_text: str,
     out_path: Path,
@@ -347,6 +360,13 @@ class TcmgoSancoesPipeline(Pipeline):
             elif len(doc_digits) == 11:
                 doc_kind = "CPF"
                 doc_fmt = mask_cpf(doc_raw)
+            elif _is_premasked_cpf(doc_raw):
+                # Upstream TCM-GO ships CPFs pre-masked (``76***.***-***``);
+                # strip_document() devolve 2 digitos, entao cai aqui. Nao
+                # tem como unmask — preserva a mascara vinda da origem e
+                # carimba kind=CPF pra validation queries acharem o row.
+                doc_kind = "CPF"
+                doc_fmt = doc_raw.strip()
             impedido_record_id = f"{doc_fmt}|{processo}"
             # Todos os impedidos derivam do mesmo CSV de contas-irregulares
             # — então compartilham a mesma URI de snapshot (quando o fetch

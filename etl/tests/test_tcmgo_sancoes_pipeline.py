@@ -42,7 +42,8 @@ class TestTransform:
         pipeline = _make_pipeline()
         pipeline.extract()
         pipeline.transform()
-        assert len(pipeline.impedidos) == 2
+        # 1 CNPJ + 1 CPF cru + 1 CPF pre-mascarado (upstream TCM-GO).
+        assert len(pipeline.impedidos) == 3
 
     def test_rejected_accounts_count(self) -> None:
         pipeline = _make_pipeline()
@@ -66,6 +67,23 @@ class TestTransform:
             if r["document_kind"] == "CPF"
         ]
         assert all("***" in c for c in cpfs)
+
+    def test_premasked_cpf_classified_as_cpf(self) -> None:
+        """Upstream TCM-GO entrega CPFs ja mascarados (``NN***.***-***``) —
+        pipeline precisa reconhecer esse shape e carimbar ``kind=CPF`` +
+        preservar a mascara. Sem isso, as 1422 rows de producao caem em
+        ``kind=""`` e quebram a validation query documentada no TODO 03.
+        """
+        pipeline = _make_pipeline()
+        pipeline.extract()
+        pipeline.transform()
+        premasked = [
+            r for r in pipeline.impedidos
+            if r["name"] == "RESPONSAVEL PRE MASCARADO"
+        ]
+        assert len(premasked) == 1
+        assert premasked[0]["document_kind"] == "CPF"
+        assert premasked[0]["document"] == "76***.***-***"
 
     def test_impedido_rels_only_for_cnpj(self) -> None:
         pipeline = _make_pipeline()
