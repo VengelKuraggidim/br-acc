@@ -266,6 +266,154 @@ CREATE INDEX socio_snapshot_membership_id IF NOT EXISTS
 CREATE INDEX socio_snapshot_date IF NOT EXISTS
   FOR ()-[r:SOCIO_DE_SNAPSHOT]-() ON (r.snapshot_date);
 
+// ── Merge-key Indexes (labels that pipelines MERGE by a unique-ish key) ───────
+// These speed up MERGE-by-key from O(n) full-scan to O(1) index lookup.
+// NOT created as CONSTRAINTs to avoid failing on legacy duplicates; promote to
+// CONSTRAINT once each domain has been audited for duplicates.
+CREATE INDEX campaign_expense_id IF NOT EXISTS
+  FOR (n:CampaignExpense) ON (n.expense_id);
+
+CREATE INDEX campaign_donation_id IF NOT EXISTS
+  FOR (n:CampaignDonation) ON (n.donation_id);
+
+CREATE INDEX campaign_donor_id IF NOT EXISTS
+  FOR (n:CampaignDonor) ON (n.doador_id);
+
+CREATE INDEX federal_legislator_id_camara IF NOT EXISTS
+  FOR (n:FederalLegislator) ON (n.id_camara);
+
+CREATE INDEX state_legislator_id IF NOT EXISTS
+  FOR (n:StateLegislator) ON (n.legislator_id);
+
+CREATE INDEX legislative_expense_id IF NOT EXISTS
+  FOR (n:LegislativeExpense) ON (n.expense_id);
+
+CREATE INDEX legislative_proposition_id IF NOT EXISTS
+  FOR (n:LegislativeProposition) ON (n.proposition_id);
+
+CREATE INDEX expense_id IF NOT EXISTS
+  FOR (n:Expense) ON (n.expense_id);
+
+CREATE INDEX senator_id_senado IF NOT EXISTS
+  FOR (n:Senator) ON (n.id_senado);
+
+CREATE INDEX canonical_person_id IF NOT EXISTS
+  FOR (n:CanonicalPerson) ON (n.canonical_id);
+
+CREATE INDEX custo_mandato_cargo IF NOT EXISTS
+  FOR (n:CustoMandato) ON (n.cargo);
+
+CREATE INDEX custo_componente_id IF NOT EXISTS
+  FOR (n:CustoComponente) ON (n.componente_id);
+
+CREATE INDEX tcmgo_impedido_id IF NOT EXISTS
+  FOR (n:TcmGoImpedido) ON (n.impedido_id);
+
+CREATE INDEX tcmgo_rejected_account_id IF NOT EXISTS
+  FOR (n:TcmGoRejectedAccount) ON (n.account_id);
+
+CREATE INDEX tcego_decision_id IF NOT EXISTS
+  FOR (n:TceGoDecision) ON (n.decision_id);
+
+CREATE INDEX tcego_audit_id IF NOT EXISTS
+  FOR (n:TceGoAudit) ON (n.audit_id);
+
+CREATE INDEX tcego_irregular_account_id IF NOT EXISTS
+  FOR (n:TceGoIrregularAccount) ON (n.account_id);
+
+CREATE INDEX bcb_penalty_id IF NOT EXISTS
+  FOR (n:BCBPenalty) ON (n.penalty_id);
+
+CREATE INDEX barred_ngo_id IF NOT EXISTS
+  FOR (n:BarredNGO) ON (n.ngo_id);
+
+CREATE INDEX bid_id IF NOT EXISTS
+  FOR (n:Bid) ON (n.bid_id);
+
+CREATE INDEX cpi_id IF NOT EXISTS
+  FOR (n:CPI) ON (n.cpi_id);
+
+CREATE INDEX cvm_proceeding_pas_id IF NOT EXISTS
+  FOR (n:CVMProceeding) ON (n.pas_id);
+
+CREATE INDEX dou_act_id IF NOT EXISTS
+  FOR (n:DOUAct) ON (n.act_id);
+
+CREATE INDEX declared_asset_id IF NOT EXISTS
+  FOR (n:DeclaredAsset) ON (n.asset_id);
+
+CREATE INDEX expulsion_id IF NOT EXISTS
+  FOR (n:Expulsion) ON (n.expulsion_id);
+
+CREATE INDEX fund_cnpj IF NOT EXISTS
+  FOR (n:Fund) ON (n.fund_cnpj);
+
+CREATE INDEX global_pep_id IF NOT EXISTS
+  FOR (n:GlobalPEP) ON (n.pep_id);
+
+CREATE INDEX go_appointment_id IF NOT EXISTS
+  FOR (n:GoAppointment) ON (n.appointment_id);
+
+CREATE INDEX go_council_expense_id IF NOT EXISTS
+  FOR (n:GoCouncilExpense) ON (n.expense_id);
+
+CREATE INDEX go_gazette_act_id IF NOT EXISTS
+  FOR (n:GoGazetteAct) ON (n.act_id);
+
+CREATE INDEX go_legislative_proposal_id IF NOT EXISTS
+  FOR (n:GoLegislativeProposal) ON (n.proposal_id);
+
+CREATE INDEX go_security_stat_id IF NOT EXISTS
+  FOR (n:GoSecurityStat) ON (n.stat_id);
+
+CREATE INDEX go_state_contract_id IF NOT EXISTS
+  FOR (n:GoStateContract) ON (n.contract_id);
+
+CREATE INDEX go_state_sanction_id IF NOT EXISTS
+  FOR (n:GoStateSanction) ON (n.sanction_id);
+
+CREATE INDEX go_state_supplier_cnpj IF NOT EXISTS
+  FOR (n:GoStateSupplier) ON (n.cnpj);
+
+CREATE INDEX go_vereador_id IF NOT EXISTS
+  FOR (n:GoVereador) ON (n.vereador_id);
+
+CREATE INDEX gov_card_expense_id IF NOT EXISTS
+  FOR (n:GovCardExpense) ON (n.expense_id);
+
+CREATE INDEX gov_travel_id IF NOT EXISTS
+  FOR (n:GovTravel) ON (n.travel_id);
+
+CREATE INDEX international_sanction_id IF NOT EXISTS
+  FOR (n:InternationalSanction) ON (n.sanction_id);
+
+CREATE INDEX legal_case_id IF NOT EXISTS
+  FOR (n:LegalCase) ON (n.case_id);
+
+CREATE INDEX leniency_id IF NOT EXISTS
+  FOR (n:LeniencyAgreement) ON (n.leniency_id);
+
+CREATE INDEX municipal_finance_id IF NOT EXISTS
+  FOR (n:MunicipalFinance) ON (n.finance_id);
+
+CREATE INDEX offshore_entity_id IF NOT EXISTS
+  FOR (n:OffshoreEntity) ON (n.offshore_id);
+
+CREATE INDEX offshore_officer_id IF NOT EXISTS
+  FOR (n:OffshoreOfficer) ON (n.offshore_officer_id);
+
+CREATE INDEX pep_cgu_id IF NOT EXISTS
+  FOR (n:PEPRecord) ON (n.pep_id);
+
+CREATE INDEX party_membership_id IF NOT EXISTS
+  FOR (n:PartyMembership) ON (n.membership_id);
+
+CREATE INDEX payment_transfer_id IF NOT EXISTS
+  FOR (n:Payment) ON (n.transfer_id);
+
+CREATE INDEX tax_waiver_id IF NOT EXISTS
+  FOR (n:TaxWaiver) ON (n.waiver_id);
+
 // ── Fulltext Search Index ───────────────────────────────
 // standard-folding analyzer makes search accent-insensitive ("João" ~ "joao").
 // Analyzer changes on an existing index are handled by ensure_schema().

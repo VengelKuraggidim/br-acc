@@ -228,6 +228,49 @@ async def obter_verba_indenizatoria_alego(
     )
 
 
+async def obter_ceaps_senador(
+    driver: AsyncDriver,
+    id_senado: str,
+    anos: list[int] | None = None,
+) -> list[DespesaGabinete]:
+    """Le CEAPS de um senador federal do grafo, agregada por tipo.
+
+    CEAPS (Cota para o Exercicio da Atividade Parlamentar dos Senadores) e a
+    cota do Senado, regulada pelo Ato da Comissao Diretora no 3/2016. Analogo
+    de :func:`obter_ceap_deputado` (federal Camara) / :func:`obter_verba_
+    indenizatoria_alego` (estadual GO) / :func:`obter_cota_vereador_goiania`
+    (municipal GYN) — **mesmo shape de saida** (``DespesaGabinete`` agregado
+    por tipo) pra que o PerfilService trate as quatro casas uniformemente.
+
+    A ingestao e feita pelo pipeline ``senado`` (CEAPS CSV anual do portal
+    do Senado) + ``senado_senadores_foto`` (roster :Senator com id_senado).
+    A bridge :Senator -> :Expense passa por :Person por name-match (ver
+    ``perfil_ceaps_senador.cypher`` pra detalhes).
+
+    Args:
+        driver: Neo4j async driver.
+        id_senado: ``id_senado`` do no ``:Senator`` (string, mesmo formato
+            que o pipeline ``senado_senadores_foto`` grava).
+        anos: Lista de anos a considerar. Se ``None``, usa
+            ``[ano_atual, ano_atual - 1]`` (mesmo default das outras casas).
+            Se ``[]``, traz todos os anos ingeridos.
+
+    Returns:
+        Lista de ``DespesaGabinete`` ordenada por ``total`` decrescente.
+        Lista vazia se o senador nao tem CEAPS ingerida ou o no nao existe;
+        nunca levanta excecao nesse caso (log ``warning``).
+    """
+    anos_filtro = anos if anos is not None else _default_anos()
+    return await _aggregate_despesas(
+        driver,
+        "perfil_ceaps_senador",
+        {"id_senado": str(id_senado), "anos": anos_filtro},
+        contexto_log=(
+            f"CEAPS senador id_senado={id_senado} anos={anos_filtro}"
+        ),
+    )
+
+
 async def obter_cota_vereador_goiania(
     driver: AsyncDriver,
     vereador_id: str,

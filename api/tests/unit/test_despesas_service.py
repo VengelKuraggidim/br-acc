@@ -20,6 +20,7 @@ import pytest
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
+    obter_ceaps_senador,
     obter_cota_vereador_goiania,
     obter_verba_indenizatoria_alego,
 )
@@ -364,6 +365,71 @@ class TestObterCotaVereadorGoiania:
     async def test_anos_default_sao_os_ultimos_dois(self) -> None:
         driver = _build_driver([])
         await obter_cota_vereador_goiania(driver, vereador_id="V")
+
+        session_cm = driver.session.return_value
+        session = session_cm.__aenter__.return_value
+        params = session.run.await_args.args[1]
+        anos = params["anos"]
+        assert len(anos) == 2
+        assert anos[0] - anos[1] == 1
+
+
+class TestObterCeapsSenador:
+    """CEAPS de senador federal — bridge :Senator -> :Person (por nome)
+    -> :Expense (source='senado'). Mesmo contrato agregado das outras casas.
+    """
+
+    @pytest.mark.anyio
+    async def test_agrupa_por_tipo_e_ordena_desc(self) -> None:
+        records = [
+            _mock_record({"tipo_raw": "PASSAGENS AEREAS", "valor": 5_000.0, "ano": 2025}),
+            _mock_record({"tipo_raw": "PASSAGENS AEREAS", "valor": 3_000.0, "ano": 2024}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": 1_500.0, "ano": 2025}),
+        ]
+        driver = _build_driver(records)
+
+        resultado = await obter_ceaps_senador(driver, id_senado="5895")
+
+        assert len(resultado) == 2
+        # PASSAGENS AEREAS (8000) > TELEFONIA (1500)
+        assert resultado[0].total == pytest.approx(8_000.0)
+        assert resultado[1].tipo == "Telefone"
+        assert resultado[1].total == pytest.approx(1_500.0)
+
+    @pytest.mark.anyio
+    async def test_sem_ceaps_retorna_lista_vazia(self) -> None:
+        driver = _build_driver([])
+        resultado = await obter_ceaps_senador(driver, id_senado="99999")
+        assert resultado == []
+
+    @pytest.mark.anyio
+    async def test_ignora_valores_invalidos(self) -> None:
+        records = [
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": None}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": -10.0}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": "abc"}),
+            _mock_record({"tipo_raw": "TELEFONIA", "valor": 75.0}),
+        ]
+        driver = _build_driver(records)
+        resultado = await obter_ceaps_senador(driver, id_senado="123")
+        assert len(resultado) == 1
+        assert resultado[0].total == 75.0
+
+    @pytest.mark.anyio
+    async def test_params_passados_para_query(self) -> None:
+        driver = _build_driver([])
+        await obter_ceaps_senador(driver, id_senado="5895", anos=[2022, 2023])
+
+        session_cm = driver.session.return_value
+        session = session_cm.__aenter__.return_value
+        params = session.run.await_args.args[1]
+        assert params["id_senado"] == "5895"
+        assert params["anos"] == [2022, 2023]
+
+    @pytest.mark.anyio
+    async def test_anos_default_sao_os_ultimos_dois(self) -> None:
+        driver = _build_driver([])
+        await obter_ceaps_senador(driver, id_senado="S")
 
         session_cm = driver.session.return_value
         session = session_cm.__aenter__.return_value

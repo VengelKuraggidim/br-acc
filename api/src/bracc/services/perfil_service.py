@@ -72,6 +72,7 @@ from bracc.services.contas_campanha_service import gerar_comparacao_contas
 from bracc.services.despesas_service import (
     calcular_media_ceap_estado,
     obter_ceap_deputado,
+    obter_ceaps_senador,
     obter_cota_vereador_goiania,
     obter_verba_indenizatoria_alego,
 )
@@ -396,27 +397,36 @@ def _build_aviso_despesas(
     is_deputado_federal: bool,
     is_estadual_go: bool,
     is_vereador_goiania: bool,
+    is_senador_federal: bool,
 ) -> str:
     """Aviso explicativo da fonte de despesas de gabinete.
 
-    Quatro casos cobertos — o PWA renderiza o texto como legenda da secao:
+    Cinco casos cobertos — o PWA renderiza o texto como legenda da secao:
 
     * Deputado federal com CEAP ingerido → fonte curta "cota CEAP".
+    * Senador federal com CEAPS ingerida → fonte "cota CEAPS" do Senado.
     * Deputado estadual GO com verba ALEGO ingerida → fonte "verba ALEGO".
     * Vereador(a) da Camara Municipal de Goiania (CMG) → cota municipal
       do portal ``goiania.go.leg.br``.
-    * Qualquer outro caso (Senador, outros municipios, sem dados, etc.) →
+    * Qualquer outro caso (outros municipios, sem dados, etc.) →
       mensagem curta "Dados de gastos parlamentares nao disponiveis".
 
     Quando ``despesas_gabinete`` esta vazio mas o politico tem label
-    conhecida (federal/estadual GO/vereador GYN), exibimos ainda a fonte
-    esperada pra nao deixar o PWA sem contexto.
+    conhecida (federal/estadual GO/vereador GYN/senador), exibimos ainda
+    a fonte esperada pra nao deixar o PWA sem contexto.
     """
     if is_deputado_federal:
         return (
             "Cota de atividade parlamentar da Camara Federal (CEAP) — "
             "inclui gastos de gabinete, telefone, combustivel e aluguel "
             "de escritorio."
+        )
+    if is_senador_federal:
+        return (
+            "Cota para o Exercicio da Atividade Parlamentar dos Senadores "
+            "(CEAPS) — ressarcimento de despesas de atividade legislativa "
+            "federal (passagens, telefonia, aluguel de imoveis, divulgacao, "
+            "combustivel). Regulada pelo Ato da Comissao Diretora no 3/2016."
         )
     if is_estadual_go:
         return (
@@ -551,6 +561,9 @@ async def obter_perfil(
     is_deputado_federal = bool(
         labels_raw and "FederalLegislator" in labels_raw,
     )
+    is_senador_federal = bool(
+        labels_raw and "Senator" in labels_raw,
+    )
     uf_props_raw = props.get("uf")
     uf_props = (
         str(uf_props_raw).upper() if isinstance(uf_props_raw, str) else ""
@@ -585,6 +598,18 @@ async def obter_perfil(
             )
         except Exception as exc:  # noqa: BLE001
             raise DriverError(str(exc)) from exc
+    elif is_senador_federal:
+        # ``id_senado`` e a chave que o pipeline ``senado_senadores_foto``
+        # grava no no :Senator. Bridge Senator -> Person (por nome) ->
+        # GASTOU -> Expense (source='senado') via ``perfil_ceaps_senador``.
+        id_senado_raw = props.get("id_senado")
+        if id_senado_raw:
+            try:
+                despesas_gabinete = await obter_ceaps_senador(
+                    driver, str(id_senado_raw), anos_ceap,
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise DriverError(str(exc)) from exc
     elif is_estadual_go:
         # ``legislator_id`` e o hash estavel que o pipeline ``alego`` grava
         # no no ``:StateLegislator`` e usa como chave do rel GASTOU_COTA_GO.
@@ -762,6 +787,7 @@ async def obter_perfil(
         is_deputado_federal=is_deputado_federal,
         is_estadual_go=is_estadual_go,
         is_vereador_goiania=is_vereador_goiania,
+        is_senador_federal=is_senador_federal,
     )
 
     # Score consolidado de red flags (pedagógico pro PWA — agrega os

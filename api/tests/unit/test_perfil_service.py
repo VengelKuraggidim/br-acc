@@ -94,9 +94,10 @@ def _patch_ceap_and_emendas(
     media_estado: float = 0.0,
     verba_alego: list[DespesaGabinete] | None = None,
     cota_gyn: list[DespesaGabinete] | None = None,
+    ceaps_senador: list[DespesaGabinete] | None = None,
 ) -> Any:
     """Patch dos sub-services paralelos do service 04.C/04.D + ALEGO (verba) +
-    CMG (cota vereador Goiania)."""
+    CMG (cota vereador Goiania) + Senado (CEAPS)."""
     return (
         patch(
             "bracc.services.perfil_service.obter_ceap_deputado",
@@ -122,6 +123,11 @@ def _patch_ceap_and_emendas(
             "bracc.services.perfil_service.obter_cota_vereador_goiania",
             new_callable=AsyncMock,
             return_value=cota_gyn or [],
+        ),
+        patch(
+            "bracc.services.perfil_service.obter_ceaps_senador",
+            new_callable=AsyncMock,
+            return_value=ceaps_senador or [],
         ),
     )
 
@@ -654,6 +660,115 @@ def _state_legislator_node(
     return props
 
 
+def _senator_node(
+    *, id_senado: str = "5895", uf: str = "GO",
+    include_provenance: bool = True, **extra: Any,
+) -> dict[str, Any]:
+    """Props canonicos de um ``:Senator`` (pipeline ``senado_senadores_foto``)."""
+    props: dict[str, Any] = {
+        "name": "JORGE KAJURU REIS DA COSTA NASSER",
+        "cpf": "",
+        "partido": "PSB",
+        "uf": uf,
+        "id_senado": id_senado,
+        "senator_id": f"senado_{id_senado}",
+        "foto_url": f"http://senado/{id_senado}.jpg",
+        "is_pep": False,
+        "element_id": f"4:senator:{id_senado}",
+        "labels": ["Senator"],
+        "source": "senado_senadores_foto",
+    }
+    if include_provenance:
+        props.update({
+            "source_id": "senado_senadores_foto",
+            "source_record_id": id_senado,
+            "source_url": "https://legis.senado.leg.br/dadosabertos/senador/lista/atual",
+            "ingested_at": "2026-04-22T00:00:00+00:00",
+            "run_id": "senado_senadores_foto_20260422000000",
+            "source_snapshot_uri": "senado_senadores_foto/2026-04/snap.json",
+        })
+    props.update(extra)
+    return props
+
+
+class TestRoteamentoDespesasSenadorFederal:
+    """``obter_ceaps_senador`` e chamado quando o politico e ``:Senator``,
+    e nenhuma das outras despesas (CEAP federal, ALEGO, CMG) e acionada."""
+
+    @pytest.mark.anyio
+    async def test_senador_usa_ceaps(self) -> None:
+        driver = _build_driver()
+        senator = _senator_node()
+        record = _mock_record({"politico": senator, "conexoes": []})
+
+        ceaps_fake = [
+            DespesaGabinete(
+                tipo="Passagens", total=12_000.0, total_fmt="R$ 12 mil",
+            ),
+            DespesaGabinete(
+                tipo="Telefone", total=800.0, total_fmt="R$ 800,00",
+            ),
+        ]
+        patches = _patch_ceap_and_emendas(ceaps_senador=ceaps_fake)
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            ceap_patch as ceap_mock,
+            emendas_patch as emendas_mock,
+            media_patch,
+            verba_patch as verba_mock,
+            cota_gyn_patch as cota_mock,
+            ceaps_patch as ceaps_mock,
+        ):
+            perfil = await obter_perfil(driver, "4:senator:5895")
+
+        ceap_mock.assert_not_awaited()
+        emendas_mock.assert_not_awaited()
+        verba_mock.assert_not_awaited()
+        cota_mock.assert_not_awaited()
+        ceaps_mock.assert_awaited_once()
+        assert ceaps_mock.await_args.args[1] == "5895"
+
+        assert len(perfil.despesas_gabinete) == 2
+        assert perfil.despesas_gabinete[0].tipo == "Passagens"
+        assert perfil.total_despesas_gabinete == pytest.approx(12_800.0)
+
+        assert "CEAPS" in perfil.aviso_despesas
+        assert "Camara Federal" not in perfil.aviso_despesas
+        assert "ALEGO" not in perfil.aviso_despesas
+
+    @pytest.mark.anyio
+    async def test_senador_sem_id_senado_nao_roteia(self) -> None:
+        """Senator sem ``id_senado`` (hipotetico) nao chama o service."""
+        driver = _build_driver()
+        senator = _senator_node()
+        senator.pop("id_senado", None)
+        record = _mock_record({"politico": senator, "conexoes": []})
+
+        patches = _patch_ceap_and_emendas()
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
+        with (
+            patch(
+                "bracc.services.perfil_service.execute_query_single",
+                new_callable=AsyncMock,
+                return_value=record,
+            ),
+            ceap_patch, emendas_patch, media_patch,
+            verba_patch, cota_gyn_patch,
+            ceaps_patch as ceaps_mock,
+        ):
+            perfil = await obter_perfil(driver, "4:senator:5895")
+
+        ceaps_mock.assert_not_awaited()
+        assert perfil.despesas_gabinete == []
+        # Aviso padrao do senador ainda aparece mesmo sem dados.
+        assert "CEAPS" in perfil.aviso_despesas
+
+
 class TestRoteamentoDespesasEstadualGo:
     """``obter_verba_indenizatoria_alego`` é chamado quando o político é
     ``:StateLegislator`` GO, e o CEAP federal NÃO é chamado. Inversão
@@ -670,7 +785,7 @@ class TestRoteamentoDespesasEstadualGo:
             DespesaGabinete(tipo="Telefone", total=400.0, total_fmt="R$ 400,00"),
         ]
         patches = _patch_ceap_and_emendas(verba_alego=verba_fake)
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -682,13 +797,15 @@ class TestRoteamentoDespesasEstadualGo:
             media_patch,
             verba_patch as verba_mock,
             cota_gyn_patch as cota_gyn_mock,
+            ceaps_patch as ceaps_mock,
         ):
             perfil = await obter_perfil(driver, "4:state:9")
 
-        # Não chamou CEAP federal nem emendas federais nem cota GYN.
+        # Não chamou CEAP federal nem emendas federais nem cota GYN nem CEAPS.
         ceap_mock.assert_not_awaited()
         emendas_mock.assert_not_awaited()
         cota_gyn_mock.assert_not_awaited()
+        ceaps_mock.assert_not_awaited()
         # Chamou a verba ALEGO com o legislator_id do nó focal.
         verba_mock.assert_awaited_once()
         call_args = verba_mock.await_args
@@ -713,7 +830,7 @@ class TestRoteamentoDespesasEstadualGo:
         record = _mock_record({"politico": state, "conexoes": []})
 
         patches = _patch_ceap_and_emendas()
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -721,6 +838,7 @@ class TestRoteamentoDespesasEstadualGo:
                 return_value=record,
             ),
             ceap_patch, emendas_patch, media_patch, verba_patch as verba_mock, cota_gyn_patch,
+            ceaps_patch,
         ):
             perfil = await obter_perfil(driver, "4:state:9")
 
@@ -736,7 +854,7 @@ class TestRoteamentoDespesasEstadualGo:
         record = _mock_record({"politico": legislator, "conexoes": []})
 
         patches = _patch_ceap_and_emendas()
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -747,14 +865,16 @@ class TestRoteamentoDespesasEstadualGo:
             emendas_patch as emendas_mock,
             media_patch, verba_patch as verba_mock,
             cota_gyn_patch as cota_gyn_mock,
+            ceaps_patch as ceaps_mock,
         ):
             await obter_perfil(driver, "4:abc:1")
 
-        # Federal chama CEAP + emendas, nunca verba ALEGO nem cota GYN.
+        # Federal chama CEAP + emendas, nunca verba ALEGO, cota GYN ou CEAPS.
         ceap_mock.assert_awaited_once()
         emendas_mock.assert_awaited_once()
         verba_mock.assert_not_awaited()
         cota_gyn_mock.assert_not_awaited()
+        ceaps_mock.assert_not_awaited()
 
 
 class TestAvisoDespesasDinamico:
@@ -904,7 +1024,7 @@ class TestRoteamentoDespesasMunicipalGyn:
             DespesaGabinete(tipo="Combustivel", total=300.0, total_fmt="R$ 300,00"),
         ]
         patches = _patch_ceap_and_emendas(cota_gyn=cota_fake)
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -916,13 +1036,15 @@ class TestRoteamentoDespesasMunicipalGyn:
             media_patch,
             verba_patch as verba_mock,
             cota_gyn_patch as cota_mock,
+            ceaps_patch as ceaps_mock,
         ):
             perfil = await obter_perfil(driver, "4:vereador:1")
 
-        # Nao chamou CEAP federal, emendas federais nem verba ALEGO.
+        # Nao chamou CEAP federal, emendas federais, verba ALEGO nem CEAPS.
         ceap_mock.assert_not_awaited()
         emendas_mock.assert_not_awaited()
         verba_mock.assert_not_awaited()
+        ceaps_mock.assert_not_awaited()
         # Chamou a cota CMG com o vereador_id do no focal.
         cota_mock.assert_awaited_once()
         assert cota_mock.await_args.args[1] == "gyn-hash-99"
@@ -947,7 +1069,7 @@ class TestRoteamentoDespesasMunicipalGyn:
         record = _mock_record({"politico": vereador, "conexoes": []})
 
         patches = _patch_ceap_and_emendas()
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -956,6 +1078,7 @@ class TestRoteamentoDespesasMunicipalGyn:
             ),
             ceap_patch, emendas_patch, media_patch, verba_patch,
             cota_gyn_patch as cota_mock,
+            ceaps_patch,
         ):
             perfil = await obter_perfil(driver, "4:vereador:1")
 
@@ -970,7 +1093,7 @@ class TestRoteamentoDespesasMunicipalGyn:
         record = _mock_record({"politico": state, "conexoes": []})
 
         patches = _patch_ceap_and_emendas()
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -980,6 +1103,7 @@ class TestRoteamentoDespesasMunicipalGyn:
             ceap_patch, emendas_patch, media_patch,
             verba_patch as verba_mock,
             cota_gyn_patch as cota_mock,
+            ceaps_patch,
         ):
             await obter_perfil(driver, "4:state:9")
 
@@ -1012,7 +1136,7 @@ class TestCanonicalIdPassthrough:
         record = _mock_record({"politico": senator, "conexoes": []})
 
         patches = _patch_ceap_and_emendas()
-        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch = patches
+        ceap_patch, emendas_patch, media_patch, verba_patch, cota_gyn_patch, ceaps_patch = patches
         with (
             patch(
                 "bracc.services.perfil_service.execute_query_single",
@@ -1020,7 +1144,7 @@ class TestCanonicalIdPassthrough:
                 return_value=record,
             ) as query_mock,
             ceap_patch, emendas_patch, media_patch,
-            verba_patch, cota_gyn_patch,
+            verba_patch, cota_gyn_patch, ceaps_patch as ceaps_mock,
         ):
             perfil = await obter_perfil(driver, "canon_senado_5895")
 

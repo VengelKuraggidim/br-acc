@@ -2552,18 +2552,26 @@ function renderPerfil(d) {
     html += '</div></details></div>';
   }
 
-  // Despesas de gabinete (cota parlamentar - dados em tempo real da Camara)
+  // Despesas de gabinete — cota parlamentar ingerida do grafo. Titulo e legenda
+  // derivados do aviso_despesas pra cobrir 4 casas (CEAP federal, CEAPS Senado,
+  // verba ALEGO, cota CMG vereador) sem hardcodar "Camara dos Deputados".
   if (d.despesas_gabinete && d.despesas_gabinete.length) {
+    const avisoHead = d.aviso_despesas || '';
+    // Extrai nome curto da cota pra o titulo: "... (CEAPS) — ..." -> "CEAPS".
+    const siglaMatch = avisoHead.match(/\(([A-Z]{3,6})\)/);
+    const sigla = siglaMatch ? siglaMatch[1] : 'cota parlamentar';
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(249,115,22,0.15);">&#128179;</span>
-          Cota Parlamentar (CEAP)
+          Gastos com a politica (${sigla})
         </div>
         <span class="badge badge-warning">${d.total_despesas_gabinete_fmt}</span>
-      </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Dados em tempo real da API da Câmara dos Deputados</div>
-      <details class="collapsible">
+      </div>`;
+    if (avisoHead) {
+      html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${avisoHead}</div>`;
+    }
+    html += `<details class="collapsible">
         <summary>Ver ${d.despesas_gabinete.length} tipo(s) de gasto</summary>
         <div class="collapsible-body">`;
     d.despesas_gabinete.forEach(g => {
