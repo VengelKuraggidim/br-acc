@@ -64,6 +64,9 @@ elections_schema = pa.DataFrameSchema(
         "uf": pa.Column(str, nullable=True, coerce=True),
         "municipio": pa.Column(str, nullable=True, coerce=True),
         "candidate_sq": pa.Column(str, nullable=False, coerce=True),
+        # DS_SIT_TOT_TURNO — empty string when not provided (pre-2020 CSVs
+        # without the column, or fixtures). Stamped on the CANDIDATO_EM rel.
+        "situacao": pa.Column(str, nullable=True, coerce=True, required=False),
     },
     coerce=True,
     strict=False,

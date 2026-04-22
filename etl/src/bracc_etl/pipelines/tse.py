@@ -96,6 +96,7 @@ class TSEPipeline(Pipeline):
             uf = str(row["uf"]).strip().upper()
             municipio = normalize_name(str(row.get("municipio", "")))
             partido = str(row.get("partido", "")).strip().upper()
+            situacao = str(row.get("situacao", "")).strip().upper()
 
             # Only store CPF if it's a real value (not the TSE "-4" mask)
             cpf = None
@@ -118,6 +119,7 @@ class TSEPipeline(Pipeline):
                 "uf": uf,
                 "municipio": municipio,
                 "candidate_sq": sq,
+                "situacao": situacao,
             })
 
         self.candidates = deduplicate_rows(candidates, ["sq_candidato"])
@@ -227,6 +229,7 @@ class TSEPipeline(Pipeline):
                 "target_cargo": e["cargo"],
                 "target_uf": e["uf"],
                 "target_municipio": e["municipio"],
+                "situacao": e.get("situacao", ""),
             }
             cpf = sq_to_cpf.get(e["candidate_sq"])
             if cpf:
@@ -246,7 +249,8 @@ class TSEPipeline(Pipeline):
                 "WHERE p IS NOT NULL "
                 "MATCH (e:Election {year: row.target_year, cargo: row.target_cargo, "
                 "uf: row.target_uf, municipio: row.target_municipio}) "
-                "MERGE (p)-[:CANDIDATO_EM]->(e)",
+                "MERGE (p)-[r:CANDIDATO_EM]->(e) "
+                "SET r.situacao = row.situacao",
                 candidato_rels,
             )
 
@@ -403,6 +407,7 @@ _CANDIDATO_COLS = {
     "ANO_ELEICAO": "ano",
     "SG_PARTIDO": "partido",
     "NR_CANDIDATO": "nr_candidato",
+    "DS_SIT_TOT_TURNO": "situacao",
 }
 
 _DOACAO_COLS_NEW = {
@@ -595,13 +600,15 @@ def fetch_to_disk(
 
     Writes pipeline-ready ``candidatos.csv`` and ``doacoes.csv`` under
     ``output_dir``. ``years`` defaults to a GO-relevant historical set covering
-    Marconi Perillo-era elections (1998–2022). Raw per-year ZIPs land under
-    ``output_dir/raw/`` for idempotent re-runs.
+    both federal/estadual cycles (1998, 2002, 2006, 2010, 2014, 2018, 2022) and
+    municipal cycles (2020, 2024) — municipal years MUST be included to pick
+    up prefeitos/vereadores. Raw per-year ZIPs land under ``output_dir/raw/``
+    for idempotent re-runs.
 
     Returns the list of output CSV paths actually written (0, 1, or 2 files).
     """
     uf_upper = uf.upper()
-    years = years or [1998, 2002, 2006, 2010, 2014, 2018, 2022]
+    years = years or [1998, 2002, 2006, 2010, 2014, 2018, 2020, 2022, 2024]
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)

@@ -56,6 +56,7 @@ CANDIDATO_COLS = {
     "ANO_ELEICAO": "ano",
     "SG_PARTIDO": "partido",
     "NR_CANDIDATO": "nr_candidato",
+    "DS_SIT_TOT_TURNO": "situacao",
 }
 
 # ── Donation column mappings (two eras) ───────────────────────────────

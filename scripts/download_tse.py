@@ -10,8 +10,9 @@ UF (default GO), avoiding the multi-GB national dump.
 Data source: TSE public CDN (https://cdn.tse.jus.br/estatistica/sead/odsele/).
 Per-year ZIPs are cached under ``<output-dir>/raw/`` for idempotent re-runs.
 
-Default years cover Marconi Perillo-era elections (governador GO 1998-2006 &
-2010-2014, senador 2018-2022): 1998, 2002, 2006, 2010, 2014, 2018, 2022.
+Default years cover federal/estadual cycles (1998-2022) and municipal
+cycles (2020, 2024) — municipal years MUST be included to ingest
+prefeitos e vereadores: 1998, 2002, 2006, 2010, 2014, 2018, 2020, 2022, 2024.
 
 Usage::
 
@@ -63,8 +64,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Election years to download (space-separated). "
-            "Default: 1998 2002 2006 2010 2014 2018 2022 "
-            "(Marconi Perillo-era)."
+            "Default: 1998 2002 2006 2010 2014 2018 2020 2022 2024 "
+            "(federal/estadual + municipal cycles)."
         ),
     )
     parser.add_argument(
