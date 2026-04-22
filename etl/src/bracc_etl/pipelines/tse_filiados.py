@@ -285,7 +285,8 @@ def fetch_to_disk(
         logger.warning(
             "[tse_filiados] no --billing-project provided; TSE filiados is not "
             "on the public CDN (requires Base dos Dados / BigQuery). Skipping. "
-            "To ingest, rerun with --billing-project <gcp-project-id>.",
+            "To ingest, rerun with --billing-project <gcp-project-id> OR "
+            "export GCP_PROJECT_ID=<proj> / GOOGLE_CLOUD_PROJECT=<proj>.",
         )
         return []
 
@@ -293,8 +294,27 @@ def fetch_to_disk(
         from google.cloud import bigquery
     except ImportError:
         logger.warning(
-            "[tse_filiados] google-cloud-bigquery not installed; "
-            "install it and pass --billing-project to ingest filiados.",
+            "[tse_filiados] google-cloud-bigquery optional dep is missing; "
+            "this pipeline requires the 'bigquery' extra to actually "
+            "download filiados. Install via: "
+            "`uv pip install -e 'etl[bigquery]'` OR run the download "
+            "outside the ETL container with basedosdados-cli.",
+        )
+        return []
+
+    # Surface credentialing failures early (vs. silently skipping via BQ auth
+    # default flow). If ADC is missing, the Client() ctor below would raise
+    # DefaultCredentialsError mid-query — more useful to surface up front.
+    try:
+        import google.auth  # type: ignore[import-untyped]
+        google.auth.default()
+    except google.auth.exceptions.DefaultCredentialsError as exc:
+        logger.warning(
+            "[tse_filiados] Google ADC unavailable (%s). "
+            "Run `gcloud auth application-default login` or set "
+            "GOOGLE_APPLICATION_CREDENTIALS to the service-account JSON. "
+            "Skipping download.",
+            exc,
         )
         return []
 
@@ -309,22 +329,38 @@ def fetch_to_disk(
         where.append("situacao_registro = 'Regular'")
     where_clause = " AND ".join(where)
 
-    client = bigquery.Client(project=billing_project)
-    query = (
-        f"SELECT {', '.join(columns)} "  # noqa: S608
-        f"FROM `basedosdados.br_tse_filiacao_partidaria.microdados` "
-        f"WHERE {where_clause}"
-    )
-    logger.info("[tse_filiados] BQ query (uf=%s): %s", uf_upper, query[:200])
+    try:
+        client = bigquery.Client(project=billing_project)
+        query = (
+            f"SELECT {', '.join(columns)} "  # noqa: S608
+            f"FROM `basedosdados.br_tse_filiacao_partidaria.microdados` "
+            f"WHERE {where_clause}"
+        )
+        logger.info(
+            "[tse_filiados] BQ query (uf=%s): %s", uf_upper, query[:200],
+        )
 
-    job = client.query(query)
-    rows_written = 0
-    # Rewrite the CSV from scratch (skip_existing check already ran above).
-    if dest.exists():
-        dest.unlink()
-    for i, chunk_df in enumerate(job.result().to_dataframe_iterable()):
-        chunk_df.to_csv(dest, mode="a", header=(i == 0), index=False)
-        rows_written += len(chunk_df)
+        job = client.query(query)
+        rows_written = 0
+        # Rewrite the CSV from scratch (skip_existing check already ran above).
+        if dest.exists():
+            dest.unlink()
+        for i, chunk_df in enumerate(job.result().to_dataframe_iterable()):
+            chunk_df.to_csv(dest, mode="a", header=(i == 0), index=False)
+            rows_written += len(chunk_df)
+    except Exception as exc:  # noqa: BLE001
+        # Authorization, quota, or transient network failures all bubble up
+        # here. Log-and-skip instead of crashing so the bootstrap pipeline can
+        # proceed (previous runs silently swallowed; now the operator at least
+        # sees what went wrong). The most common cause is the executor
+        # account lacking `bigquery.jobs.create` on ``billing_project``.
+        logger.warning(
+            "[tse_filiados] BQ fetch falhou (%s); skipping. "
+            "Verifique se a conta tem `roles/bigquery.jobUser` no projeto %s "
+            "e se basedosdados.br_tse_filiacao_partidaria e acessivel.",
+            exc, billing_project,
+        )
+        return []
 
     logger.info("[tse_filiados] wrote %d rows → %s", rows_written, dest)
     return [dest] if rows_written > 0 else []

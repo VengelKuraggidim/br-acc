@@ -307,6 +307,10 @@ class TSEPipeline(Pipeline):
             # ``r.donated_at`` é ``last-write-wins`` neste pipeline (bulk
             # histórico). O pipeline ``tse_prestacao_contas_go`` mantém
             # granularidade por doação via ``donation_id``.
+            # Carimbamos ``ano`` ALEM do ``year`` legacy pra alinhar com
+            # ``tse_prestacao_contas_go`` + filtros ``ano_doacao=2022`` do
+            # ``conexoes_service.py`` (ver
+            # todo-list-prompts/high_priority/debitos/backfill-ano-doou-rels.md).
             loader.run_query(
                 "UNWIND $rows AS row "
                 "MATCH (d:Person {cpf: row.source_key}) "
@@ -317,6 +321,7 @@ class TSEPipeline(Pipeline):
                 "WHERE c IS NOT NULL "
                 "MERGE (d)-[r:DOOU {year: row.year}]->(c) "
                 "SET r.valor = row.valor, "
+                "    r.ano = row.year, "
                 "    r.donated_at = row.donated_at, "
                 "    r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
@@ -357,6 +362,7 @@ class TSEPipeline(Pipeline):
                 "WHERE c IS NOT NULL "
                 "MERGE (d)-[r:DOOU {year: row.year}]->(c) "
                 "SET r.valor = row.valor, "
+                "    r.ano = row.year, "
                 "    r.donated_at = row.donated_at, "
                 "    r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
