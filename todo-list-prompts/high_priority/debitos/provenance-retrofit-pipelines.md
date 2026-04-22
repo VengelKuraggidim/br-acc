@@ -1,4 +1,18 @@
-# Retrofit de provenance em pipelines recém-fixados
+# Retrofit de provenance em pipelines recém-fixados — ✅ RESOLVIDO no codigo (2026-04-22)
+
+> Commit `49657f6` aplica o padrao `_stamp()` + `attach_provenance()`
+> nos 6 pipelines listados abaixo (camara, tesouro_emendas, siop, pgfn,
+> senado; comprasnet ja tinha sido feito previamente em `0d407d5`).
+>
+> Cada pipeline ganha um helper `_stamp(row, record_id=...)` e cada
+> node/rel lista passa por ele antes do `loader.load_*`. Rels recebem
+> SET com os 5 campos de provenance (source_id, source_record_id,
+> source_url, ingested_at, run_id).
+>
+> Pendente: reingestao dos dados ja carregados (backfill retroativo) —
+> debito separado em `rodar-pipelines-pesados.md` pra comprasnet/pgfn
+> pesados.
+
 
 ## Contexto
 

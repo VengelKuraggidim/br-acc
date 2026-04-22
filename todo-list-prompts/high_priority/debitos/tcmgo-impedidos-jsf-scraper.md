@@ -1,4 +1,27 @@
-# TCM-GO "Impedidos de licitar" via scraper JSF — ⏳ PENDENTE (2026-04-21)
+# TCM-GO "Impedidos de licitar" via scraper JSF — 🔧 CODIGO ENTREGUE (2026-04-22)
+
+> Commit `0f1b3c6` entrega o scraper completo:
+>
+> - `fetch_impedidos_jsf(output_dir, client=?)` em `tcmgo_sancoes.py` — GET
+>   inicial pra ViewState + POST pagination PrimeFaces ate empty sentinel
+>   (cap 500 paginas, rate-limit 1s).
+> - CLI `scripts/download_tcmgo_sancoes.py --include-impedidos-jsf` ou
+>   `--jsf-only` pra habilitar sem regredir o REST.
+> - Extract/transform do pipeline le `impedidos_licitar.csv` e loada como
+>   `:TcmGoImpedido` + IMPEDIDO_TCMGO com `list_kind='impedidos_licitar'`
+>   (distingue da contas-irregulares ja existente que ganha
+>   `list_kind='contas_irregulares'`).
+> - 3 fixtures offline (HTML inicial + XML partial-response com dados +
+>   XML empty) + 9 unit tests novos cobrindo parser + scraper end-to-end
+>   com MockTransport.
+>
+> Nao rodado em producao ainda — robots.txt do subdominio tcmgo.tc.br
+> precisa ser verificado antes do primeiro fetch real. Se OK, rodar:
+> `uv run python scripts/download_tcmgo_sancoes.py --jsf-only --output-dir data/tcmgo_sancoes --limit 50`
+> pra smoke test, depois full run com `--include-impedidos-jsf`.
+
+## Original
+
 
 > Extracted from todo 03-tcmgo_sancoes durante recon. A parte
 > "contas-irregulares" (rejeitados) foi carregada via REST oficial

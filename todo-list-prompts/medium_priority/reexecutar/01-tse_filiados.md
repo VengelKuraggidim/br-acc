@@ -1,4 +1,24 @@
-# Refazer bootstrap do `tse_filiados` — ⏳ PENDENTE (2026-04-18)
+# Refazer bootstrap do `tse_filiados` — 🔧 DIAGNOSTICO MELHORADO (2026-04-22)
+
+> Commit `7aca93b` troca o skip silencioso no `fetch_to_disk()` por
+> mensagens claras quando:
+>
+> - `google.auth.default()` nao resolve → "Run gcloud auth
+>   application-default login" + "Skipping download".
+> - BQ job explode no Client() ou no job.result() → "BQ fetch falhou:
+>   <exc>" + dica sobre `roles/bigquery.jobUser`.
+>
+> O bug original ("sem erro capturado") era silent-skip — o pipeline
+> retornava `[]` sem indicar a causa. Agora o operador ve no log
+> exatamente por que o download foi pulado.
+>
+> Nao fixa o caso operacional (credencial GCP editor-only nao tem
+> bigquery.jobs.create pra executar queries na org). Esse caminho
+> cruza com `iam-secret-accessor-vengel.md` — marido (owner) precisa
+> conceder `roles/bigquery.jobUser` + `secretAccessor` pra usuaria.
+
+## Original
+
 
 > Pipeline falhou no download durante a rodada de bootstraps GO entre
 > 2026-04-17 (noite) e 2026-04-18. Todos os outros pipelines da leva

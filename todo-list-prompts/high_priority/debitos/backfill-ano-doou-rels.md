@@ -1,4 +1,17 @@
-# Backfill `ano` em todas as rels `:DOOU`
+# Backfill `ano` em todas as rels `:DOOU` — 🔧 PATCH PARCIAL (2026-04-22)
+
+> Commit `7aca93b` ajusta `tse.py` pra `SET r.ano = row.year` nas duas
+> queries de DOOU (Person→candidato e Company→candidato). MERGE key
+> continua `{year: row.year}` pra preservar idempotencia — re-runs do
+> tse bulk vao **atualizar r.ano em rels existentes sem duplicar**.
+>
+> Backfill em producao (Aura) ainda pendente: depende de rerun do
+> pipeline tse OU de uma APOC query ad-hoc tipo
+> `MATCH ()-[r:DOOU]->() WHERE r.ano IS NULL AND r.year IS NOT NULL SET r.ano = r.year`
+> pra cobrir os 165k rels legacy sem reingerir.
+
+## Original
+
 
 ## Contexto
 

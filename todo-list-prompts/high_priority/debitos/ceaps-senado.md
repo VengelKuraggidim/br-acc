@@ -1,4 +1,26 @@
-# CEAPS — Cota pra Exercicio da Atividade Parlamentar dos Senadores
+# CEAPS — Cota pra Exercicio da Atividade Parlamentar dos Senadores — ✅ RESOLVIDO (2026-04-22)
+
+> Commit `3d80aaa` entrega a API + integracao PWA da CEAPS:
+>
+> - `api/src/bracc/services/despesas_service.py::obter_ceaps_senador`
+>   le o grafo via `perfil_ceaps_senador.cypher` (bridge
+>   `:Senator {id_senado}` -> `:Person {name}` -> GASTOU -> `:Expense
+>   {source:'senado'}`).
+> - `perfil_service.py` ganha flag `is_senador_federal` e roteia pra
+>   `obter_ceaps_senador` quando o politico e `:Senator`.
+> - `_build_aviso_despesas` ganha branch CEAPS.
+> - PWA (`pwa/index.html`) gera titulo dinamico por sigla da cota
+>   (CEAP/CEAPS/ALEGO/CMG) em vez de hardcodar "Camara dos Deputados".
+> - 4 unit tests novos em test_despesas_service.py + 2 em
+>   test_perfil_service.py cobrem a rota.
+>
+> A pipeline `senado` ja ingeria CEAPS pre-commit (bridge nao criou novo
+> pipeline, aproveitou o existente). Pipeline novo `senado_ceaps` da
+> proposta original e `NAO` necessario — o label canonico e `:Expense`
+> source='senado'.
+
+## Original (contexto do debito antes do fix)
+
 
 ## Contexto
 

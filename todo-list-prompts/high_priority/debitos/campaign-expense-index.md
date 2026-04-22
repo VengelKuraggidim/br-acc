@@ -1,4 +1,15 @@
-# Índice faltando em `:CampaignExpense(expense_id)` trava load do TSE — ⏳ PENDENTE (2026-04-21)
+# Índice faltando em `:CampaignExpense(expense_id)` trava load do TSE — ✅ RESOLVIDO no codigo (2026-04-22)
+
+> Commit `3d80aaa` adiciona 44 INDEXes IF NOT EXISTS ao
+> `api/src/bracc/queries/schema_init.cypher` cobrindo CampaignExpense,
+> CampaignDonation, CampaignDonor, FederalLegislator, StateLegislator,
+> LegislativeExpense, TcmGoImpedido, TceGoDecision, Senator e outros 35+
+> labels que pipelines MERGE por chave.
+>
+> Precisa reiniciar a API (ensure_schema roda on startup) para aplicar os
+> indexes ao Neo4j (local OU prod). Depois disso, re-rodar
+> `tse_prestacao_contas_go` deve completar em minutos em vez de horas.
+
 
 > Descoberto em 2026-04-21 ao rodar `tse_prestacao_contas_go` contra Neo4j
 > local. MERGE batch de 50k expenses ficou 12+ min numa única transação

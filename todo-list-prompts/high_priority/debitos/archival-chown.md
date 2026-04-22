@@ -1,8 +1,28 @@
-# `etl/archival/` owned by root — bloqueia pipelines locais — ⏳ PENDENTE (2026-04-21)
+# `etl/archival/` owned by root — bloqueia pipelines locais — 🔧 PARCIAL (2026-04-22)
 
 > Já rastreado no memo `project_fotos_politicos_pendente.md` — documentado
 > aqui como débito explícito pra não se perder (afeta mais pipelines que
 > só os de fotos).
+
+## Update 2026-04-22 — causa raiz corrigida no compose
+
+Commit `7c1b872` adiciona `user: "${UID:-1000}:${GID:-1000}"` aos serviços
+`etl` e `etl-go` em `docker-compose.yml`. A partir de agora, runs via
+`docker compose run etl ...` criam arquivos em `etl/archival/` com o UID
+do host — sem ficar root.
+
+**Passos manuais restantes** (1 vez, limpa o estado corrente):
+
+1. `sudo chown -R $USER:$USER etl/archival` — recupera o que já está root
+   (o compose só afeta criações futuras).
+2. Rerun dos pipelines listados no `project_fotos_politicos_pendente.md`
+   (senado / alego / tse / wikidata / propagacao_fotos_person) pra
+   reconciliar snapshots que falharam por permissão na sessão anterior.
+3. Verificar que o operador não precisa mais setar
+   `BRACC_ARCHIVAL_ROOT=/tmp/...` como workaround — rodar um pipeline
+   qualquer e conferir que os arquivos saem owned pelo usuário.
+
+Se tudo estiver OK depois disso, deletar este arquivo (débito resolvido).
 
 ## Contexto
 
