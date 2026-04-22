@@ -28,8 +28,11 @@ from bracc_etl.pipelines.entity_resolution_politicos_go import (
     _SOURCE_ID,
     EntityResolutionPoliticosGoPipeline,
     _canonical_id_for,
+    _cargo_tokens_subset_of_person,
+    _contentful_tokens,
     _normalize_name,
     _strip_honorifics,
+    _visible_cpf_suffix,
 )
 
 if TYPE_CHECKING:
@@ -231,6 +234,58 @@ class TestStripHonorifics:
         assert fed == tse == "ISMAEL ALEXANDRINO"
 
 
+class TestVisibleCpfSuffix:
+    def test_mascarado_camara(self) -> None:
+        assert _visible_cpf_suffix("***.***.*71-34") == "7134"
+
+    def test_pleno(self) -> None:
+        assert _visible_cpf_suffix("547.795.371-34") == "7134"
+
+    def test_none_vira_string_vazia(self) -> None:
+        assert _visible_cpf_suffix(None) == ""
+
+    def test_muito_curto(self) -> None:
+        assert _visible_cpf_suffix("12") == ""
+
+
+class TestContentfulTokens:
+    def test_descarta_stopwords(self) -> None:
+        assert _contentful_tokens("JOAO DA SILVA") == ["JOAO", "SILVA"]
+
+    def test_descarta_honorificos(self) -> None:
+        # "DR" e "JUNIOR" são dropados.
+        assert _contentful_tokens("DR JOAO DA SILVA JUNIOR") == ["JOAO", "SILVA"]
+
+    def test_descarta_tokens_curtos(self) -> None:
+        # "E" filtrado por stopword; "DA" idem; "OS" pelo tamanho.
+        assert _contentful_tokens("MARIA OS E JOSE") == ["MARIA", "JOSE"]
+
+
+class TestCargoTokensSubset:
+    def test_subset_exato_passa(self) -> None:
+        assert _cargo_tokens_subset_of_person("FLAVIA MORAIS", "FLAVIA MORAIS")
+
+    def test_person_estendido_passa(self) -> None:
+        assert _cargo_tokens_subset_of_person(
+            "FLAVIA MORAIS", "FLAVIA CARREIRO ALBUQUERQUE MORAIS",
+        )
+
+    def test_nome_completamente_diferente_falha(self) -> None:
+        assert not _cargo_tokens_subset_of_person(
+            "CELIO SILVEIRA", "WEBER TIAGO PIRES",
+        )
+
+    def test_falta_um_token_falha(self) -> None:
+        # "SILVEIRA" não aparece no nome do Person.
+        assert not _cargo_tokens_subset_of_person(
+            "CELIO SILVEIRA", "CELIO ANTONIO DOS SANTOS",
+        )
+
+    def test_cargo_so_com_stopwords_falha(self) -> None:
+        # Sem tokens contentfuls no cargo → não dá pra validar.
+        assert not _cargo_tokens_subset_of_person("DE DA", "DE DA JOAO")
+
+
 class TestCanonicalId:
     def test_senado(self) -> None:
         node = {"id_senado": "5895"}
@@ -322,6 +377,117 @@ class TestHappyPath:
         # Confidence no stripped é 0.85.
         stripped_edge = next(e for e in edges if e["method"] == "name_stripped")
         assert stripped_edge["confidence"] == pytest.approx(0.85)
+
+    def test_fed_matcha_person_por_cpf_suffix_name(self, tmp_path: Path) -> None:
+        # Caso Flavia Morais: Fed "FLAVIA MORAIS" (CPF mascarado) +
+        # Person TSE "FLAVIA CARREIRO ALBUQUERQUE MORAIS" (CPF pleno).
+        # name_exact falha (nomes diferentes); cpf_exact pula (mascarado).
+        # A fase cpf_suffix_name casa pelos 4 últimos dígitos + tokens.
+        fed = _fed("n1", "FLAVIA MORAIS", id_camara="160598", partido="PDT")
+        fed["cpf"] = "***.***.*71-34"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "FLAVIA CARREIRO ALBUQUERQUE MORAIS",
+                cpf="547.795.371-34",  # suffix 7134 bate com *71-34
+                partido="PDT",
+                uf="GO",
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        methods = sorted(e["method"] for e in edges)
+        assert methods == ["cargo_root", "cpf_suffix_name"]
+        suffix_edge = next(e for e in edges if e["method"] == "cpf_suffix_name")
+        assert suffix_edge["confidence"] == pytest.approx(0.92)
+        assert suffix_edge["target_element_id"] == "n2"
+
+    def test_fed_cpf_suffix_nao_casa_quando_nomes_divergem(self, tmp_path: Path) -> None:
+        # Pessoa completamente diferente que casualmente tem CPF com
+        # mesmo suffix. Tokens do cargo ausentes → não casa.
+        fed = _fed("n1", "CELIO SILVEIRA", id_camara="178876", partido="MDB")
+        fed["cpf"] = "***.***.*61-20"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "WEBER TIAGO PIRES",  # suffix bate (957.509.161-20)
+                cpf="957.509.161-20",
+                uf="GO",
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        # Só o cargo_root — sem match no suffix rule por nome divergente.
+        assert methods == ["cargo_root"]
+
+    def test_fed_cpf_suffix_ambiguidade_vira_audit(self, tmp_path: Path) -> None:
+        # 2 Persons GO com suffix batendo E tokens do nome do cargo em
+        # ambos (improvável mas possível com nomes curtos) → audit + skip.
+        fed = _fed("n1", "JOAO SILVA", id_camara="42", partido="PT")
+        fed["cpf"] = "***.***.*11-11"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "JOAO SILVA PEREIRA",
+                cpf="111.222.311-11",  # suffix 1111
+                uf="GO",
+            ),
+            _person(
+                "n3",
+                "JOAO SILVA JUNIOR",
+                cpf="999.888.711-11",  # suffix 1111
+                uf="GO",
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        # Nada anexado — ambiguidade logada.
+        assert "cpf_suffix_name" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        assert any(e["type"] == "cpf_suffix_ambiguous" for e in entries)
+
+    def test_fed_cpf_suffix_anexa_alem_do_name_exact(self, tmp_path: Path) -> None:
+        # Caso real: cluster já tem 1 Person via name_exact (nome curto
+        # "FLAVIA MORAIS" sem CPF). A fase 3 DEVE anexar o Person TSE
+        # full-name com CPF adicional — múltiplos Persons por cluster.
+        fed = _fed("n1", "FLAVIA MORAIS", id_camara="160598", partido="PDT")
+        fed["cpf"] = "***.***.*71-34"
+        rows = [
+            fed,
+            # Person curto sem CPF: casa pelo name_exact.
+            _person("n2", "FLAVIA MORAIS", cpf=None, uf="GO"),
+            # Person TSE pleno: só a fase 3 (cpf_suffix_name) pega.
+            _person(
+                "n3",
+                "FLAVIA CARREIRO ALBUQUERQUE MORAIS",
+                cpf="547.795.371-34",
+                partido="PDT",
+                uf="GO",
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = sorted(e["method"] for e in pipeline.represents_rels)
+        assert methods == ["cargo_root", "cpf_suffix_name", "name_exact"]
+        targets = sorted(
+            e["target_element_id"] for e in pipeline.represents_rels
+            if e["method"] != "cargo_root"
+        )
+        assert targets == ["n2", "n3"]
 
     def test_state_matcha_person_por_cpf(self, tmp_path: Path) -> None:
         # StateLegislator tem CPF pleno (pipeline alego não mascara).

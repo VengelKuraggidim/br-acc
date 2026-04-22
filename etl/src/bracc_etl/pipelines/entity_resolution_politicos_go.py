@@ -35,11 +35,22 @@ resolve sem ambiguidade vence):
    ponta. Cobre "DR. ISMAEL ALEXANDRINO" ↔ "ISMAEL ALEXANDRINO JUNIOR".
    Conf 0.85.
 
-Pós-resolução de cargos, tentamos **shadow attach**: ``:Person`` sem CPF,
-sem UF (nós bare "só name" originados de referências em outros pipelines,
-ex.: autores de inquéritos) com nome normalizado batendo exatamente com
-UM dos nomes já presentes no cluster canônico → REPRESENTS adicional com
-método ``shadow_name_exact`` (conf 0.80). Ambiguidade = skip+log.
+Pós-resolução inicial, duas fases adicionais anexam nós-fonte que as
+regras 1-3 não pegam:
+
+* **cpf_suffix_name** (fase 3) — cargo com CPF mascarado
+  (``***.***.*NN-NN``, formato da Câmara) contra ``:Person`` GO com CPF
+  pleno cujo último 4 dígitos bate **e** cujo nome contém todos os tokens
+  contentfuls (≥3 chars, não-stopwords) do nome do cargo. Cobre o caso
+  "FLAVIA MORAIS" (parlamentar) ↔ "FLAVIA CARREIRO ALBUQUERQUE MORAIS"
+  (TSE) onde nome abreviado + CPF mascarado quebram as 3 primeiras
+  regras. Conf 0.92. Múltiplos matches → audit + skip.
+
+* **shadow_name_exact** (fase 4) — ``:Person`` sem CPF, sem UF (nós bare
+  "só name" originados de referências em outros pipelines, ex.: autores
+  de inquéritos) com nome normalizado batendo exatamente com UM dos
+  nomes já presentes no cluster canônico → REPRESENTS adicional. Conf
+  0.80. Ambiguidade = skip+log.
 
 Stop on ambiguidade é política do projeto (CLAUDE.md §3). Audit log em
 ``data/entity_resolution_politicos_go/audit_{run_id}.jsonl`` lista todos
@@ -70,8 +81,9 @@ Props no nó (além de proveniência):
 Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 ``(:CanonicalPerson)-[:REPRESENTS]->(sourceNode)``. Props:
 
-* ``method``: ``"cpf_exact" | "name_exact" | "name_stripped" |
-  "shadow_name_exact" | "cargo_root"``.
+* ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
+  "name_stripped" | "cpf_suffix_name" | "shadow_name_exact" |
+  "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -130,6 +142,15 @@ _HONORIFIC_PREFIXES = frozenset({
 # follow-up.
 _HONORIFIC_SUFFIXES = frozenset({
     "JUNIOR", "JR", "FILHO", "NETO", "SOBRINHO", "SEGUNDO",
+})
+
+# Stopwords portuguesas descartadas na comparação por "tokens contentfuls"
+# usada pela regra ``cpf_suffix_name``. Preservar "DE", "DA", "DOS" etc.
+# inflaria falsos positivos — um "FLAVIA DE MORAIS" não deveria casar com
+# "FLAVIA MORAIS" por tokens. Tokens ≤2 chars já caem no filtro de
+# tamanho mínimo (ver ``_contentful_tokens``).
+_NAME_STOPWORDS = frozenset({
+    "DE", "DA", "DO", "DAS", "DOS", "E",
 })
 
 _NON_ALNUM = re.compile(r"[^A-Z0-9 ]+")
@@ -203,6 +224,70 @@ def _is_masked_cpf(raw: str | None) -> bool:
     ``cpf_exact`` (vão pro ``name_*`` depois).
     """
     return bool(raw) and "*" in str(raw)
+
+
+def _visible_cpf_suffix(raw: str | None) -> str:
+    """Extrai os 4 dígitos visíveis do CPF (funciona mascarado ou pleno).
+
+    Câmara mascara no formato ``***.***.*NN-NN`` — revela exatamente os 4
+    últimos dígitos (posições 10, 11, 13, 14 de ``AAA.BBB.CCC-DD``). CPF
+    pleno do TSE também devolve os últimos 4. Retorna ``""`` quando a
+    entrada é inconclusiva (sem 4 dígitos parseáveis).
+
+    Uso: casa ``:Person`` TSE com CPF pleno contra ``:FederalLegislator``
+    com CPF mascarado quando o nome TSE ("FLAVIA CARREIRO ALBUQUERQUE
+    MORAIS") não bate exato com o nome parlamentar ("FLAVIA MORAIS").
+    """
+    digits = _digits_only(raw)
+    if len(digits) < 4:
+        return ""
+    return digits[-4:]
+
+
+def _contentful_tokens(name_normalized: str) -> list[str]:
+    """Tokens significativos do nome — exclui stopwords, honoríficos e tokens curtos.
+
+    Filtros (ordem):
+    * tamanho ≥ 3 chars (descarta "E", iniciais, artigos);
+    * não é stopword (``DE``/``DA``/``DO``/``DAS``/``DOS``/``E``);
+    * não é honorífico prefixo ou sufixo (``DR``, ``JUNIOR``, ...).
+
+    Usado pela regra ``cpf_suffix_name`` pra garantir que todos os tokens
+    contentfuls do nome do cargo aparecem no nome do Person. Previne
+    colisões de suffix em outros Persons GO que batem no suffix mas são
+    pessoas diferentes ("CELIO ANTONIO DA SILVEIRA" passa; "WEBER TIAGO
+    PIRES" falha apesar do suffix igual ao "CELIO SILVEIRA").
+    """
+    if not name_normalized:
+        return []
+    tokens: list[str] = []
+    for tok in name_normalized.split(" "):
+        if len(tok) < 3:
+            continue
+        if tok in _NAME_STOPWORDS:
+            continue
+        if tok in _HONORIFIC_PREFIXES or tok in _HONORIFIC_SUFFIXES:
+            continue
+        tokens.append(tok)
+    return tokens
+
+
+def _cargo_tokens_subset_of_person(
+    cargo_name_normalized: str,
+    person_name_normalized: str,
+) -> bool:
+    """True sse todos os tokens contentfuls do cargo estão no nome do Person.
+
+    Subset de tokens (não substring) — preserva ordem livre e ignora
+    tokens extras do Person (nomes do meio, patronímicos, etc.).
+    Retorna False se o cargo não tem nenhum token contentful (nome vazio
+    ou só stopwords — não dá pra validar).
+    """
+    cargo_tokens = _contentful_tokens(cargo_name_normalized)
+    if not cargo_tokens:
+        return False
+    person_tokens = set(_contentful_tokens(person_name_normalized))
+    return all(tok in person_tokens for tok in cargo_tokens)
 
 
 # Cypher: puxa todos os nós candidatos pro ER — os 3 cargos GO +
@@ -463,7 +548,20 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                     claimed=person_elt_ids_in_cluster,
                 )
 
-        # ---- Fase 2: shadow attach ----
+        # ---- Fase 3: cpf_suffix_name attach ----
+        # Câmara mascara CPF como ``***.***.*NN-NN``. Persons TSE com CPF
+        # pleno e nome estendido ("FLAVIA CARREIRO ALBUQUERQUE MORAIS") não
+        # casam pelas 3 regras principais (cpf_exact pula mascarado;
+        # name_exact/stripped requerem nome igual ao da Câmara "FLAVIA
+        # MORAIS"). Aqui anexamos quando (a) os 4 últimos dígitos batem e
+        # (b) todos os tokens contentfuls do nome do cargo aparecem no
+        # nome do Person.
+        self._attach_cpf_suffix_matches(
+            persons_go=persons_go,
+            claimed=person_elt_ids_in_cluster,
+        )
+
+        # ---- Fase 4: shadow attach ----
         # Pra cada shadow, tenta anexar a um cluster existente por nome normalizado.
         cluster_names: dict[str, list[str]] = defaultdict(list)
         for canonical_id, cluster in self._clusters.items():
@@ -547,7 +645,14 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
 
         # Cluster vazio inicial (canonical + 1 edge pro cargo).
         canonical = self._build_canonical_row(canonical_id, cargo)
-        self._clusters[canonical_id] = {"canonical": canonical, "edges": []}
+        # ``cargo`` guardado pra fase 3 (``_attach_cpf_suffix_matches``)
+        # que precisa do CPF mascarado e do nome normalizado do cargo
+        # pra casar com ``:Person`` GO pelos últimos 4 dígitos + tokens.
+        self._clusters[canonical_id] = {
+            "canonical": canonical,
+            "edges": [],
+            "cargo": cargo,
+        }
         self._attach_source(
             canonical_id=canonical_id,
             node=cargo,
@@ -644,6 +749,68 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
             confidence=confidence,
         )
         claimed.add(matched_person["element_id"])
+
+    def _attach_cpf_suffix_matches(
+        self,
+        persons_go: list[dict[str, Any]],
+        claimed: set[str],
+    ) -> None:
+        """Anexa Person GO ao cluster do cargo via CPF-suffix + tokens de nome.
+
+        Itera clusters cujo cargo âncora tem CPF mascarado e procura
+        ``:Person`` GO com CPF pleno terminando nos mesmos 4 dígitos
+        **e** cujo nome contém todos os tokens contentfuls do nome do
+        cargo. Match único → attach (conf 0.92); múltiplos → audit.
+        Persons já atribuídos a outro cluster (``claimed``) ou ao mesmo
+        (via outras regras) são ignorados.
+        """
+        persons_by_suffix: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for person in persons_go:
+            cpf_digits = _digits_only(person.get("cpf"))
+            if len(cpf_digits) != 11 or cpf_digits == "00000000000":
+                continue
+            persons_by_suffix[cpf_digits[-4:]].append(person)
+
+        for cluster in self._clusters.values():
+            cargo = cluster.get("cargo")
+            if not cargo:
+                continue
+            cargo_cpf = cargo.get("cpf")
+            if not _is_masked_cpf(cargo_cpf):
+                continue
+            suffix = _visible_cpf_suffix(cargo_cpf)
+            if not suffix:
+                continue
+            cargo_name_norm = cargo.get("name_normalized") or ""
+            canonical_id = cluster["canonical"]["canonical_id"]
+            already_in_cluster = {e["target_element_id"] for e in cluster["edges"]}
+
+            candidates = [
+                p for p in persons_by_suffix.get(suffix, [])
+                if p["element_id"] not in claimed
+                and p["element_id"] not in already_in_cluster
+                and _cargo_tokens_subset_of_person(
+                    cargo_name_norm,
+                    p["name_normalized"] or "",
+                )
+            ]
+            if len(candidates) == 1:
+                self._attach_source(
+                    canonical_id=canonical_id,
+                    node=candidates[0],
+                    method="cpf_suffix_name",
+                    confidence=0.92,
+                )
+                claimed.add(candidates[0]["element_id"])
+            elif len(candidates) > 1:
+                self._audit_entries.append({
+                    "type": "cpf_suffix_ambiguous",
+                    "cargo_element_id": cargo["element_id"],
+                    "cargo_label": cargo["primary_label"],
+                    "cargo_name": cargo["name"],
+                    "cpf_suffix": suffix,
+                    "candidates": [p["element_id"] for p in candidates],
+                })
 
     def _disambiguate_by_partido(
         self,

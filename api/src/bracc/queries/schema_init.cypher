@@ -268,8 +268,8 @@ CREATE INDEX socio_snapshot_date IF NOT EXISTS
 
 // ── Merge-key Indexes (labels that pipelines MERGE by a unique-ish key) ───────
 // These speed up MERGE-by-key from O(n) full-scan to O(1) index lookup.
-// NOT created as CONSTRAINTs to avoid failing on legacy duplicates; promote to
-// CONSTRAINT once each domain has been audited for duplicates.
+// NOT created as CONSTRAINTs to avoid failing on legacy duplicates -- promote
+// to CONSTRAINT once each domain has been audited for duplicates.
 CREATE INDEX campaign_expense_id IF NOT EXISTS
   FOR (n:CampaignExpense) ON (n.expense_id);
 

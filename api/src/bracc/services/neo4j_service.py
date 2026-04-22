@@ -118,13 +118,17 @@ async def _migrate_entity_search_analyzer(session: AsyncSession) -> None:
 async def ensure_schema(driver: AsyncDriver) -> None:
     """Run schema_init.cypher statements on startup. All use IF NOT EXISTS so idempotent."""
     raw = CypherLoader.load("schema_init")
-    statements = [s.strip() for s in raw.split(";") if s.strip()]
+    # Strip ``//`` comment lines BEFORE splitting on ``;`` — comments podem
+    # conter ``;`` ("duplicates; promote to") e quebrariam o split nativo,
+    # gerando pseudo-statements como "promote to\nCREATE INDEX ..." que
+    # o Neo4j rejeita com CypherSyntaxError.
+    code_lines = [
+        ln for ln in raw.splitlines() if not ln.strip().startswith("//")
+    ]
+    code = "\n".join(code_lines)
+    statements = [s.strip() for s in code.split(";") if s.strip()]
     async with driver.session(database=settings.neo4j_database) as session:
         await _migrate_entity_search_analyzer(session)
         for stmt in statements:
-            # Skip comment-only lines
-            lines = [ln for ln in stmt.splitlines() if not ln.strip().startswith("//")]
-            cypher = "\n".join(lines).strip()
-            if cypher:
-                await session.run(cypher)
+            await session.run(stmt)
     logger.info("Schema bootstrap complete: %d statements executed", len(statements))
