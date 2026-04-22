@@ -78,6 +78,12 @@ services:
     build: ./etl
     profiles: ["etl"]
     working_dir: /workspace
+    # Roda como o UID/GID do host pra que arquivos criados em /workspace
+    # (bind mount) fiquem writable pela conta do usuario. Sem isso o
+    # pipeline criava etl/archival/ owned by root, bloqueando reruns locais
+    # ate um `sudo chown`. ${UID:-1000} cobre o caso de a variavel nao
+    # estar exportada (compose nao exporta $UID por default).
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
@@ -96,6 +102,7 @@ services:
     build: ./etl
     profiles: ["etl-go"]
     working_dir: /workspace
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
