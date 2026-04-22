@@ -247,29 +247,59 @@ class SiopPipeline(Pipeline):
         self.authors = deduplicate_rows(authors, ["cpf"])
         self.author_rels = author_rels
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canonica do CGU emendas.
+
+        O dataset emendas-parlamentares do Portal da Transparencia nao expoe
+        deep-link por emenda — usamos a URL base do dataset como source_url.
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url=(
+                f"{_TRANSPARENCIA_BASE_URL}/{_TRANSPARENCIA_DATASET}"
+            ),
+        )
+
     def load(self) -> None:
         loader = Neo4jBatchLoader(self.driver)
 
         # 1. Amendment nodes
         if self.amendments:
+            amendment_rows = [
+                self._stamp(a, record_id=a["amendment_id"])
+                for a in self.amendments
+            ]
             loaded = loader.load_nodes(
-                "Amendment", self.amendments, key_field="amendment_id",
+                "Amendment", amendment_rows, key_field="amendment_id",
             )
             self.rows_loaded += loaded
 
         # 2. Person nodes for authors with CPF
         if self.authors:
-            loader.load_nodes("Person", self.authors, key_field="cpf")
+            author_rows = [
+                self._stamp(a, record_id=a["cpf"]) for a in self.authors
+            ]
+            loader.load_nodes("Person", author_rows, key_field="cpf")
 
         # 3. Person -[:AUTOR_EMENDA]-> Amendment
         if self.author_rels:
+            rel_rows = [
+                self._stamp(r, record_id=r["target_key"])
+                for r in self.author_rels
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (p:Person {cpf: row.source_key}) "
                 "MATCH (a:Amendment {amendment_id: row.target_key}) "
-                "MERGE (p)-[:AUTOR_EMENDA]->(a)"
+                "MERGE (p)-[r:AUTOR_EMENDA]->(a) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            loader.run_query_with_retry(query, self.author_rels)
+            loader.run_query_with_retry(query, rel_rows)
 
 
 # ── Download / fetch-to-disk (for scripts/download_siop.py) ──────────

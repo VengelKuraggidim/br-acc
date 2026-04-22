@@ -235,6 +235,22 @@ class SenadoPipeline(Pipeline):
             skipped,
         )
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canonica da CEAPS.
+
+        Senado nao expoe deep-link por despesa — usamos a landing do dataset
+        de dados abertos como ``source_url``. ``record_id`` e o identificador
+        proprio da linha (expense_id, cnpj/cpf).
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url=(
+                "https://www12.senado.leg.br/transparencia/dados-abertos-transparencia/"
+                "dados-abertos-ceaps"
+            ),
+        )
+
     def load(self) -> None:
         if not self.expenses:
             logger.warning("No expenses to load")
@@ -244,14 +260,17 @@ class SenadoPipeline(Pipeline):
 
         # Load Expense nodes
         expense_nodes = [
-            {
-                "expense_id": e["expense_id"],
-                "type": e["type"],
-                "value": e["value"],
-                "date": e["date"],
-                "description": e["description"],
-                "source": e["source"],
-            }
+            self._stamp(
+                {
+                    "expense_id": e["expense_id"],
+                    "type": e["type"],
+                    "value": e["value"],
+                    "date": e["date"],
+                    "description": e["description"],
+                    "source": e["source"],
+                },
+                record_id=e["expense_id"],
+            )
             for e in self.expenses
         ]
         count = loader.load_nodes("Expense", expense_nodes, key_field="expense_id")
@@ -261,21 +280,30 @@ class SenadoPipeline(Pipeline):
         # Load/merge Company nodes for CNPJ suppliers
         company_suppliers = [s for s in self.suppliers if "cnpj" in s]
         if company_suppliers:
-            count = loader.load_nodes("Company", company_suppliers, key_field="cnpj")
+            stamped = [
+                self._stamp(s, record_id=s["cnpj"]) for s in company_suppliers
+            ]
+            count = loader.load_nodes("Company", stamped, key_field="cnpj")
             logger.info("Merged %d supplier Company nodes", count)
 
         # Load/merge Person nodes for CPF suppliers
         person_suppliers = [s for s in self.suppliers if "cpf" in s]
         if person_suppliers:
-            count = loader.load_nodes("Person", person_suppliers, key_field="cpf")
+            stamped = [
+                self._stamp(s, record_id=s["cpf"]) for s in person_suppliers
+            ]
+            count = loader.load_nodes("Person", stamped, key_field="cpf")
             logger.info("Merged %d supplier Person nodes", count)
 
         # GASTOU: Person (senator) -> Expense
         # Tier 1: CPF-based (from senator lookup enrichment)
         if self.gastou_rels:
+            stamped = [
+                self._stamp(r, record_id=r["target_key"]) for r in self.gastou_rels
+            ]
             count = loader.load_relationships(
                 rel_type="GASTOU",
-                rows=self.gastou_rels,
+                rows=stamped,
                 source_label="Person",
                 source_key="cpf",
                 target_label="Expense",
@@ -286,27 +314,45 @@ class SenadoPipeline(Pipeline):
         # Tier 2: Name-based (no CANDIDATO_EM filter — matches suplentes and
         # pre-2002 senators who lack TSE candidacy records)
         if self.gastou_by_name_rels:
+            stamped = [
+                self._stamp(r, record_id=r["target_key"])
+                for r in self.gastou_by_name_rels
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (e:Expense {expense_id: row.target_key}) "
                 "MATCH (p:Person {name: row.senator_name}) "
-                "MERGE (p)-[:GASTOU]->(e)"
+                "MERGE (p)-[r:GASTOU]->(e) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            count = loader.run_query(query, self.gastou_by_name_rels)
+            count = loader.run_query(query, stamped)
             logger.info("Created %d GASTOU relationships (name)", count)
 
         # FORNECEU: Company/Person -> Expense
         if self.forneceu_rels:
+            stamped = [
+                self._stamp(r, record_id=r["target_key"])
+                for r in self.forneceu_rels
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (e:Expense {expense_id: row.target_key}) "
                 "OPTIONAL MATCH (c:Company {cnpj: row.source_key}) "
                 "OPTIONAL MATCH (p:Person {cpf: row.source_key}) "
-                "WITH e, coalesce(c, p) AS supplier "
+                "WITH e, coalesce(c, p) AS supplier, row "
                 "WHERE supplier IS NOT NULL "
-                "MERGE (supplier)-[:FORNECEU]->(e)"
+                "MERGE (supplier)-[r:FORNECEU]->(e) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            count = loader.run_query(query, self.forneceu_rels)
+            count = loader.run_query(query, stamped)
             logger.info("Created %d FORNECEU relationships", count)
 
 

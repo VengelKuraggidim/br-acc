@@ -549,6 +549,18 @@ class CamaraPipeline(Pipeline):
             skipped,
         )
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canonica do CEAP bulk.
+
+        A Camara publica o CSV bulk do CEAP sem deep-link por lancamento —
+        usamos a landing de cotas como ``source_url`` pra todos os rows.
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url="https://www.camara.leg.br/cotas/",
+        )
+
     def load(self) -> None:
         if not self.expenses:
             logger.warning("No expenses to load")
@@ -558,15 +570,18 @@ class CamaraPipeline(Pipeline):
 
         # Load Expense nodes (include deputy_id for linkage)
         expense_nodes = [
-            {
-                "expense_id": e["expense_id"],
-                "deputy_id": e["deputy_id"],
-                "type": e["type"],
-                "value": e["value"],
-                "date": e["date"],
-                "description": e["description"],
-                "source": e["source"],
-            }
+            self._stamp(
+                {
+                    "expense_id": e["expense_id"],
+                    "deputy_id": e["deputy_id"],
+                    "type": e["type"],
+                    "value": e["value"],
+                    "date": e["date"],
+                    "description": e["description"],
+                    "source": e["source"],
+                },
+                record_id=e["expense_id"],
+            )
             for e in self.expenses
         ]
         count = loader.load_nodes("Expense", expense_nodes, key_field="expense_id")
@@ -575,36 +590,53 @@ class CamaraPipeline(Pipeline):
 
         # Load/merge Person nodes for deputies (CPF-based)
         if self.deputies:
-            count = loader.load_nodes("Person", self.deputies, key_field="cpf")
+            stamped = [self._stamp(d, record_id=d["cpf"]) for d in self.deputies]
+            count = loader.load_nodes("Person", stamped, key_field="cpf")
             logger.info("Merged %d deputy Person nodes (CPF)", count)
 
         # Load/merge Person nodes for deputies without CPF (deputy_id-based)
         if self.deputies_by_id:
+            stamped = [
+                self._stamp(d, record_id=d["deputy_id"])
+                for d in self.deputies_by_id
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MERGE (p:Person {deputy_id: row.deputy_id}) "
-                "SET p.name = row.name, p.uf = row.uf, p.partido = row.partido"
+                "SET p.name = row.name, p.uf = row.uf, p.partido = row.partido, "
+                "    p.source_id = row.source_id, p.source_record_id = row.source_record_id, "
+                "    p.source_url = row.source_url, p.ingested_at = row.ingested_at, "
+                "    p.run_id = row.run_id"
             )
-            count = loader.run_query(query, self.deputies_by_id)
+            count = loader.run_query(query, stamped)
             logger.info("Merged %d deputy Person nodes (deputy_id)", count)
 
         # Load/merge Company nodes for CNPJ suppliers
         company_suppliers = [s for s in self.suppliers if "cnpj" in s]
         if company_suppliers:
-            count = loader.load_nodes("Company", company_suppliers, key_field="cnpj")
+            stamped = [
+                self._stamp(s, record_id=s["cnpj"]) for s in company_suppliers
+            ]
+            count = loader.load_nodes("Company", stamped, key_field="cnpj")
             logger.info("Merged %d supplier Company nodes", count)
 
         # Load/merge Person nodes for CPF suppliers
         person_suppliers = [s for s in self.suppliers if "cpf" in s]
         if person_suppliers:
-            count = loader.load_nodes("Person", person_suppliers, key_field="cpf")
+            stamped = [
+                self._stamp(s, record_id=s["cpf"]) for s in person_suppliers
+            ]
+            count = loader.load_nodes("Person", stamped, key_field="cpf")
             logger.info("Merged %d supplier Person nodes", count)
 
         # GASTOU: Person -> Expense (CPF-based)
         if self.gastou_rels:
+            stamped = [
+                self._stamp(r, record_id=r["target_key"]) for r in self.gastou_rels
+            ]
             count = loader.load_relationships(
                 rel_type="GASTOU",
-                rows=self.gastou_rels,
+                rows=stamped,
                 source_label="Person",
                 source_key="cpf",
                 target_label="Expense",
@@ -614,25 +646,43 @@ class CamaraPipeline(Pipeline):
 
         # GASTOU: Person -> Expense (deputy_id-based, for CPF-less deputies)
         if self.gastou_by_deputy_id_rels:
+            stamped = [
+                self._stamp(r, record_id=r["target_key"])
+                for r in self.gastou_by_deputy_id_rels
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (p:Person {deputy_id: row.deputy_id}) "
                 "MATCH (e:Expense {expense_id: row.target_key}) "
-                "MERGE (p)-[:GASTOU]->(e)"
+                "MERGE (p)-[r:GASTOU]->(e) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            count = loader.run_query(query, self.gastou_by_deputy_id_rels)
+            count = loader.run_query(query, stamped)
             logger.info("Created %d GASTOU relationships (deputy_id)", count)
 
         # FORNECEU: Company/Person -> Expense
         if self.forneceu_rels:
+            stamped = [
+                self._stamp(r, record_id=r["target_key"])
+                for r in self.forneceu_rels
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (e:Expense {expense_id: row.target_key}) "
                 "OPTIONAL MATCH (c:Company {cnpj: row.source_key}) "
                 "OPTIONAL MATCH (p:Person {cpf: row.source_key}) "
-                "WITH e, coalesce(c, p) AS supplier "
+                "WITH e, coalesce(c, p) AS supplier, row "
                 "WHERE supplier IS NOT NULL "
-                "MERGE (supplier)-[:FORNECEU]->(e)"
+                "MERGE (supplier)-[r:FORNECEU]->(e) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            count = loader.run_query(query, self.forneceu_rels)
+            count = loader.run_query(query, stamped)
             logger.info("Created %d FORNECEU relationships", count)

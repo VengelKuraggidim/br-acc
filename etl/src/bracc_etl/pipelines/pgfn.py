@@ -21,6 +21,14 @@ from bracc_etl.transforms import (
 
 logger = logging.getLogger(__name__)
 
+# URL canonica da PGFN pra carimbar source_url. Fonte nao expoe deep-link por
+# inscricao — usamos a landing page do dataset de divida ativa. Igual ao padrao
+# do transparencia.py (bulk CSVs sem per-record URL).
+_PGFN_SOURCE_URL = (
+    "https://www.gov.br/pgfn/pt-br/assuntos/divida-ativa-da-uniao/"
+    "dados-abertos"
+)
+
 
 class PgfnPipeline(Pipeline):
     """ETL pipeline for PGFN active tax debt (divida ativa da Uniao).
@@ -150,15 +158,33 @@ class PgfnPipeline(Pipeline):
             skipped_bad_cnpj,
         )
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canonica da PGFN.
+
+        Igual ao padrao de ``transparencia.py::_stamp``: fonte nao tem deep-
+        link por inscricao, entao todo row carimba o mesmo ``source_url``.
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url=_PGFN_SOURCE_URL,
+        )
+
     def load(self) -> None:
         loader = Neo4jBatchLoader(self.driver)
 
         if self.finances:
-            loaded = loader.load_nodes("Finance", self.finances, key_field="finance_id")
+            finance_rows = [
+                self._stamp(f, record_id=f["finance_id"]) for f in self.finances
+            ]
+            loaded = loader.load_nodes("Finance", finance_rows, key_field="finance_id")
             self.rows_loaded += loaded
             logger.info("[pgfn] Loaded %d Finance nodes", loaded)
 
         if self.relationships:
+            rel_rows = [
+                self._stamp(r, record_id=r["target_key"]) for r in self.relationships
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MERGE (c:Company {cnpj: row.source_key}) "
@@ -167,7 +193,12 @@ class PgfnPipeline(Pipeline):
                 "MATCH (f:Finance {finance_id: row.target_key}) "
                 "MERGE (c)-[r:DEVE]->(f) "
                 "SET r.value = row.value, "
-                "    r.date = row.date"
+                "    r.date = row.date, "
+                "    r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            loaded = loader.run_query_with_retry(query, self.relationships, batch_size=2000)
+            loaded = loader.run_query_with_retry(query, rel_rows, batch_size=2000)
             logger.info("[pgfn] Loaded %d DEVE relationships", loaded)

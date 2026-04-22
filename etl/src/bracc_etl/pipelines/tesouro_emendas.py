@@ -315,25 +315,56 @@ class TesouroEmendasPipeline(Pipeline):
             len(self.companies),
         )
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canonica da emendas CSV
+        do Tesouro Transparente.
+
+        CKAN nao expoe deep-link por OB/registro — usamos a landing do dataset.
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url=(
+                "https://www.tesourotransparente.gov.br/ckan/dataset/"
+                "emendas-parlamentares"
+            ),
+        )
+
     def load(self) -> None:
         loader = Neo4jBatchLoader(self.driver)
 
         if self.transfers:
+            transfer_rows = [
+                self._stamp(t, record_id=t["transfer_id"])
+                for t in self.transfers
+            ]
             loaded = loader.load_nodes(
-                "Payment", self.transfers, key_field="transfer_id",
+                "Payment", transfer_rows, key_field="transfer_id",
             )
             self.rows_loaded += loaded
 
         if self.companies:
+            company_rows = [
+                self._stamp(c, record_id=c["cnpj"]) for c in self.companies
+            ]
             loader.load_nodes(
-                "Company", self.companies, key_field="cnpj",
+                "Company", company_rows, key_field="cnpj",
             )
 
         if self.transfer_rels:
+            rel_rows = [
+                self._stamp(r, record_id=f"{r['source_key']}->{r['target_key']}")
+                for r in self.transfer_rels
+            ]
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (p:Payment {transfer_id: row.source_key}) "
                 "MATCH (c:Company {cnpj: row.target_key}) "
-                "MERGE (p)-[:PAGO_PARA]->(c)"
+                "MERGE (p)-[r:PAGO_PARA]->(c) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
-            loader.run_query(query, self.transfer_rels)
+            loader.run_query(query, rel_rows)
