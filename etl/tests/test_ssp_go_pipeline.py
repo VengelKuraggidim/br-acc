@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from bracc_etl.archival import restore_snapshot
-from bracc_etl.pipelines.ssp_go import SspGoPipeline
+from bracc_etl.pipelines.ssp_go import SspGoPipeline, _parse_bulletin_pdf
 from tests._mock_helpers import mock_session
 
 if TYPE_CHECKING:
@@ -245,4 +245,87 @@ class TestArchivalRetrofit:
             # Ausência do campo == opt-in não ativado (contrato do
             # attach_provenance: só injeta a chave quando snapshot_uri
             # não é None).
+            assert "source_snapshot_uri" not in stat
+
+
+# ---------------------------------------------------------------------------
+# PDF parser — os boletins anuais da SSP-GO são 1 página com tabela
+# ``NATUREZAS × JAN..DEZ + TOTAL``. ``_parse_bulletin_pdf`` é o único
+# ponto de entrada; os testes abaixo usam o PDF real de 2025 como fixture
+# (22 KB, pequeno o bastante pra ficar versionado) e validam shape,
+# valores amostrais e comportamento em PDF malformado.
+# ---------------------------------------------------------------------------
+
+
+_FIXTURE_2025_PDF = FIXTURES / "ssp_go" / "estatisticas_2025.pdf"
+
+
+class TestParseBulletinPdf:
+    """Cobertura do parser isolado."""
+
+    def test_year_extracted_from_header(self) -> None:
+        year, _rows = _parse_bulletin_pdf(_FIXTURE_2025_PDF.read_bytes())
+        assert year == 2025
+
+    def test_row_count_matches_15x12(self) -> None:
+        """15 naturezas conhecidas × 12 meses = 180 rows, sem TOTAL."""
+        _year, rows = _parse_bulletin_pdf(_FIXTURE_2025_PDF.read_bytes())
+        assert len(rows) == 180
+
+    def test_row_shape_state_level(self) -> None:
+        """Todas as rows carregam o sentinela estadual (sem granularidade municipal)."""
+        _year, rows = _parse_bulletin_pdf(_FIXTURE_2025_PDF.read_bytes())
+        assert {r["municipio"] for r in rows} == {"ESTADO DE GOIAS"}
+        assert {r["cod_ibge"] for r in rows} == {"5200000"}
+
+    def test_values_match_pdf_sample(self) -> None:
+        """Sanity: HOMICIDIO DOLOSO 2025-01 = 70 e FEMINICIDIO 2025-12 = 9."""
+        # Valores conferidos manualmente contra o PDF original. Se o
+        # parser regredir (shift de coluna, perda de linha), esses
+        # casos quebram primeiro.
+        _year, rows = _parse_bulletin_pdf(_FIXTURE_2025_PDF.read_bytes())
+        by_key = {(r["natureza"], r["periodo"]): r["quantidade"] for r in rows}
+        assert by_key[("HOMICIDIO DOLOSO", "2025-01")] == "70"
+        assert by_key[("FEMINICIDIO", "2025-12")] == "9"
+        assert by_key[("ROUBO A INSTITUICAO FINANCEIRA", "2025-06")] == "0"
+
+    def test_thousand_separator_stripped(self) -> None:
+        """Números com separador de milhar (ex.: ``1.097``) parseiam como int."""
+        _year, rows = _parse_bulletin_pdf(_FIXTURE_2025_PDF.read_bytes())
+        # FURTO EM RESIDENCIA tem valores >1000 em todos os meses de 2025.
+        by_key = {(r["natureza"], r["periodo"]): r["quantidade"] for r in rows}
+        assert int(by_key[("FURTO EM RESIDENCIA", "2025-01")]) == 1097
+
+    def test_corrupt_pdf_returns_empty(self) -> None:
+        """Bytes inválidos não explodem o pipeline — retornam (None, [])."""
+        year, rows = _parse_bulletin_pdf(b"not a pdf at all")
+        assert year is None
+        assert rows == []
+
+
+class TestOfflinePdfFallback:
+    """Extract cai nos PDFs locais quando não há CSV e archive_pdfs=False."""
+
+    def test_parses_local_pdf_when_csv_absent(
+        self, tmp_path: Path,
+    ) -> None:
+        ssp_dir = tmp_path / "ssp_go"
+        ssp_dir.mkdir()
+        # Só copia o PDF (sem ocorrencias.csv) pra forçar o fallback.
+        (ssp_dir / "estatisticas_2025.pdf").write_bytes(
+            _FIXTURE_2025_PDF.read_bytes(),
+        )
+        pipeline = SspGoPipeline(
+            driver=MagicMock(),
+            data_dir=str(tmp_path),
+            archive_pdfs=False,
+        )
+        pipeline.extract()
+        pipeline.transform()
+
+        # 180 rows do PDF, todas com provenance estampada.
+        assert len(pipeline.stats) == 180
+        assert all(s["uf"] == "GO" for s in pipeline.stats)
+        # Sem archive_pdfs, o campo snapshot_uri permanece fora (opt-in).
+        for stat in pipeline.stats:
             assert "source_snapshot_uri" not in stat

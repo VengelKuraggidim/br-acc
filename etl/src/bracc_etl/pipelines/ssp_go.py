@@ -1,39 +1,36 @@
-"""ETL pipeline scaffold for Goias public-security statistics.
+"""ETL pipeline for Goias public-security statistics.
 
 SSP-GO (Secretaria de Seguranca Publica de Goias, via goias.gov.br/seguranca)
-publishes aggregate yearly statistics. This scaffold accepts
-pre-downloaded CSV files under ``data/ssp_go/`` with the expected shape:
+publishes aggregate statistics as one PDF per year
+(``estatisticas_<YYYY>.pdf`` plus consolidated multi-year PDFs). There
+is no CSV/XLSX export, no Power BI embed, and no CKAN dataset with
+occurrence counts (the only CSV the SSP organization owns on
+``dadosabertos.go.gov.br`` is ``doacoes-recebidas-ssp`` — donations,
+unrelated to crime statistics). Audited 2026-04-22.
 
-- ``ocorrencias.csv``  -> GoSecurityStat nodes (aggregate counts by
-                          municipality / crime type / period)
+Granularity is **state-wide** only (no per-municipality breakdown
+upstream). Each yearly bulletin is a single page with a table of
+~15 crime naturezas × 12 months + a TOTAL column. The pipeline parses
+those PDFs with :mod:`pypdf` and materialises one row per
+(naturaza × mes), stamped with ``cod_ibge=5200000`` (UF GO sentinel)
+and ``municipality="ESTADO DE GOIAS"``.
 
-Upstream availability (audited 2026-04-17):
+Extraction strategy (in order of preference):
 
-- ``goias.gov.br/seguranca/estatisticas/`` publishes one PDF per year
-  (``estatisticas_<YYYY>.pdf``, plus consolidated multi-year PDFs). No
-  CSV/XLSX export is exposed.
-- ``dadosabertos.go.gov.br`` (state CKAN) has **no** "ocorrencias by
-  municipality" dataset. The only CSV owned by the SSP organization is
-  ``doacoes-recebidas-ssp`` (donations received), unrelated to crime
-  statistics. Police-civil exposes only a 14-row crime-type taxonomy
-  (``crimes-registrados-pela-delegacia-virtual``).
+1. If ``data/ssp_go/ocorrencias.csv`` exists, read it verbatim. Lets
+   operators drop a LAI-obtained CSV with per-municipality data next to
+   the pipeline and override the PDF parse path.
+2. Otherwise, scrape the estatisticas index online, download each
+   yearly PDF, archive the bytes via :func:`archive_fetch`, and parse
+   the crime table. Snapshot URIs are stamped back onto the rows via
+   ``source_snapshot_uri``.
+3. Offline fallback: parse any ``estatisticas*.pdf`` found directly
+   under ``data/ssp_go/`` (useful when the portal is unreachable but a
+   prior ``fetch_to_disk`` dump is cached locally).
 
-``fetch_to_disk`` therefore downloads the yearly PDF bulletins (the real
-machine-readable output SSP-GO publishes) plus the SSP donations CSV.
-Extracting tabular occurrence counts from the PDFs is out of scope of
-this fetch layer — the pipeline's ``extract`` still reads
-``ocorrencias.csv`` when an operator provides one. Once a PDF parser is
-added, drop it next to ``fetch_to_disk`` and materialize
-``ocorrencias.csv`` from the yearly PDFs.
-
-Human validation required:
-
-1. Decide on the canonical crime-type taxonomy (SSP's own categories vs.
-   a unified set used across Brazilian state security agencies).
-2. Validate CSV schema once an operator exports a sample.
-3. Build the PDF -> tabular extractor for ``estatisticas_<YYYY>.pdf``.
-
-Data source: https://goias.gov.br/seguranca/
+Data source: https://goias.gov.br/seguranca/estatisticas/
+Per-municipality data is tracked as a débito — see
+``todo-list-prompts/high_priority/debitos/ssp-go-granularidade-municipio.md``.
 """
 
 from __future__ import annotations
@@ -123,6 +120,131 @@ def _year_from_pdf_slug(slug: str) -> str | None:
     """
     match = _PDF_YEAR_RE.search(slug)
     return match.group(1) if match else None
+
+
+# Sentinela do IBGE pro estado de Goiás inteiro — os boletins anuais do
+# SSP-GO só publicam totais estaduais, então todas as rows carregam esse
+# valor. Operadores que tiverem dado municipal (ex.: via LAI) sobrescrevem
+# via ``ocorrencias.csv`` e o parser é pulado.
+_GO_STATE_COD_IBGE = "5200000"
+_GO_STATE_MUNICIPIO = "ESTADO DE GOIAS"
+
+# Taxonomia que o boletim publica (confirmada 2018–2025). Usada só pra
+# logar drift — o parser não rejeita linhas desconhecidas, pra não falhar
+# silenciosamente se a SSP adicionar uma naturaza nova.
+_KNOWN_NATUREZAS: frozenset[str] = frozenset({
+    "HOMICIDIO DOLOSO",
+    "FEMINICIDIO",
+    "ESTUPRO",
+    "LATROCINIO",
+    "LESAO SEGUIDA DE MORTE",
+    "ROUBO A TRANSEUNTE",
+    "ROUBO DE VEICULOS",
+    "ROUBO EM COMERCIO",
+    "ROUBO EM RESIDENCIA",
+    "ROUBO DE CARGA",
+    "ROUBO A INSTITUICAO FINANCEIRA",
+    "FURTO DE VEICULOS",
+    "FURTO EM COMERCIO",
+    "FURTO EM RESIDENCIA",
+    "FURTO A TRANSEUNTE",
+})
+
+# Regex do cabeçalho "DEMONSTRATIVO - ANO YYYY" usado pra descobrir o ano
+# do boletim direto do conteúdo — mais confiável que o nome do arquivo
+# (o SSP às vezes sobe PDFs sob slugs inconsistentes ou re-postados com
+# o mesmo nome).
+_ANO_HEADER_RE = re.compile(
+    r"DEMONSTRATIVO\s*[-–]\s*ANO\s+(\d{4})",
+    re.IGNORECASE,
+)
+
+
+def _parse_number(token: str) -> int | None:
+    """Parse um número do boletim (ex.: ``903`` ou ``28.119``).
+
+    O PDF usa ``.`` como separador de milhar — só removemos pontos e
+    convertemos. Retorna ``None`` quando o token não é um inteiro
+    reconhecível, pro caller pular a linha sem tratar como erro fatal.
+    """
+    clean = token.replace(".", "")
+    if not clean.isdigit():
+        return None
+    return int(clean)
+
+
+def _parse_bulletin_pdf(pdf_bytes: bytes) -> tuple[int | None, list[dict[str, str]]]:
+    """Extract (year, rows) from a single SSP-GO yearly bulletin.
+
+    The bulletin is a 1-page PDF with a ``NATUREZAS × JAN..DEZ + TOTAL``
+    table. We use :mod:`pypdf` to pull text and then parse line-by-line:
+    any line whose last 13 whitespace-separated tokens are numbers is
+    treated as a data row. The 13th number is the pre-computed TOTAL
+    and is discarded — we re-expand to 12 monthly rows so downstream
+    callers always see one row per ``periodo = YYYY-MM``.
+
+    Returns ``(year, rows)``. ``year`` is pulled from the
+    ``DEMONSTRATIVO - ANO YYYY`` header; if missing, returns
+    ``(None, [])`` because rows without a ``periodo`` are useless.
+    """
+    # pypdf import lazy: keeps the module importable in environments
+    # where PDF parsing is unused (already a hard dep in ``pyproject.toml``,
+    # but this keeps the cost off the happy path when only CSVs are read).
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:  # pypdf raises many things (ValueError, etc.)  # noqa: BLE001
+        logger.warning("[ssp_go] could not read PDF bulletin: %s", exc)
+        return None, []
+
+    year_match = _ANO_HEADER_RE.search(text)
+    if year_match is None:
+        logger.warning(
+            "[ssp_go] bulletin has no 'DEMONSTRATIVO - ANO YYYY' header; skipping",
+        )
+        return None, []
+    year = int(year_match.group(1))
+
+    rows: list[dict[str, str]] = []
+    for raw_line in text.splitlines():
+        parts = raw_line.strip().split()
+        # A data row has 1+ natureza tokens + 12 monthly counts + 1 total.
+        if len(parts) < 14:
+            continue
+        # Parse the trailing 13 tokens; bail if any isn't a number.
+        numbers = [_parse_number(t) for t in parts[-13:]]
+        if any(n is None for n in numbers):
+            continue
+        natureza_raw = " ".join(parts[:-13]).strip()
+        if not natureza_raw:
+            continue
+        # Defensive: observation lines can occasionally end with
+        # numeric tokens (CPFs, dates). If the "natureza" contains
+        # digits it's almost certainly not a crime row.
+        if any(c.isdigit() for c in natureza_raw):
+            continue
+
+        natureza = normalize_name(natureza_raw)
+        if natureza not in _KNOWN_NATUREZAS:
+            logger.info(
+                "[ssp_go] unknown naturaza %r in %d bulletin; loading anyway",
+                natureza, year,
+            )
+        for month_idx in range(12):
+            quantidade = numbers[month_idx]
+            assert quantidade is not None  # guarded by `any(n is None ...)` above
+            rows.append({
+                "municipio": _GO_STATE_MUNICIPIO,
+                "cod_ibge": _GO_STATE_COD_IBGE,
+                "natureza": natureza,
+                "periodo": f"{year}-{month_idx + 1:02d}",
+                "quantidade": str(quantidade),
+            })
+    return year, rows
 
 
 def _download_binary(
@@ -345,18 +467,23 @@ class SspGoPipeline(Pipeline):
             logger.warning("[ssp_go] failed to read %s: %s", path, exc)
             return pd.DataFrame()
 
-    def _archive_pdf_bulletins_online(self) -> dict[str, str]:
-        """Baixa e arquiva os PDFs anuais de estatisticas (online-only).
+    def _fetch_archive_parse_bulletins_online(
+        self,
+    ) -> tuple[list[dict[str, str]], dict[str, str]]:
+        """Baixa, arquiva e parseia os PDFs anuais de estatisticas.
 
-        Retorna ``{YYYY: snapshot_uri}`` — chave é o ano extraído do nome
-        do arquivo, valor é a URI relativa devolvida por
-        :func:`bracc_etl.archival.archive_fetch`. PDFs cujo nome não tem
-        ano reconhecível são arquivados mas ficam fora do dict (nenhuma
-        row consegue casar com eles via ``periodo``).
+        Retorna ``(rows, {YYYY: snapshot_uri})``: ``rows`` são os
+        registros por ``(natureza × mês)`` achatados através de todos os
+        PDFs baixados, e o dict mapeia o ano extraído do nome do arquivo
+        pra URI relativa devolvida por :func:`archive_fetch`.
 
         Falhas de HTTP são logadas e engolidas: o pipeline continua com
-        o CSV offline mesmo se o portal do SSP estiver fora do ar.
+        a lista vazia se o portal estiver fora. Falhas de parse (PDF
+        corrompido, cabeçalho faltando) também são absorvidas — o
+        snapshot ainda é gravado mesmo que o parser não consiga extrair
+        linhas, pra preservar o bruto pra análise manual.
         """
+        rows: list[dict[str, str]] = []
         uris: dict[str, str] = {}
         try:
             with httpx.Client(timeout=60, follow_redirects=True) as client:
@@ -370,7 +497,7 @@ class SspGoPipeline(Pipeline):
                         _ESTATISTICAS_INDEX_URL,
                         exc,
                     )
-                    return uris
+                    return rows, uris
 
                 if self.limit is not None and self.limit >= 0:
                     pdf_urls = pdf_urls[: self.limit]
@@ -395,42 +522,89 @@ class SspGoPipeline(Pipeline):
                         source_id=self.source_id,
                     )
                     slug = _slug_from_pdf_url(url)
-                    year = _year_from_pdf_slug(slug)
-                    if year is not None:
+                    slug_year = _year_from_pdf_slug(slug)
+                    if slug_year is not None:
                         # PDFs mais recentes sobrescrevem os antigos pra
                         # um mesmo ano — consistente com a ordem "newest
                         # first" do índice HTML.
-                        uris.setdefault(year, uri)
+                        uris.setdefault(slug_year, uri)
                     logger.info(
                         "[ssp_go] archived PDF %s -> %s", slug, uri,
                     )
+
+                    _parsed_year, parsed_rows = _parse_bulletin_pdf(resp.content)
+                    rows.extend(parsed_rows)
         except httpx.HTTPError as exc:
             logger.warning("[ssp_go] online archival aborted: %s", exc)
-        return uris
+        return rows, uris
+
+    def _parse_local_bulletins(self, src_dir: Path) -> list[dict[str, str]]:
+        """Parse cached ``estatisticas*.pdf`` found directly under ``src_dir``.
+
+        Offline fallback path: if the online scrape fails (or archival
+        is opt-out) but a prior ``fetch_to_disk`` run left PDFs on
+        disk, those get parsed so the pipeline still loads. Snapshot
+        URIs are *not* populated here — provenance lives in the
+        archival layer, which is online-only.
+        """
+        rows: list[dict[str, str]] = []
+        if not src_dir.exists():
+            return rows
+        for pdf_path in sorted(src_dir.glob("estatisticas*.pdf")):
+            try:
+                pdf_bytes = pdf_path.read_bytes()
+            except OSError as exc:
+                logger.warning("[ssp_go] could not read %s: %s", pdf_path, exc)
+                continue
+            _year, parsed_rows = _parse_bulletin_pdf(pdf_bytes)
+            rows.extend(parsed_rows)
+        return rows
 
     def extract(self) -> None:
         src_dir = Path(self.data_dir) / "ssp_go"
-        if not src_dir.exists():
+        # Operator-supplied CSV (ex.: LAI com dado municipal) tem
+        # precedência sobre os PDFs. Se presente e não-vazio, pula o
+        # scrape online do boletim anual.
+        operator_csv: pd.DataFrame | None = None
+        csv_path = src_dir / "ocorrencias.csv"
+        if csv_path.exists() and csv_path.stat().st_size > 0:
+            df = self._read_csv_optional(csv_path)
+            if not df.empty:
+                operator_csv = df
+
+        # Online archival + parse dos PDFs anuais. Rodando produção com
+        # ``archive_pdfs=True`` (default), tenta scrape do índice HTML +
+        # download de cada PDF pra gerar snapshot via :func:`archive_fetch`
+        # **e** materializar as rows. Falhas de HTTP são absorvidas.
+        # Testes offline passam ``archive_pdfs=False`` pra evitar network.
+        online_rows: list[dict[str, str]] = []
+        if self._archive_pdfs_enabled:
+            online_rows, self._pdf_snapshot_uris = (
+                self._fetch_archive_parse_bulletins_online()
+            )
+
+        # Triagem final: CSV do operador > rows online > PDFs cacheados
+        # localmente. Só cai no parse local quando nenhum dos dois
+        # caminhos de cima rendeu linhas (portal fora + sem CSV).
+        if operator_csv is not None:
+            self._raw_stats = operator_csv
+        elif online_rows:
+            self._raw_stats = pd.DataFrame(online_rows)
+        else:
+            local_rows = self._parse_local_bulletins(src_dir)
+            if local_rows:
+                self._raw_stats = pd.DataFrame(local_rows)
+
+        if self._raw_stats.empty:
             logger.warning(
-                "[ssp_go] expected directory %s missing; "
-                "export SSP-GO aggregate CSVs there.",
+                "[ssp_go] nenhuma fonte de dados disponível em %s "
+                "(sem ocorrencias.csv, sem PDFs locais, portal offline?)",
                 src_dir,
             )
-            return
-        self._raw_stats = self._read_csv_optional(src_dir / "ocorrencias.csv")
+
         if self.limit:
             self._raw_stats = self._raw_stats.head(self.limit)
         self.rows_in = len(self._raw_stats)
-
-        # Online archival dos PDFs anuais do SSP. Rodando produção com
-        # ``archive_pdfs=True`` (default), tenta scrape do índice HTML +
-        # download de cada PDF pra gerar snapshot via
-        # :func:`archive_fetch`. Falhas de HTTP são absorvidas — se o
-        # portal estiver fora, o dict fica vazio e rows não ganham
-        # ``source_snapshot_uri`` (opt-in preservado). Testes offline
-        # passam ``archive_pdfs=False`` pra evitar network.
-        if self._archive_pdfs_enabled:
-            self._pdf_snapshot_uris = self._archive_pdf_bulletins_online()
 
     def transform(self) -> None:
         for _, row in self._raw_stats.iterrows():
