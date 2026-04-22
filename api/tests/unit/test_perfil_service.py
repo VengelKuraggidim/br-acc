@@ -542,8 +542,9 @@ class TestTetoGastos:
     async def test_com_despesas_tse_teto_populado(self) -> None:
         """``total_despesas_tse_2022`` + ``cargo_tse_2022`` no grafo → teto preenchido."""
         driver = _build_driver()
+        # 2.7M / 3.176M ≈ 85% → classificação "alto".
         legislator = _legislator_node(
-            total_despesas_tse_2022=1_800_000.0,
+            total_despesas_tse_2022=2_700_000.0,
             cargo_tse_2022="DEPUTADO FEDERAL",
         )
         record = _mock_record({"politico": legislator, "conexoes": []})
@@ -560,7 +561,7 @@ class TestTetoGastos:
             perfil = await obter_perfil(driver, "4:abc:1")
 
         assert perfil.teto_gastos is not None
-        assert perfil.teto_gastos.valor_limite == 2_100_000.0
+        assert perfil.teto_gastos.valor_limite == 3_176_572.53
         assert perfil.teto_gastos.classificacao == "alto"
         assert perfil.teto_gastos.ano_eleicao == 2022
         # Alerta info associado (alto < limite = 'info').
@@ -594,7 +595,7 @@ class TestTetoGastos:
         """Gasto > 100% do teto → alerta ``grave`` no perfil."""
         driver = _build_driver()
         legislator = _legislator_node(
-            total_despesas_tse_2022=2_500_000.0,  # 119% do teto 2.1M
+            total_despesas_tse_2022=3_800_000.0,  # 119% do teto 3.176M
             cargo_tse_2022="DEPUTADO FEDERAL",
         )
         record = _mock_record({"politico": legislator, "conexoes": []})

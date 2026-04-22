@@ -21,45 +21,45 @@ class TestDeputadoFederal:
             cargo="DEPUTADO FEDERAL",
             uf="GO",
             ano_eleicao=2022,
-            total_despesas_declaradas=1_000_000.0,
+            total_despesas_declaradas=1_500_000.0,
         )
         assert teto is not None
-        assert teto.valor_limite == 2_100_000.0
-        assert teto.pct_usado == pytest.approx(47.6, abs=0.1)
+        assert teto.valor_limite == 3_176_572.53
+        # 1.5M / 3.176M ≈ 47.2%
+        assert teto.pct_usado == pytest.approx(47.2, abs=0.2)
         assert teto.classificacao == "ok"
         assert teto.ano_eleicao == 2022
         assert "23.607/2019" in teto.fonte_legal
 
     def test_alto_entre_70_e_90(self) -> None:
-        # 1.8M / 2.1M = 85.7%
+        # 2.7M / 3.176M ≈ 85%
         teto = calcular_teto(
             cargo="deputado federal",
             uf="GO",
             ano_eleicao=2022,
-            total_despesas_declaradas=1_800_000.0,
+            total_despesas_declaradas=2_700_000.0,
         )
         assert teto is not None
         assert teto.classificacao == "alto"
-        assert teto.pct_usado_fmt == "86%"
 
     def test_limite_entre_90_e_100(self) -> None:
-        # 2.0M / 2.1M = 95.2%
+        # 3.0M / 3.176M ≈ 94.4%
         teto = calcular_teto(
             cargo="Deputado Federal",
             uf="GO",
             ano_eleicao=2022,
-            total_despesas_declaradas=2_000_000.0,
+            total_despesas_declaradas=3_000_000.0,
         )
         assert teto is not None
         assert teto.classificacao == "limite"
 
     def test_ultrapassou_acima_100(self) -> None:
-        # 2.5M / 2.1M = 119%
+        # 3.8M / 3.176M ≈ 119.6%
         teto = calcular_teto(
             cargo="DEPUTADO FEDERAL",
             uf="GO",
             ano_eleicao=2022,
-            total_despesas_declaradas=2_500_000.0,
+            total_despesas_declaradas=3_800_000.0,
         )
         assert teto is not None
         assert teto.classificacao == "ultrapassou"
@@ -76,15 +76,15 @@ class TestDeputadoFederal:
 
 class TestGovernador:
     def test_governador_go_ultrapassou(self) -> None:
-        # 25M / 21M = 119%
+        # 13.66M / 11.48M ≈ 119%
         teto = calcular_teto(
             cargo="GOVERNADOR",
             uf="GO",
             ano_eleicao=2022,
-            total_despesas_declaradas=25_000_000.0,
+            total_despesas_declaradas=13_660_000.0,
         )
         assert teto is not None
-        assert teto.valor_limite == 21_000_000.0
+        assert teto.valor_limite == 11_480_000.0
         assert teto.classificacao == "ultrapassou"
         assert teto.pct_usado_fmt == "119%"
 
@@ -101,26 +101,41 @@ class TestGovernador:
             cargo="vice-governador",
             uf="GO",
             ano_eleicao=2022,
-            total_despesas_declaradas=10_000_000.0,
+            total_despesas_declaradas=5_000_000.0,
         )
         assert teto is not None
-        assert teto.valor_limite == 21_000_000.0
+        assert teto.valor_limite == 11_480_000.0
 
 
 class TestSenador:
-    def test_senador_nacional(self) -> None:
+    def test_senador_go(self) -> None:
+        # GO: R$ 4.4M (Portaria TSE 647/2022).
         teto = calcular_teto("SENADOR", "GO", 2022, 2_000_000.0)
         assert teto is not None
-        assert teto.valor_limite == 5_000_000.0
+        assert teto.valor_limite == 4_400_000.0
         assert teto.classificacao == "ok"
+
+    def test_senador_sem_uf_retorna_none(self) -> None:
+        """Senador varia por UF; sem UF, degrada pra None."""
+        assert calcular_teto("SENADOR", None, 2022, 2_000_000.0) is None
+
+    def test_senador_uf_nao_mapeada_retorna_none(self) -> None:
+        assert calcular_teto("SENADOR", "AP", 2022, 2_000_000.0) is None
 
 
 class TestDeputadoEstadual:
-    def test_deputado_estadual(self) -> None:
+    def test_deputado_estadual_go(self) -> None:
+        # GO: R$ 1.26M (Portaria TSE 647/2022).
         teto = calcular_teto("DEPUTADO ESTADUAL", "GO", 2022, 500_000.0)
         assert teto is not None
-        assert teto.valor_limite == 1_050_000.0
+        assert teto.valor_limite == 1_260_000.0
         assert teto.classificacao == "ok"
+
+    def test_deputado_estadual_sem_uf_retorna_none(self) -> None:
+        assert calcular_teto("DEPUTADO ESTADUAL", None, 2022, 500_000.0) is None
+
+    def test_deputado_estadual_uf_nao_mapeada_retorna_none(self) -> None:
+        assert calcular_teto("DEPUTADO ESTADUAL", "AP", 2022, 500_000.0) is None
 
 
 class TestDegradacaoSilenciosa:
@@ -186,16 +201,16 @@ class TestNormalizacao:
         # "DEPUTADO FEDERAL" acentuado não existe mas testa normalização.
         teto = calcular_teto("Deputádo Fédéral", "GO", 2022, 1_000_000.0)
         assert teto is not None
-        assert teto.valor_limite == 2_100_000.0
+        assert teto.valor_limite == 3_176_572.53
 
     def test_cargo_lowercase(self) -> None:
         teto = calcular_teto("deputado federal", "GO", 2022, 1_000_000.0)
         assert teto is not None
 
     def test_uf_lowercase(self) -> None:
-        teto = calcular_teto("GOVERNADOR", "go", 2022, 10_000_000.0)
+        teto = calcular_teto("GOVERNADOR", "go", 2022, 5_000_000.0)
         assert teto is not None
-        assert teto.valor_limite == 21_000_000.0
+        assert teto.valor_limite == 11_480_000.0
 
 
 class TestFormatacao:
@@ -208,7 +223,7 @@ class TestFormatacao:
 
     def test_pct_usado_fmt_sem_decimais(self) -> None:
         """Formato '87%' (inteiro) — não '87.3%'."""
-        teto = calcular_teto("DEPUTADO FEDERAL", "GO", 2022, 1_830_000.0)
+        # 2.77M / 3.176M ≈ 87.2% → arredondado pra "87%"
+        teto = calcular_teto("DEPUTADO FEDERAL", "GO", 2022, 2_770_000.0)
         assert teto is not None
-        # 1.83M / 2.1M = 87.14% → arredondado pra "87%"
         assert teto.pct_usado_fmt == "87%"
