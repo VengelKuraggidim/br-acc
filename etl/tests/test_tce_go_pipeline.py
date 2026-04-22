@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from bracc_etl.archival import restore_snapshot
-from bracc_etl.pipelines.tce_go import TceGoPipeline
+from bracc_etl.pipelines.tce_go import (
+    TceGoPipeline,
+    _decision_to_row,
+    fetch_to_disk,
+)
 from tests._mock_helpers import mock_session
 
 if TYPE_CHECKING:
@@ -264,3 +270,153 @@ class TestArchivalRetrofit:
             assert "source_snapshot_uri" not in a
         for rel in pipeline.impedido_rels:
             assert "source_snapshot_uri" not in rel
+
+
+# --- Fetch tests ---------------------------------------------------------
+
+_SAMPLE_DECISION = {
+    "id": "130972",
+    "title": "Acórdão 00837/2026 - Processo: 202600047000261",
+    "type": "Acórdão",
+    "number": "00837",
+    "year": 2026,
+    "date": "13/04/2026 11:00",
+    "collegiate": "Tribunal Pleno",
+    "ementa": "Processo nº 202600047000261/004-47, tratam os autos...",
+    "summary": "RECURSO ADMINISTRATIVO. PRESCRIÇÃO QUINQUENAL.",
+    "rapporteur": "CARLA CINTIA SANTILLO",
+    "decision_rapporteur": "CARLA CINTIA SANTILLO",
+    "process": "202600047000261",
+    "subject": "004 - 47 - ATOS DE PESSOAL",
+    "interested": "CLAUDIA MIGUEL ROSA DUARTE",
+    "confidential": False,
+    "indicator": "AC",
+}
+
+
+class TestDecisionToRow:
+    """``_decision_to_row`` normaliza o shape do iago-search-api."""
+
+    def test_numero_combines_number_and_year(self) -> None:
+        row = _decision_to_row(_SAMPLE_DECISION)
+        assert row["numero"] == "00837/2026"
+
+    def test_data_strips_time_component(self) -> None:
+        """``parse_date`` rejeita ``13/04/2026 11:00``; a serialização
+        precisa entregar só ``DD/MM/YYYY`` pro transform downstream."""
+        row = _decision_to_row(_SAMPLE_DECISION)
+        assert row["data"] == "13/04/2026"
+
+    def test_uses_decision_rapporteur_when_present(self) -> None:
+        row = _decision_to_row(
+            {**_SAMPLE_DECISION, "decision_rapporteur": "OUTRO"},
+        )
+        assert row["relator"] == "OUTRO"
+
+    def test_falls_back_to_rapporteur_when_decision_empty(self) -> None:
+        row = _decision_to_row(
+            {**_SAMPLE_DECISION, "decision_rapporteur": ""},
+        )
+        assert row["relator"] == "CARLA CINTIA SANTILLO"
+
+    def test_confidential_serialised_as_string(self) -> None:
+        row = _decision_to_row({**_SAMPLE_DECISION, "confidential": True})
+        assert row["confidencial"] == "true"
+
+    def test_preserves_id_and_processo(self) -> None:
+        row = _decision_to_row(_SAMPLE_DECISION)
+        assert row["id"] == "130972"
+        assert row["processo"] == "202600047000261"
+
+
+class TestFetchToDisk:
+    """``fetch_to_disk`` paginates the search API and writes the CSV."""
+
+    def _mock_client(
+        self, pages: list[list[dict]],
+    ) -> httpx.Client:
+        """Build an httpx.Client with MockTransport that returns pages in
+        Spring Boot Page shape. Last page sets ``last: True``."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            params = dict(request.url.params)
+            page = int(params.get("page", "0"))
+            size = int(params.get("size", "25"))
+            if page >= len(pages):
+                content: list[dict] = []
+                is_last = True
+            else:
+                content = pages[page]
+                is_last = page == len(pages) - 1
+            return httpx.Response(
+                200,
+                json={
+                    "content": content,
+                    "size": size,
+                    "number": page,
+                    "totalElements": sum(len(p) for p in pages),
+                    "totalPages": len(pages),
+                    "last": is_last,
+                    "first": page == 0,
+                    "numberOfElements": len(content),
+                    "empty": not content,
+                    "pageable": {"pageNumber": page, "pageSize": size},
+                    "sort": {"sorted": False, "empty": True, "unsorted": True},
+                },
+            )
+        return httpx.Client(transport=httpx.MockTransport(handler))
+
+    def test_writes_header_and_rows(self, tmp_path: Path) -> None:
+        client = self._mock_client([[_SAMPLE_DECISION]])
+        try:
+            paths = fetch_to_disk(tmp_path, client=client)
+        finally:
+            client.close()
+        assert len(paths) == 1
+        csv_path = paths[0]
+        assert csv_path.name == "decisoes.csv"
+        with csv_path.open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh, delimiter=";"))
+        assert len(rows) == 1
+        assert rows[0]["numero"] == "00837/2026"
+        assert rows[0]["data"] == "13/04/2026"
+        assert rows[0]["relator"] == "CARLA CINTIA SANTILLO"
+
+    def test_paginates_until_last(self, tmp_path: Path) -> None:
+        """Pagina ate o backend marcar ``last: True`` — junta conteudo de
+        todas as paginas no CSV final."""
+        client = self._mock_client([
+            [dict(_SAMPLE_DECISION, id="a", number="001")],
+            [dict(_SAMPLE_DECISION, id="b", number="002")],
+            [dict(_SAMPLE_DECISION, id="c", number="003")],
+        ])
+        try:
+            paths = fetch_to_disk(tmp_path, page_size=1, client=client)
+        finally:
+            client.close()
+        with paths[0].open(encoding="utf-8") as fh:
+            ids = [r["id"] for r in csv.DictReader(fh, delimiter=";")]
+        assert ids == ["a", "b", "c"]
+
+    def test_limit_stops_early(self, tmp_path: Path) -> None:
+        client = self._mock_client([
+            [dict(_SAMPLE_DECISION, id=str(i)) for i in range(10)],
+        ])
+        try:
+            paths = fetch_to_disk(tmp_path, limit=3, client=client)
+        finally:
+            client.close()
+        with paths[0].open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh, delimiter=";"))
+        assert len(rows) == 3
+
+    def test_empty_response_still_writes_header(self, tmp_path: Path) -> None:
+        """Pagina vazia na primeira requisicao → CSV fica só com header,
+        permitindo runs em janelas sem atividade sem erro."""
+        client = self._mock_client([[]])
+        try:
+            paths = fetch_to_disk(tmp_path, client=client)
+        finally:
+            client.close()
+        content = paths[0].read_text(encoding="utf-8").splitlines()
+        assert content[0].startswith("numero;tipo;data;")
+        assert len(content) == 1
