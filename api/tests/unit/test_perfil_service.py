@@ -287,7 +287,7 @@ class TestDeputadoFederalCompleto:
             "empresas", "contratos", "despesas_gabinete",
             "total_despesas_gabinete", "total_despesas_gabinete_fmt",
             "comparacao_cidada", "comparacao_cidada_resumo",
-            "alertas", "conexoes_total", "fonte_emendas",
+            "alertas", "fonte_emendas",
             "descricao_conexoes", "doadores_empresa", "doadores_pessoa",
             "total_doacoes", "total_doacoes_fmt",
             "socios", "familia", "aviso_despesas", "validacao_tse",
@@ -309,7 +309,6 @@ class TestDeputadoFederalCompleto:
         # --- Totais ---
         assert perfil.total_emendas_valor == 80_000.0  # value_paid
         assert perfil.total_doacoes == 50_000.0
-        assert perfil.conexoes_total == 3
 
         # --- fonte_emendas = bracc (vieram do grafo) ---
         assert perfil.fonte_emendas == "bracc"

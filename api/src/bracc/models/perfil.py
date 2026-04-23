@@ -439,7 +439,6 @@ class PerfilPolitico(BaseModel):
     comparacao_cidada: list[ComparacaoCidada] = []
     comparacao_cidada_resumo: str = ""
     alertas: list[dict[str, str]]
-    conexoes_total: int
     fonte_emendas: str | None = None
     descricao_conexoes: str = ""
     doadores_empresa: list[DoadorEmpresa] = []

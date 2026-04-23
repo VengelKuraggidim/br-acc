@@ -103,18 +103,24 @@ class TestGerarResumoPolitico:
             patrimonio=1_500_000,
             num_emendas=5,
             total_emendas=2_000_000,
-            num_conexoes=12,
+            num_doadores_empresa=4,
+            num_doadores_pessoa=7,
+            num_socios=1,
+            num_familia=0,
         )
         assert "Joao Silva" in resumo
         assert "Deputado(a) Federal" in resumo
         assert "Patrimonio" in resumo
         assert "5 emenda" in resumo
-        assert "12 conexao" in resumo
+        assert "4 empresa(s) doadora(s)" in resumo
+        assert "7 pessoa(s) doadora(s)" in resumo
+        assert "1 socio(s)" in resumo
+        assert "familiar" not in resumo  # zero deve ser suprimido
 
     def test_sem_cargo(self) -> None:
-        resumo = gerar_resumo_politico("Ana", None, None, 0, 0, 0)
+        resumo = gerar_resumo_politico("Ana", None, None, 0, 0)
         assert "politico" in resumo.lower()
 
     def test_sem_patrimonio_nao_cita(self) -> None:
-        resumo = gerar_resumo_politico("Ana", "vereador", None, 0, 0, 0)
+        resumo = gerar_resumo_politico("Ana", "vereador", None, 0, 0)
         assert "Patrimonio" not in resumo

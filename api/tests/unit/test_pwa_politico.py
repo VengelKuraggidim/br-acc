@@ -68,7 +68,6 @@ def _perfil_fixture() -> PerfilPolitico:
         comparacao_cidada=[],
         comparacao_cidada_resumo="",
         alertas=[{"tipo": "ok", "icone": "ok", "texto": "Tudo certo"}],
-        conexoes_total=1,
         fonte_emendas="bracc",
         descricao_conexoes="",
         doadores_empresa=[],
@@ -112,7 +111,6 @@ async def test_politico_happy_path_devolve_perfil_completo(
     assert body["comparacao_cidada"] == []
     assert body["comparacao_cidada_resumo"] == ""
     assert body["alertas"] == [{"tipo": "ok", "icone": "ok", "texto": "Tudo certo"}]
-    assert body["conexoes_total"] == 1
     assert body["fonte_emendas"] == "bracc"
     assert body["descricao_conexoes"] == ""
     assert body["doadores_empresa"] == []

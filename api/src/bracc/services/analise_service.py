@@ -205,9 +205,19 @@ def gerar_resumo_politico(
     patrimonio: float | None,
     num_emendas: int,
     total_emendas: float,
-    num_conexoes: int,
+    num_doadores_empresa: int = 0,
+    num_doadores_pessoa: int = 0,
+    num_socios: int = 0,
+    num_familia: int = 0,
 ) -> str:
-    """Monta resumo em linguagem simples sobre o político."""
+    """Monta resumo em linguagem simples sobre o político.
+
+    O texto de "conexoes" lista so categorias que tem renderizacao visivel
+    no PWA (doadores, socios, familiares). CEAP de gabinete e emendas tem
+    secoes dedicadas e nao entram aqui — antes contavam como "conexoes"
+    inflando um numero que nao se traduzia em itens visiveis (vide debito
+    contador-conexoes-enganoso).
+    """
     partes: list[str] = []
     cargo_txt = traduzir_cargo(cargo) if cargo else "politico(a)"
     partes.append(f"{nome.title()} e {cargo_txt}.")
@@ -221,10 +231,16 @@ def gerar_resumo_politico(
             f"totalizando {fmt_brl(total_emendas)}."
         )
 
-    if num_conexoes > 0:
-        partes.append(
-            f"Foram identificadas {num_conexoes} conexao(oes) registrada(s) com "
-            "empresas, pessoas e contratos publicos."
-        )
+    detalhes: list[str] = []
+    if num_doadores_empresa > 0:
+        detalhes.append(f"{num_doadores_empresa} empresa(s) doadora(s)")
+    if num_doadores_pessoa > 0:
+        detalhes.append(f"{num_doadores_pessoa} pessoa(s) doadora(s)")
+    if num_socios > 0:
+        detalhes.append(f"{num_socios} socio(s)")
+    if num_familia > 0:
+        detalhes.append(f"{num_familia} familiar(es)")
+    if detalhes:
+        partes.append(f"Conexoes diretas: {', '.join(detalhes)}.")
 
     return " ".join(partes)

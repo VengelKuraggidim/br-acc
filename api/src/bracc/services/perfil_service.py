@@ -691,7 +691,10 @@ async def obter_perfil(
         patrimonio=politico.patrimonio,
         num_emendas=len(emendas),
         total_emendas=total_emendas_valor,
-        num_conexoes=len(conexoes_norm),
+        num_doadores_empresa=len(resultado.doadores_empresa),
+        num_doadores_pessoa=len(resultado.doadores_pessoa),
+        num_socios=len(resultado.socios),
+        num_familia=len(resultado.familia),
     )
 
     validacao_tse = gerar_validacao_tse(props, total_doacoes)
@@ -810,7 +813,6 @@ async def obter_perfil(
         comparacao_cidada=comparacoes_cidada,
         comparacao_cidada_resumo=comparacao_cidada_resumo,
         alertas=alertas,
-        conexoes_total=len(conexoes_norm),
         fonte_emendas=fonte_emendas,
         descricao_conexoes=descricao_conexoes,
         doadores_empresa=resultado.doadores_empresa,
