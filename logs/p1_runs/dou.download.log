@@ -1,0 +1,198 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:16:19,244 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] Fetching DOU 2026-03-25..2026-04-23 sections=('do1', 'do2', 'do3') -> ../data/dou
+2026-04-23 01:16:19,816 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=25-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:19,943 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-25 do1: wrote 496 acts (2026-03-25_do1.json)
+2026-04-23 01:16:21,130 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=25-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:21,386 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-25 do2: wrote 757 acts (2026-03-25_do2.json)
+2026-04-23 01:16:27,558 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=25-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:28,205 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-25 do3: wrote 3759 acts (2026-03-25_do3.json)
+2026-04-23 01:16:29,332 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=26-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:29,430 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-26 do1: wrote 338 acts (2026-03-26_do1.json)
+2026-04-23 01:16:30,459 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=26-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:30,569 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-26 do2: wrote 646 acts (2026-03-26_do2.json)
+2026-04-23 01:16:35,403 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=26-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:36,629 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-26 do3: wrote 2949 acts (2026-03-26_do3.json)
+2026-04-23 01:16:36,666 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=27-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:36,766 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-27 do1: wrote 407 acts (2026-03-27_do1.json)
+2026-04-23 01:16:36,814 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=27-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:37,157 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-27 do2: wrote 635 acts (2026-03-27_do2.json)
+2026-04-23 01:16:37,227 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=27-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:39,495 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-27 do3: wrote 2812 acts (2026-03-27_do3.json)
+2026-04-23 01:16:39,629 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=28-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:39,837 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=28-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:40,043 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=28-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:40,569 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=29-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:40,733 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=29-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:40,889 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=29-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:40,929 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=30-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:41,099 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-30 do1: wrote 467 acts (2026-03-30_do1.json)
+2026-04-23 01:16:41,137 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=30-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:41,321 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-30 do2: wrote 769 acts (2026-03-30_do2.json)
+2026-04-23 01:16:45,629 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=30-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:46,084 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-30 do3: wrote 2579 acts (2026-03-30_do3.json)
+2026-04-23 01:16:47,267 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=31-03-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:47,367 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-31 do1: wrote 379 acts (2026-03-31_do1.json)
+2026-04-23 01:16:47,402 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=31-03-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:47,513 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-31 do2: wrote 869 acts (2026-03-31_do2.json)
+2026-04-23 01:16:52,509 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=31-03-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:53,023 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-03-31 do3: wrote 2991 acts (2026-03-31_do3.json)
+2026-04-23 01:16:53,051 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=01-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:53,133 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-01 do1: wrote 600 acts (2026-04-01_do1.json)
+2026-04-23 01:16:53,161 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=01-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:53,293 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-01 do2: wrote 1093 acts (2026-04-01_do2.json)
+2026-04-23 01:16:53,329 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=01-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:53,794 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-01 do3: wrote 3213 acts (2026-04-01_do3.json)
+2026-04-23 01:16:54,910 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=02-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:54,980 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-02 do1: wrote 424 acts (2026-04-02_do1.json)
+2026-04-23 01:16:56,087 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=02-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:56,242 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-02 do2: wrote 659 acts (2026-04-02_do2.json)
+2026-04-23 01:16:56,271 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=02-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:56,539 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-02 do3: wrote 2486 acts (2026-04-02_do3.json)
+2026-04-23 01:16:56,572 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=03-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:56,609 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=03-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:56,756 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=03-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:56,915 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=04-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:56,952 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=04-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:57,112 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=04-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,275 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=05-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,312 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=05-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,520 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=05-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,592 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=06-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,645 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-06 do1: wrote 513 acts (2026-04-06_do1.json)
+2026-04-23 01:16:58,678 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=06-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,755 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-06 do2: wrote 814 acts (2026-04-06_do2.json)
+2026-04-23 01:16:58,788 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=06-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:16:58,965 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-06 do3: wrote 1782 acts (2026-04-06_do3.json)
+2026-04-23 01:16:59,890 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=07-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:00,136 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-07 do1: wrote 362 acts (2026-04-07_do1.json)
+2026-04-23 01:17:01,328 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=07-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:01,569 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-07 do2: wrote 748 acts (2026-04-07_do2.json)
+2026-04-23 01:17:01,604 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=07-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:02,036 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-07 do3: wrote 2612 acts (2026-04-07_do3.json)
+2026-04-23 01:17:02,072 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=08-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:02,182 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-08 do1: wrote 319 acts (2026-04-08_do1.json)
+2026-04-23 01:17:03,796 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=08-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:04,082 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-08 do2: wrote 860 acts (2026-04-08_do2.json)
+2026-04-23 01:17:04,116 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=08-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:04,679 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-08 do3: wrote 3197 acts (2026-04-08_do3.json)
+2026-04-23 01:17:04,717 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=09-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:04,825 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-09 do1: wrote 343 acts (2026-04-09_do1.json)
+2026-04-23 01:17:04,865 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=09-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:05,132 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-09 do2: wrote 845 acts (2026-04-09_do2.json)
+2026-04-23 01:17:05,245 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=09-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:05,903 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-09 do3: wrote 2789 acts (2026-04-09_do3.json)
+2026-04-23 01:17:06,137 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=10-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:06,318 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-10 do1: wrote 319 acts (2026-04-10_do1.json)
+2026-04-23 01:17:07,653 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=10-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:08,020 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-10 do2: wrote 767 acts (2026-04-10_do2.json)
+2026-04-23 01:17:08,050 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=10-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:08,735 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-10 do3: wrote 2956 acts (2026-04-10_do3.json)
+2026-04-23 01:17:08,768 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=11-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:08,809 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=11-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,000 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=11-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,184 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=12-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,380 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=12-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,563 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=12-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,600 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=13-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,690 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-13 do1: wrote 506 acts (2026-04-13_do1.json)
+2026-04-23 01:17:09,725 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=13-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:09,873 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-13 do2: wrote 869 acts (2026-04-13_do2.json)
+2026-04-23 01:17:09,906 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=13-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:10,388 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-13 do3: wrote 2724 acts (2026-04-13_do3.json)
+2026-04-23 01:17:10,425 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=14-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:10,520 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-14 do1: wrote 398 acts (2026-04-14_do1.json)
+2026-04-23 01:17:10,555 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=14-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:10,645 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-14 do2: wrote 686 acts (2026-04-14_do2.json)
+2026-04-23 01:17:10,680 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=14-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:11,107 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-14 do3: wrote 2904 acts (2026-04-14_do3.json)
+2026-04-23 01:17:11,143 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=15-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:11,196 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-15 do1: wrote 332 acts (2026-04-15_do1.json)
+2026-04-23 01:17:11,228 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=15-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:11,329 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-15 do2: wrote 763 acts (2026-04-15_do2.json)
+2026-04-23 01:17:11,363 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=15-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:11,830 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-15 do3: wrote 3062 acts (2026-04-15_do3.json)
+2026-04-23 01:17:11,864 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=16-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:11,926 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-16 do1: wrote 385 acts (2026-04-16_do1.json)
+2026-04-23 01:17:13,114 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=16-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:13,384 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-16 do2: wrote 598 acts (2026-04-16_do2.json)
+2026-04-23 01:17:13,412 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=16-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:13,793 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-16 do3: wrote 2767 acts (2026-04-16_do3.json)
+2026-04-23 01:17:13,827 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=17-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:13,886 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-17 do1: wrote 340 acts (2026-04-17_do1.json)
+2026-04-23 01:17:13,914 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=17-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,008 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-17 do2: wrote 716 acts (2026-04-17_do2.json)
+2026-04-23 01:17:14,036 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=17-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,450 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-17 do3: wrote 3030 acts (2026-04-17_do3.json)
+2026-04-23 01:17:14,478 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=18-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,514 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=18-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,559 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=18-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,587 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=19-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,623 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=19-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,660 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=19-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,706 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=20-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,743 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=20-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,779 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=20-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,809 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=21-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,866 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=21-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,926 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=21-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:14,963 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=22-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:15,012 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] 2026-04-22 do1: wrote 350 acts (2026-04-22_do1.json)
+2026-04-23 01:17:15,040 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=22-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:15,122 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=22-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:15,159 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=23-04-2026&secao=do1 "HTTP/1.1 200 OK"
+2026-04-23 01:17:15,189 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=23-04-2026&secao=do2 "HTTP/1.1 200 OK"
+2026-04-23 01:17:15,367 INFO httpx HTTP Request: GET https://www.in.gov.br/leiturajornal?data=23-04-2026&secao=do3 "HTTP/1.1 200 OK"
+2026-04-23 01:17:15,391 INFO bracc_etl.pipelines.dou [dou.fetch_to_disk] Done: 52 file(s) across 30 day(s)
+2026-04-23 01:17:15,392 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-25_do1.json (378415 bytes)
+2026-04-23 01:17:15,392 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-25_do2.json (559937 bytes)
+2026-04-23 01:17:15,392 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-25_do3.json (2863316 bytes)
+2026-04-23 01:17:15,392 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-26_do1.json (260021 bytes)
+2026-04-23 01:17:15,392 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-26_do2.json (481415 bytes)
+2026-04-23 01:17:15,392 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-26_do3.json (2202347 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-27_do1.json (309168 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-27_do2.json (470666 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-27_do3.json (2082356 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-30_do1.json (352627 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-30_do2.json (571169 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-30_do3.json (1881832 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-31_do1.json (289280 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-31_do2.json (645697 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-03-31_do3.json (2232842 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-01_do1.json (450129 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-01_do2.json (815085 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-01_do3.json (2389538 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-02_do1.json (327864 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-02_do2.json (492086 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-02_do3.json (1870144 bytes)
+2026-04-23 01:17:15,393 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-06_do1.json (386497 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-06_do2.json (597614 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-06_do3.json (1326001 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-07_do1.json (276147 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-07_do2.json (555229 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-07_do3.json (1940063 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-08_do1.json (249531 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-08_do2.json (632383 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-08_do3.json (2413900 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-09_do1.json (258901 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-09_do2.json (621092 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-09_do3.json (2072489 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-10_do1.json (246980 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-10_do2.json (562547 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-10_do3.json (2188853 bytes)
+2026-04-23 01:17:15,394 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-13_do1.json (378808 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-13_do2.json (643566 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-13_do3.json (2041786 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-14_do1.json (300643 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-14_do2.json (502692 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-14_do3.json (2201351 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-15_do1.json (256123 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-15_do2.json (560434 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-15_do3.json (2249092 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-16_do1.json (293497 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-16_do2.json (437361 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-16_do3.json (2047022 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-17_do1.json (260448 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-17_do2.json (528067 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-17_do3.json (2255905 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/dou/2026-04-22_do1.json (270242 bytes)
+2026-04-23 01:17:15,395 INFO download_dou [download_dou] total: 52 file(s)

@@ -13,3 +13,9 @@ warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cida
 2026-04-23 01:08:55,963 INFO   Batch written: 13017 rows (cumulative: 114973)
 2026-04-23 01:08:55,972 INFO [ibama] MERGEing 67952 Person nodes...
 2026-04-23 01:08:56,551 WARNING [provenance:nodes:Person] 67952/67952 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:10:05,301 INFO   Batch written: 67952 rows (cumulative: 182925)
+2026-04-23 01:10:05,308 INFO [ibama] Loading 101956 EMBARGADA rels...
+2026-04-23 01:10:53,048 INFO   Batch written: 101956 rows (cumulative: 284881)
+2026-04-23 01:10:53,048 INFO [ibama] Load complete.
+2026-04-23 01:10:53,075 INFO [ibama] Pipeline complete.
+2026-04-23 01:10:53,076 INFO No post-load linking hook configured for source=ibama

@@ -1,0 +1,13 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:17:18,183 INFO [dou] Starting extraction...
+2026-04-23 01:17:19,151 INFO [dou] Extracted 68984 act records
+2026-04-23 01:17:19,151 INFO [dou] Starting transformation...
+2026-04-23 01:18:17,386 INFO [dou] Transformed 68984 acts (54 person links, 20750 company links, skipped 0)
+2026-04-23 01:18:17,387 INFO [dou] Starting load...
+2026-04-23 01:18:17,803 WARNING [provenance:nodes:DOUAct] 68984/68984 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:18:47,111 INFO   Batch written: 68984 rows (cumulative: 68984)
+2026-04-23 01:18:47,112 INFO [dou] Loaded 68984 DOUAct nodes
+2026-04-23 01:18:47,417 INFO [dou] Created 54 PUBLICOU relationships
+2026-04-23 01:18:50,433 INFO [dou] Created 20750 MENCIONOU relationships
+2026-04-23 01:18:50,444 INFO [dou] Pipeline complete.
+2026-04-23 01:18:50,444 INFO No post-load linking hook configured for source=dou

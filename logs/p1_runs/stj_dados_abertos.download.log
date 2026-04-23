@@ -1,0 +1,41 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:21:49,160 INFO bracc_etl.pipelines.stj_dados_abertos [stj_dados_abertos] streaming basedosdados.br_stj_corte_aberta.decisoes (8 columns, page_size=100000) -> ../data/stj_dados_abertos/decisoes.csv
+Traceback (most recent call last):
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/../scripts/download_stj_dados_abertos.py", line 120, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/../scripts/download_stj_dados_abertos.py", line 90, in main
+    written = fetch_to_disk(
+              ^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/pipelines/stj_dados_abertos.py", line 234, in fetch_to_disk
+    for i, chunk_df in enumerate(
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/cloud/bigquery/table.py", line 2083, in _to_page_iterable
+    yield from result_pages
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/cloud/bigquery/_pandas_helpers.py", line 820, in download_dataframe_row_iterator
+    for page in pages:
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/api_core/page_iterator.py", line 244, in _page_iter
+    page = self._next_page()
+           ^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/api_core/page_iterator.py", line 373, in _next_page
+    response = self._get_next_page_response()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/cloud/bigquery/table.py", line 2037, in _get_next_page_response
+    return self.api_request(
+           ^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/cloud/bigquery/client.py", line 863, in _call_api
+    return call()
+           ^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/api_core/retry/retry_unary.py", line 294, in retry_wrapped_func
+    return retry_target(
+           ^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/api_core/retry/retry_unary.py", line 156, in retry_target
+    next_sleep = _retry_error_helper(
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/api_core/retry/retry_base.py", line 216, in _retry_error_helper
+    raise final_exc from source_exc
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/api_core/retry/retry_unary.py", line 147, in retry_target
+    result = target()
+             ^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/google/cloud/_http/__init__.py", line 494, in api_request
+    raise exceptions.from_http_response(response)
+google.api_core.exceptions.NotFound: 404 GET https://bigquery.googleapis.com/bigquery/v2/projects/basedosdados/datasets/br_stj_corte_aberta/tables/decisoes/data?maxResults=100000&selectedFields=ano%2Cclasse%2Cnumero%2Crelator%2Ctipo_decisao%2Cdata_decisao%2Cassunto%2Cuf_origem&formatOptions.useInt64Timestamp=True&prettyPrint=false: Dataset 337627637791:br_stj_corte_aberta not found

@@ -1,0 +1,6 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:22:58,836 INFO bracc_etl.pipelines.opensanctions: [opensanctions.fetch_to_disk] GET https://data.opensanctions.org/datasets/latest/br_pep/entities.ftm.json (dataset=br_pep, limit=50000)
+2026-04-23 01:22:59,857 INFO httpx: HTTP Request: GET https://data.opensanctions.org/datasets/latest/br_pep/entities.ftm.json "HTTP/1.1 200 OK"
+2026-04-23 01:23:02,057 INFO bracc_etl.pipelines.opensanctions: [opensanctions.fetch_to_disk] wrote 50000 lines (21790231 bytes) to ../data/opensanctions/entities.ftm.json
+Wrote 1 file(s) to /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/opensanctions:
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/opensanctions/entities.ftm.json  (21790231 bytes)

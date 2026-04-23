@@ -1,5 +1,4 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:54:15,505 INFO httpx: HTTP Request: GET https://data.brasil.io/dataset/socios-brasil/holding.csv.gz "HTTP/1.1 200 OK"
-2026-04-22 22:54:17,167 INFO bracc_etl.pipelines.holdings: [holdings] wrote ../data/holdings/holding.csv.gz (10396827 bytes)
+2026-04-23 01:11:33,691 INFO bracc_etl.pipelines.holdings: [holdings] ../data/holdings/holding.csv.gz already exists (10396827 bytes), skipping download
 Wrote 1 file(s) to /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/holdings:
   ../data/holdings/holding.csv.gz  (10396827 bytes)

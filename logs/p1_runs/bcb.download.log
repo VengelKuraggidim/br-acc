@@ -1,38 +1,38 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:53:44,086 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] Downloading https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador (page_size=1000, limit=None) -> ../data/bcb/penalidades.csv
-2026-04-22 22:53:49,556 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=0 "HTTP/1.1 200 OK"
-2026-04-22 22:53:49,803 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=0 (+1000) total_written=1000
-2026-04-22 22:53:50,501 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=1000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:50,620 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=1000 (+1000) total_written=2000
-2026-04-22 22:53:51,192 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=2000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:51,315 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=2000 (+1000) total_written=3000
-2026-04-22 22:53:51,923 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=3000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:52,051 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=3000 (+1000) total_written=4000
-2026-04-22 22:53:52,628 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=4000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:52,748 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=4000 (+1000) total_written=5000
-2026-04-22 22:53:53,346 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=5000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:53,461 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=5000 (+1000) total_written=6000
-2026-04-22 22:53:54,093 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=6000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:54,380 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=6000 (+1000) total_written=7000
-2026-04-22 22:53:54,972 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=7000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:55,092 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=7000 (+1000) total_written=8000
-2026-04-22 22:53:55,694 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=8000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:55,806 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=8000 (+1000) total_written=9000
-2026-04-22 22:53:56,446 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=9000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:56,565 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=9000 (+1000) total_written=10000
-2026-04-22 22:53:57,179 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=10000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:57,294 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=10000 (+1000) total_written=11000
-2026-04-22 22:53:57,904 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=11000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:58,074 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=11000 (+1000) total_written=12000
-2026-04-22 22:53:58,699 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=12000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:58,830 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=12000 (+1000) total_written=13000
-2026-04-22 22:53:59,415 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=13000 "HTTP/1.1 200 OK"
-2026-04-22 22:53:59,550 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=13000 (+1000) total_written=14000
-2026-04-22 22:54:00,182 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=14000 "HTTP/1.1 200 OK"
-2026-04-22 22:54:00,330 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=14000 (+1000) total_written=15000
-2026-04-22 22:54:00,925 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=15000 "HTTP/1.1 200 OK"
-2026-04-22 22:54:01,049 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=15000 (+1000) total_written=16000
-2026-04-22 22:54:01,649 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=16000 "HTTP/1.1 200 OK"
-2026-04-22 22:54:01,677 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=16000 (+344) total_written=16344
-2026-04-22 22:54:01,678 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] Wrote 16344 rows to ../data/bcb/penalidades.csv (1459.0 KB)
-2026-04-22 22:54:01,678 INFO download_bcb [download_bcb] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/bcb/penalidades.csv (1494010 bytes)
+2026-04-23 01:11:00,517 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] Downloading https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador (page_size=1000, limit=None) -> ../data/bcb/penalidades.csv
+2026-04-23 01:11:05,331 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=0 "HTTP/1.1 200 OK"
+2026-04-23 01:11:05,590 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=0 (+1000) total_written=1000
+2026-04-23 01:11:06,311 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=1000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:06,472 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=1000 (+1000) total_written=2000
+2026-04-23 01:11:07,141 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=2000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:07,278 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=2000 (+1000) total_written=3000
+2026-04-23 01:11:07,902 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=3000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:08,047 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=3000 (+1000) total_written=4000
+2026-04-23 01:11:08,636 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=4000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:08,771 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=4000 (+1000) total_written=5000
+2026-04-23 01:11:09,332 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=5000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:09,459 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=5000 (+1000) total_written=6000
+2026-04-23 01:11:10,067 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=6000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:10,217 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=6000 (+1000) total_written=7000
+2026-04-23 01:11:10,839 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=7000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:10,977 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=7000 (+1000) total_written=8000
+2026-04-23 01:11:11,552 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=8000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:11,675 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=8000 (+1000) total_written=9000
+2026-04-23 01:11:12,271 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=9000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:12,432 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=9000 (+1000) total_written=10000
+2026-04-23 01:11:13,128 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=10000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:13,303 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=10000 (+1000) total_written=11000
+2026-04-23 01:11:13,899 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=11000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:14,049 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=11000 (+1000) total_written=12000
+2026-04-23 01:11:14,671 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=12000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:14,807 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=12000 (+1000) total_written=13000
+2026-04-23 01:11:15,442 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=13000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:15,565 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=13000 (+1000) total_written=14000
+2026-04-23 01:11:16,152 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=14000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:16,300 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=14000 (+1000) total_written=15000
+2026-04-23 01:11:16,887 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=15000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:17,023 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=15000 (+1000) total_written=16000
+2026-04-23 01:11:17,561 INFO httpx HTTP Request: GET https://olinda.bcb.gov.br/olinda/servico/Gepad_QuadroPenalidades/versao/v1/odata/QuadroGeralProcessoAdministrativoSancionador?%24format=json&%24top=1000&%24skip=16000 "HTTP/1.1 200 OK"
+2026-04-23 01:11:17,602 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] paged skip=16000 (+344) total_written=16344
+2026-04-23 01:11:17,609 INFO bracc_etl.pipelines.bcb [bcb.fetch_to_disk] Wrote 16344 rows to ../data/bcb/penalidades.csv (1459.0 KB)
+2026-04-23 01:11:17,609 INFO download_bcb [download_bcb] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/bcb/penalidades.csv (1494010 bytes)

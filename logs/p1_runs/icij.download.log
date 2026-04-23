@@ -1,0 +1,13 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:23:23,191 INFO bracc_etl.pipelines.icij: [icij.fetch_to_disk] Downloading bundle https://offshoreleaks-data.icij.org/offshoreleaks/csv/full-oldb.LATEST.zip (limit=ALL) -> ../data/icij
+2026-04-23 01:23:23,766 INFO httpx: HTTP Request: GET https://offshoreleaks-data.icij.org/offshoreleaks/csv/full-oldb.LATEST.zip "HTTP/1.1 200 OK"
+2026-04-23 01:23:25,398 INFO bracc_etl.pipelines.icij: [icij.fetch_to_disk] Bundle downloaded: 69.66 MB
+2026-04-23 01:23:27,342 INFO bracc_etl.pipelines.icij: [icij.fetch_to_disk] Wrote ../data/icij/nodes-entities.csv (189.71 MB)
+2026-04-23 01:23:28,104 INFO bracc_etl.pipelines.icij: [icij.fetch_to_disk] Wrote ../data/icij/nodes-officers.csv (86.80 MB)
+2026-04-23 01:23:28,153 INFO bracc_etl.pipelines.icij: [icij.fetch_to_disk] Wrote ../data/icij/nodes-intermediaries.csv (3.76 MB)
+2026-04-23 01:23:30,401 INFO bracc_etl.pipelines.icij: [icij.fetch_to_disk] Wrote ../data/icij/relationships.csv (247.19 MB)
+Wrote 4 file(s) to /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/icij:
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/icij/nodes-entities.csv  (198926104 bytes)
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/icij/nodes-officers.csv  (91021122 bytes)
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/icij/nodes-intermediaries.csv  (3944578 bytes)
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/icij/relationships.csv  (259198321 bytes)

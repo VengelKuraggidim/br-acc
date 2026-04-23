@@ -1,0 +1,11 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:19:46,311 INFO [bndes] Starting extraction...
+2026-04-23 01:19:46,887 INFO [bndes] Extracted 23339 rows from non-automatic operations
+2026-04-23 01:19:46,887 INFO [bndes] Starting transformation...
+2026-04-23 01:19:55,046 INFO [bndes] Transformed 8247 Finance nodes, 23339 relationships
+2026-04-23 01:19:55,057 INFO [bndes] Starting load...
+2026-04-23 01:19:55,091 WARNING [provenance:nodes:Finance] 8247/8247 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:20:01,301 INFO [bndes] Loaded 8247 Finance nodes
+2026-04-23 01:20:13,300 INFO [bndes] Loaded 23339 RECEBEU_EMPRESTIMO relationships
+2026-04-23 01:20:13,313 INFO [bndes] Pipeline complete.
+2026-04-23 01:20:13,313 INFO No post-load linking hook configured for source=bndes

@@ -1,0 +1,44 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:20:27,075 INFO [stf] Starting extraction...
+Traceback (most recent call last):
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/bin/bracc-etl", line 10, in <module>
+    sys.exit(cli())
+             ^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/runner.py", line 354, in run
+    pipeline.run()
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/base.py", line 110, in run
+    self.extract()
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/pipelines/stf.py", line 78, in extract
+    self._raw = pd.read_csv(
+                ^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1880, in _make_engine
+    self.handles = get_handle(
+                   ^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/pandas/io/common.py", line 873, in get_handle
+    handle = open(
+             ^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '../data/stf/decisoes.csv'

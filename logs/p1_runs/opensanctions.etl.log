@@ -1,0 +1,11 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:23:07,557 INFO [opensanctions] Starting extraction...
+2026-04-23 01:23:09,945 INFO [opensanctions] Extracted 50000 raw entities
+2026-04-23 01:23:09,946 INFO [opensanctions] Starting transformation...
+2026-04-23 01:23:11,118 INFO [opensanctions] Transformed 21648 GlobalPEP nodes, 0 CPF match relationships
+2026-04-23 01:23:11,118 INFO [opensanctions] Starting load...
+2026-04-23 01:23:11,499 WARNING [provenance:nodes:GlobalPEP] 21648/21648 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:23:19,091 INFO   Batch written: 21648 rows (cumulative: 21648)
+2026-04-23 01:23:19,092 INFO [opensanctions] Loaded 21648 GlobalPEP nodes
+2026-04-23 01:23:19,102 INFO [opensanctions] Pipeline complete.
+2026-04-23 01:23:19,102 INFO No post-load linking hook configured for source=opensanctions

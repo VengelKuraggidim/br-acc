@@ -1,0 +1,6 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:19:42,566 INFO bracc_etl.pipelines.bndes: [bndes.fetch_to_disk] Downloading https://dadosabertos.bndes.gov.br/dataset/10e21ad1-568e-45e5-a8af-43f2c05ef1a2/resource/6f56b78c-510f-44b6-8274-78a5b7e931f4/download/operacoes-financiamento-operacoes-nao-automaticas.csv (uf=ALL, limit=ALL) -> ../data/bndes/operacoes-nao-automaticas.csv
+2026-04-23 01:19:42,943 INFO httpx: HTTP Request: GET https://dadosabertos.bndes.gov.br/dataset/10e21ad1-568e-45e5-a8af-43f2c05ef1a2/resource/6f56b78c-510f-44b6-8274-78a5b7e931f4/download/operacoes-financiamento-operacoes-nao-automaticas.csv "HTTP/1.1 200 OK"
+2026-04-23 01:19:43,728 INFO bracc_etl.pipelines.bndes: [bndes.fetch_to_disk] Wrote ../data/bndes/operacoes-nao-automaticas.csv (18.66 MB)
+Wrote 1 file(s) to /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/bndes:
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/bndes/operacoes-nao-automaticas.csv  (19567908 bytes)

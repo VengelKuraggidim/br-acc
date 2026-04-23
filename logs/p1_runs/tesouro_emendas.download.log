@@ -1,0 +1,7 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-23 01:18:53,871 INFO bracc_etl.pipelines.tesouro_emendas [tesouro_emendas] Downloading https://www.tesourotransparente.gov.br/ckan/dataset/83e419da-1552-46bf-bfc3-05160b2c46c9/resource/66d69917-a5d8-4500-b4b2-ef1f5d062430/download/emendas-parlamentares.csv (uf=GO, years=ALL) -> ../data/tesouro_emendas/emendas_tesouro.csv
+2026-04-23 01:18:54,327 INFO httpx HTTP Request: GET https://www.tesourotransparente.gov.br/ckan/dataset/83e419da-1552-46bf-bfc3-05160b2c46c9/resource/66d69917-a5d8-4500-b4b2-ef1f5d062430/download/emendas-parlamentares.csv "HTTP/1.1 200 OK"
+2026-04-23 01:19:06,754 INFO bracc_etl.pipelines.tesouro_emendas [tesouro_emendas] Raw CSV written: ../data/tesouro_emendas/emendas_parlamentares_raw.csv (61.38 MB)
+2026-04-23 01:19:12,375 INFO bracc_etl.pipelines.tesouro_emendas [tesouro_emendas] Kept 17049 / 363694 rows (uf=GO years=ALL) -> ../data/tesouro_emendas/emendas_tesouro.csv
+2026-04-23 01:19:12,375 INFO download_tesouro_emendas [download_tesouro_emendas] wrote ../data/tesouro_emendas/emendas_parlamentares_raw.csv (64365575 bytes)
+2026-04-23 01:19:12,375 INFO download_tesouro_emendas [download_tesouro_emendas] wrote ../data/tesouro_emendas/emendas_tesouro.csv (2368305 bytes)

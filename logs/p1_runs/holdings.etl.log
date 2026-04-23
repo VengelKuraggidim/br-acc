@@ -1,15 +1,14 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:54:19,678 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
-2026-04-22 22:54:22,197 INFO [holdings] Starting extraction...
-2026-04-22 22:54:22,197 INFO [holdings] Reading ../data/holdings/holding.csv.gz
-2026-04-22 22:54:23,753 INFO [holdings] Extracted 507550 rows
-2026-04-22 22:54:23,753 INFO [holdings] Starting transformation...
-2026-04-22 22:55:45,376 INFO [holdings] Transformed 497055 HOLDING_DE relationships
-2026-04-22 22:55:45,376 INFO [holdings] Starting load...
-2026-04-22 22:56:25,922 INFO   Progress: 100000 rows loaded
-2026-04-22 22:57:04,606 INFO   Progress: 200000 rows loaded
-2026-04-22 22:57:42,363 INFO   Progress: 300000 rows loaded
-2026-04-22 22:58:19,668 INFO   Progress: 400000 rows loaded
-2026-04-22 22:58:56,149 INFO [holdings] Loaded 497055 HOLDING_DE relationships
-2026-04-22 22:58:56,327 INFO [holdings] Pipeline complete.
-2026-04-22 22:58:56,328 INFO No post-load linking hook configured for source=holdings
+2026-04-23 01:11:37,360 INFO [holdings] Starting extraction...
+2026-04-23 01:11:37,361 INFO [holdings] Reading ../data/holdings/holding.csv.gz
+2026-04-23 01:11:41,121 INFO [holdings] Extracted 507550 rows
+2026-04-23 01:11:41,121 INFO [holdings] Starting transformation...
+2026-04-23 01:14:28,364 INFO [holdings] Transformed 497055 HOLDING_DE relationships
+2026-04-23 01:14:28,370 INFO [holdings] Starting load...
+2026-04-23 01:14:40,456 INFO   Progress: 100000 rows loaded
+2026-04-23 01:15:03,441 INFO   Progress: 200000 rows loaded
+2026-04-23 01:15:15,289 INFO   Progress: 300000 rows loaded
+2026-04-23 01:15:30,452 INFO   Progress: 400000 rows loaded
+2026-04-23 01:15:40,833 INFO [holdings] Loaded 497055 HOLDING_DE relationships
+2026-04-23 01:15:40,930 INFO [holdings] Pipeline complete.
+2026-04-23 01:15:40,930 INFO No post-load linking hook configured for source=holdings
