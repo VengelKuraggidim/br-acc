@@ -1,11 +1,12 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:42:06,851 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
-2026-04-22 22:42:10,728 INFO [pep_cgu] Starting extraction...
-2026-04-22 22:42:12,053 INFO [pep_cgu] Extracted 133877 PEP records
-2026-04-22 22:42:12,054 INFO [pep_cgu] Starting transformation...
-2026-04-22 22:48:34,975 INFO [pep_cgu] Transformed 133877 PEP records, 0 person links
-2026-04-22 22:48:34,983 INFO [pep_cgu] Starting load...
-2026-04-22 22:48:35,928 WARNING [provenance:nodes:PEPRecord] 133877/133877 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-22 22:49:43,674 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
+2026-04-22 22:49:46,289 INFO [ofac] Starting extraction...
+2026-04-22 22:49:46,289 INFO [ofac] Reading ../data/ofac/sdn.csv
+2026-04-22 22:49:46,404 INFO [ofac] Extracted 18773 rows
+2026-04-22 22:49:46,405 INFO [ofac] Starting transformation...
+2026-04-22 22:49:48,227 INFO [ofac] Transformed 7416 InternationalSanction nodes
+2026-04-22 22:49:48,227 INFO [ofac] Starting load...
+2026-04-22 22:49:48,311 WARNING [provenance:nodes:InternationalSanction] 7416/7416 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
 Traceback (most recent call last):
   File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/bin/bracc-etl", line 10, in <module>
     sys.exit(cli())
@@ -29,9 +30,9 @@ Traceback (most recent call last):
     pipeline.run()
   File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/base.py", line 114, in run
     self.load()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/pipelines/pep_cgu.py", line 330, in load
-    loaded = loader.load_nodes("PEPRecord", self.pep_records, key_field="pep_id")
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/pipelines/ofac.py", line 216, in load
+    loaded = loader.load_nodes(
+             ^^^^^^^^^^^^^^^^^^
   File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 111, in load_nodes
     return self._run_batches(query, rows)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -54,4 +55,4 @@ Traceback (most recent call last):
     response.on_failure(summary_metadata or {})
   File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
     raise self._hydrate_error(metadata)
-neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 204881 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 204881 nodes). Please consider upgrading to the next tier.}
+neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 7416 nodes would reach 202298 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 7416 nodes would reach 202298 nodes). Please consider upgrading to the next tier.}

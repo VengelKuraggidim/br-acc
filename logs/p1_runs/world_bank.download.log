@@ -1,0 +1,6 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-22 22:52:07,988 INFO bracc_etl.pipelines.world_bank [world_bank.fetch_to_disk] GET https://apigwext.worldbank.org/dvsvc/v1.0/json/APPLICATION/ADOBE_EXPRNCE_MGR/FIRM/SANCTIONED_FIRM (limit=None) -> ../data/world_bank/debarred.csv
+2026-04-22 22:52:09,516 INFO httpx HTTP Request: GET https://apigwext.worldbank.org/dvsvc/v1.0/json/APPLICATION/ADOBE_EXPRNCE_MGR/FIRM/SANCTIONED_FIRM "HTTP/1.1 200 OK"
+2026-04-22 22:52:09,589 INFO bracc_etl.pipelines.world_bank [world_bank.fetch_to_disk] Received 1379 records
+2026-04-22 22:52:09,605 INFO bracc_etl.pipelines.world_bank [world_bank.fetch_to_disk] Wrote 1379 rows to ../data/world_bank/debarred.csv (236.0 KB)
+2026-04-22 22:52:09,607 INFO download_world_bank [download_world_bank] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/world_bank/debarred.csv (241651 bytes)

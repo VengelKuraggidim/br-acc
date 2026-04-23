@@ -13,3 +13,33 @@
 === 2026-04-22T22:41:49-03:00 pep_cgu: download ===
   download OK
 === 2026-04-22T22:41:56-03:00 pep_cgu: etl ===
+  etl FAIL (1) |     raise self._hydrate_error(metadata)|neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 204881 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 204881 nodes). Please consider upgrading to the next tier.}|
+=== 2026-04-22T22:49:34-03:00 ofac: download ===
+  download OK
+=== 2026-04-22T22:49:41-03:00 ofac: etl ===
+  etl FAIL (1) |     raise self._hydrate_error(metadata)|neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 7416 nodes would reach 202298 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 7416 nodes would reach 202298 nodes). Please consider upgrading to the next tier.}|
+=== 2026-04-22T22:50:07-03:00 eu_sanctions: download ===
+  download OK
+=== 2026-04-22T22:50:27-03:00 eu_sanctions: etl ===
+  etl FAIL (1) |     raise self._hydrate_error(metadata)|neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 206574 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 206574 nodes). Please consider upgrading to the next tier.}|
+=== 2026-04-22T22:51:53-03:00 un_sanctions: download ===
+  download OK
+=== 2026-04-22T22:51:58-03:00 un_sanctions: etl ===
+  etl OK | 2026-04-22 22:52:06,853 INFO [un_sanctions] Pipeline complete.|
+=== 2026-04-22T22:52:07-03:00 world_bank: download ===
+  download OK
+=== 2026-04-22T22:52:09-03:00 world_bank: etl ===
+  etl OK | 2026-04-22 22:52:18,284 INFO [world_bank] Pipeline complete.|
+=== 2026-04-22T22:52:18-03:00 ibama: download ===
+  download OK
+=== 2026-04-22T22:52:26-03:00 ibama: etl ===
+  etl FAIL (1) |     raise self._hydrate_error(metadata)|neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 208907 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 208907 nodes). Please consider upgrading to the next tier.}|
+=== 2026-04-22T22:53:43-03:00 bcb: download ===
+  download OK
+=== 2026-04-22T22:54:01-03:00 bcb: etl ===
+  etl FAIL (1) |     raise self._hydrate_error(metadata)|neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 3603 nodes would reach 202511 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 3603 nodes would reach 202511 nodes). Please consider upgrading to the next tier.}|
+=== 2026-04-22T22:54:13-03:00 holdings: download ===
+  download OK
+=== 2026-04-22T22:54:17-03:00 holdings: etl ===
+  etl OK | 2026-04-22 22:58:56,327 INFO [holdings] Pipeline complete.|
+=== 2026-04-22T22:58:56-03:00 done ===

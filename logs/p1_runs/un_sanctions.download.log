@@ -1,0 +1,10 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-22 22:51:54,202 INFO bracc_etl.pipelines.un_sanctions: [un_sanctions.fetch_to_disk] GET https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-04-22 22:51:55,162 INFO httpx: HTTP Request: GET https://scsanctions.un.org/resources/xml/en/consolidated.xml "HTTP/1.1 302 Found"
+2026-04-22 22:51:55,855 INFO httpx: HTTP Request: GET https://unsolprodfiles.blob.core.windows.net/publiclegacyxmlfiles/EN/consolidatedLegacyByPRN.xml?sv=2024-05-04&st=2026-04-23T01%3A51%3A55Z&se=2026-04-23T02%3A51%3A55Z&sr=b&sp=r&sig=2Kk4Yi8LKPEa1Z1Sjz1VgXUUAr5Q4MYXV9ovkx13uIc%3D&rscd=attachment%3B%20filename%3D%22consolidatedLegacyByPRN.xml%22 "HTTP/1.1 200 OK"
+2026-04-22 22:51:58,707 INFO bracc_etl.pipelines.un_sanctions: [un_sanctions.fetch_to_disk] wrote ../data/un_sanctions/un_sanctions.xml (2176920 bytes)
+2026-04-22 22:51:58,792 INFO bracc_etl.pipelines.un_sanctions: [un_sanctions.fetch_to_disk] parsed 733 individuals + 272 entities = 1005 total records
+2026-04-22 22:51:58,807 INFO bracc_etl.pipelines.un_sanctions: [un_sanctions.fetch_to_disk] wrote ../data/un_sanctions/un_sanctions.json (1005 records)
+Wrote 2 file(s) to /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/un_sanctions:
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/un_sanctions/un_sanctions.xml  (2176920 bytes)
+  /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/un_sanctions/un_sanctions.json  (314303 bytes)
