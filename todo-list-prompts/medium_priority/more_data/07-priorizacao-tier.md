@@ -183,7 +183,7 @@ da lista.
 | `tce_go` (irregulares + fiscalizações) | Qlik Sense WebSocket scrape, fragil + volumoso | `high_priority/debitos/tce-go-qlik-scraper.md` | Decisões já `loaded` via `iago-search-api`; completar Qlik quando ROI justificar |
 | `tcmgo_sancoes` (impedidos de licitar) | `robots.txt` do subdomínio `tcmgo.tc.br` tem `Disallow: /` | `high_priority/debitos/tcmgo-impedidos-jsf-scraper.md` | Scraper entregue mas bloqueado por robots; fallback LAI |
 | `ssp_go` (granularidade municipal) | SSP-GO só publica totais estaduais em PDF; RAI municipal só via LAI | `high_priority/debitos/ssp-go-granularidade-municipio.md` | Estadual `loaded`; municipal depende de LAI/SINESP/FBSP |
-| `camara_goiania` | Portal Plone retorna stubs; dados reais só via HTML+PDF scraping | `high_priority/debitos/camara-goiania-scraping.md` | Camada 1 (regex `ato_vereador` em `querido_diario_go`) entregue em 2026-04-22; camada 2 (scraper CMG completo) em aberto |
+| `camara_goiania` | Portal Plone retorna stubs; dados reais só via HTML+PDF scraping | `medium_priority/debitos/camara-goiania-scraping.md` | Camada 1 (regex `ato_vereador` em `querido_diario_go`) entregue em 2026-04-22; camada 2 (scraper CMG completo) em aberto — rebaixada pra medium |
 | `pncp` nacional | Volume (completo, não só UF=GO); janela dedicada | `high_priority/debitos/rodar-pipelines-pesados.md` | Pipeline existe; rodar em janela planejada |
 | `comprasnet` | Volume ~6.4 GB; agendamento dedicado | `high_priority/debitos/rodar-pipelines-pesados.md` | OOM fix já aplicado em `0d407d5`, falta rodar |
 | `pgfn` (full history) | ~1.2 GB, transform `iterrows()` ~10M rows (>1h) | `high_priority/debitos/rodar-pipelines-pesados.md` | Idem — janela dedicada |

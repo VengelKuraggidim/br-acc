@@ -24,10 +24,19 @@ from bracc_etl.transforms import (
 logger = logging.getLogger(__name__)
 
 
-def _make_asset_id(cpf: str, year: str, asset_type: str, value: str, description: str) -> str:
-    """Generate deterministic asset_id from key fields."""
-    payload = f"{cpf}|{year}|{asset_type}|{value}|{description}"
+def _make_asset_id(key: str, year: str, asset_type: str, value: str, description: str) -> str:
+    """Generate deterministic asset_id from key fields.
+
+    ``key`` é CPF (em anos com CPF real) ou ``sq_candidato`` (TSE 2024+,
+    onde CPF vem mascarado como "-4"). Usar SQ como fallback mantém
+    o ID determinístico e único mesmo sem CPF real.
+    """
+    payload = f"{key}|{year}|{asset_type}|{value}|{description}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+# TSE 2024 mask all candidate CPFs as "-4" — same sentinel used in tse.py.
+_MASKED_CPF_SENTINEL = "-4"
 
 
 class TseBensPipeline(Pipeline):
@@ -72,12 +81,16 @@ class TseBensPipeline(Pipeline):
 
         for _idx, row in self._raw.iterrows():
             cpf_raw = str(row.get("cpf", ""))
+            sq = str(row.get("sq_candidato", "")).strip()
             digits = strip_document(cpf_raw)
 
-            if len(digits) != 11:
+            # 2024+ mascarou todos os CPFs como "-4"; aceitamos rows com
+            # sq_candidato nesses anos e linkamos Person via sq_candidato.
+            has_real_cpf = len(digits) == 11 and cpf_raw.strip() != _MASKED_CPF_SENTINEL
+            if not has_real_cpf and not sq:
                 continue
 
-            cpf_formatted = format_cpf(cpf_raw)
+            cpf_formatted = format_cpf(cpf_raw) if has_real_cpf else ""
             nome = normalize_name(str(row.get("nome_candidato", "")))
             year = str(row.get("ano", "")).strip()
             asset_type = str(row.get("tipo_bem", "")).strip()
@@ -87,7 +100,8 @@ class TseBensPipeline(Pipeline):
             uf = str(row.get("sigla_uf", "")).strip()
             partido = str(row.get("sigla_partido", "")).strip()
 
-            asset_id = _make_asset_id(digits, year, asset_type, value_raw.strip(), description)
+            asset_key = digits if has_real_cpf else f"sq:{sq}"
+            asset_id = _make_asset_id(asset_key, year, asset_type, value_raw.strip(), description)
 
             assets.append(self.attach_provenance(
                 {
@@ -107,7 +121,8 @@ class TseBensPipeline(Pipeline):
 
             person_rels.append(self.attach_provenance(
                 {
-                    "source_key": cpf_formatted,
+                    "source_cpf": cpf_formatted,
+                    "source_sq": sq if not has_real_cpf else "",
                     "target_key": asset_id,
                     "person_name": nome,
                 },
@@ -128,24 +143,35 @@ class TseBensPipeline(Pipeline):
         if self.assets:
             loader.load_nodes("DeclaredAsset", self.assets, key_field="asset_id")
 
-        # Ensure Person nodes exist for each candidate
-        persons_seen: set[str] = set()
-        unique_persons: list[dict[str, Any]] = []
+        # Ensure Person nodes exist for each candidate — keyed by CPF quando
+        # real, por sq_candidato quando CPF vem mascarado (2024+).
+        cpf_persons: dict[str, dict[str, Any]] = {}
+        sq_persons: dict[str, dict[str, Any]] = {}
         for rel in self.person_rels:
-            cpf = rel["source_key"]
-            if cpf not in persons_seen:
-                persons_seen.add(cpf)
-                unique_persons.append(self.attach_provenance(
-                    {"cpf": cpf, "name": rel["person_name"]},
-                    record_id=cpf,
-                ))
-        if unique_persons:
-            loader.load_nodes("Person", unique_persons, key_field="cpf")
+            cpf = rel.get("source_cpf", "")
+            sq = rel.get("source_sq", "")
+            if cpf and cpf not in cpf_persons:
+                cpf_persons[cpf] = self.attach_provenance(
+                    {"cpf": cpf, "name": rel["person_name"]}, record_id=cpf,
+                )
+            elif sq and sq not in sq_persons:
+                sq_persons[sq] = self.attach_provenance(
+                    {"sq_candidato": sq, "name": rel["person_name"]}, record_id=sq,
+                )
+        if cpf_persons:
+            loader.load_nodes("Person", list(cpf_persons.values()), key_field="cpf")
+        if sq_persons:
+            loader.load_nodes("Person", list(sq_persons.values()), key_field="sq_candidato")
 
         if self.person_rels:
             query = (
                 "UNWIND $rows AS row "
-                "MATCH (p:Person {cpf: row.source_key}) "
+                "OPTIONAL MATCH (p1:Person {cpf: row.source_cpf}) "
+                "WHERE row.source_cpf <> '' "
+                "OPTIONAL MATCH (p2:Person {sq_candidato: row.source_sq}) "
+                "WHERE row.source_sq <> '' "
+                "WITH coalesce(p1, p2) AS p, row "
+                "WHERE p IS NOT NULL "
                 "MATCH (a:DeclaredAsset {asset_id: row.target_key}) "
                 "MERGE (p)-[r:DECLAROU_BEM]->(a) "
                 "SET r.source_id = row.source_id, "
@@ -158,9 +184,11 @@ class TseBensPipeline(Pipeline):
 
         self.rows_loaded = len(self.assets)
         logger.info(
-            "[tse_bens] Loaded: %d assets, %d persons, %d rels",
+            "[tse_bens] Loaded: %d assets, %d persons (cpf=%d, sq=%d), %d rels",
             len(self.assets),
-            len(persons_seen),
+            len(cpf_persons) + len(sq_persons),
+            len(cpf_persons),
+            len(sq_persons),
             len(self.person_rels),
         )
 
@@ -239,11 +267,13 @@ def fetch_to_disk(
     rows) and ``consulta_cand_<year>.zip`` (to resolve CPF, name, partido from
     SQ_CANDIDATO). Only the per-UF CSV from each ZIP is extracted.
 
-    Years default to the subset of Marconi-era elections where TSE publishes
-    bens on the CDN (2006+ — 1998/2002 are not available on the CDN).
+    Years default to the subset of elections where TSE publishes bens on
+    the CDN (2006+ — 1998/2002 are not available on the CDN). Inclui ciclos
+    federais/estaduais (2006, 2010, 2014, 2018, 2022) e municipais (2020,
+    2024) — municipais são obrigatórios pra pegar bens de prefeito/vereador.
     """
     uf_upper = uf.upper()
-    years = years or [2006, 2010, 2014, 2018, 2022]
+    years = years or [2006, 2010, 2014, 2018, 2020, 2022, 2024]
     output_dir.mkdir(parents=True, exist_ok=True)
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -296,6 +326,7 @@ def fetch_to_disk(
         merged = bens_df.merge(cand_small, on="SQ_CANDIDATO", how="left")
 
         out_df = pd.DataFrame({
+            "sq_candidato": merged.get("SQ_CANDIDATO", ""),
             "cpf": merged.get("NR_CPF_CANDIDATO", ""),
             "nome_candidato": merged.get("NM_CANDIDATO", ""),
             "ano": merged.get("ANO_ELEICAO", str(year)),

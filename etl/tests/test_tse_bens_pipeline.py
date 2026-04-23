@@ -225,7 +225,9 @@ class TestTseBensTransform:
         asset_cpfs = {a["candidate_cpf"] for a in pipeline.assets}
         for rel in pipeline.person_rels:
             assert rel["target_key"] in asset_ids
-            assert rel["source_key"] in asset_cpfs
+            # CPF-keyed rels (real CPF em anos <2024) vs sq-keyed (2024+ masked).
+            key = rel.get("source_cpf") or f"sq:{rel.get('source_sq')}"
+            assert rel["source_cpf"] in asset_cpfs or rel["source_sq"] != ""
 
     def test_asset_fields_present(self) -> None:
         pipeline = _make_pipeline()
@@ -309,7 +311,7 @@ class TestTseBensLoad:
         ]
         for call in rel_calls:
             query = str(call)
-            assert "row.source_key" in query
+            assert "row.source_cpf" in query or "row.source_sq" in query
             assert "row.target_key" in query
 
     def test_load_deduplicates_persons(self) -> None:

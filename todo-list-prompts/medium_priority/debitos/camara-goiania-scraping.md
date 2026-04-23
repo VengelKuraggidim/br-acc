@@ -133,16 +133,22 @@ cobrindo **parcialmente** (1) fixação de subsídios por lei municipal e
 
 Plano em duas camadas:
 
-**Camada 1 — quick win (~1h)**: retrofit do `querido_diario_go` adicionando
-regex `ato_vereador` como descrito acima. Não resolve o produto "perfil de
-vereador", mas bota sinais CMG-fuzzy-matched no grafo (`MunicipalGazetteAct
-{act_type='ato_vereador'}`), consultáveis por quem investigar.
+**Camada 1 — ✅ ENTREGUE em 2026-04-22 (commit `98f016e`)**: retrofit do
+`querido_diario_go` adicionando regex `ato_vereador` (incluindo
+"câmara municipal de goiânia" — cobertura mais ampla que o plano
+original). Prioridade sobre `nomeacao`/`contrato` via ordering dos
+patterns. 5 testes novos em
+`etl/tests/test_querido_diario_go_pipeline.py::TestClassifyAct`
+(verba_indenizatória / subsídio / resolução_mesa / prioridade +
+integration). `MunicipalGazetteAct {act_type='ato_vereador'}` passa a
+ser populado automaticamente em runs futuros do `querido_diario_go`.
 
-**Camada 2 — solução completa**: continua valendo a opção (4) — scraper
-dedicado do portal CMG. Re-avaliar ROI a cada 6 meses; escopo (a) listagem
-parlamentares via HTML simples, (b) PDF parser pras despesas via `pypdf`
-(já dep), (c) archival por URL.
+**Camada 2 — pendente (big project)**: continua valendo a opção (4) —
+scraper dedicado do portal CMG. Re-avaliar ROI a cada 6 meses; escopo
+(a) listagem parlamentares via HTML simples, (b) PDF parser pras
+despesas via `pypdf` (já dep), (c) archival por URL.
 
 Se alguma das fontes alternativas materializar mais dado equivalente
 (basedosdados.org `vereador_goiania_despesas` é o candidato mais realista
-à médio prazo), a camada 2 vira deletable.
+à médio prazo), a camada 2 vira deletable. Este débito pode viver agora
+em `medium_priority/debitos/` pois só a Camada 2 (opcional) resta.

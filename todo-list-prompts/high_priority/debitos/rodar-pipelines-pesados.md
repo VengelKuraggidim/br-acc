@@ -54,6 +54,18 @@ Python). Fix em duas frentes:
 29 testes comprasnet passam (21 originais + 5 provenance + 3
 streaming/per-year).
 
+## Pré-condição: download dos dados crus (2026-04-22)
+
+**Atualização 2026-04-22:** `data/comprasnet/` e `data/pgfn/` estão
+**vazios** no dev local de vengel-kuraggidim-sitagi. O doc original foi
+redigido em ambiente `/home/alladrian/` com dados já baixados — não
+é o estado atual. Antes de rodar, precisa disparar o download (6,4 GB
+comprasnet + ~1,2 GB pgfn). O download em si é o maior gargalo agora,
+não a ingestão — não é mais quick win.
+
+Caminho correto (ajustado pra user vengel): substituir `/home/alladrian/`
+por `/home/vengel-kuraggidim-sitagi/` em todos os comandos abaixo.
+
 ## Como rodar quando houver janela
 
 ### Pré-checks
@@ -63,7 +75,7 @@ streaming/per-year).
 docker ps --filter name=fiscal-neo4j --format '{{.Status}}'
 
 # Dados crus em disco? (2019-2026 esperados)
-ls -lh /home/alladrian/PycharmProjects/br-acc/data/comprasnet/
+ls -lh /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/comprasnet/
 
 # Senha do Neo4j local
 NEO4J_PW="$(docker exec fiscal-neo4j env | grep NEO4J_AUTH | cut -d/ -f2)"
@@ -75,19 +87,19 @@ free -h
 ### Run — comprasnet (pós-fix OOM)
 
 ```bash
-cd /home/alladrian/PycharmProjects/br-acc/etl
+cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl
 
 # Opcional: smoke test rápido com limit antes do run completo
 uv run python -m bracc_etl.runner run --source comprasnet \
   --neo4j-password "$NEO4J_PW" \
-  --data-dir /home/alladrian/PycharmProjects/br-acc/data \
+  --data-dir /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data \
   --limit 100 2>&1 | tee /tmp/comprasnet_smoke.log
 
 # Run completo — 6 ciclos curtos (2019/2020 no-op, 2021-2026 com dados).
 # Monitorar RSS: peak previsto ~3-5 GB. Se passar de 10 GB, algo errado.
 uv run python -m bracc_etl.runner run --source comprasnet \
   --neo4j-password "$NEO4J_PW" \
-  --data-dir /home/alladrian/PycharmProjects/br-acc/data 2>&1 | tee /tmp/comprasnet.log &
+  --data-dir /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data 2>&1 | tee /tmp/comprasnet.log &
 
 # Monitoramento em outra aba
 watch -n 5 "ps aux | grep bracc-etl | grep -v grep | awk '{print \$6/1024/1024\" GB \"\$11}'"
@@ -96,10 +108,10 @@ watch -n 5 "ps aux | grep bracc-etl | grep -v grep | awk '{print \$6/1024/1024\"
 ### Run — pgfn (sem fix OOM ainda — esperar >1h, um chunk de cada vez)
 
 ```bash
-cd /home/alladrian/PycharmProjects/br-acc/etl
+cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl
 uv run python -m bracc_etl.runner run --source pgfn \
   --neo4j-password "$NEO4J_PW" \
-  --data-dir /home/alladrian/PycharmProjects/br-acc/data 2>&1 | tee /tmp/pgfn.log
+  --data-dir /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data 2>&1 | tee /tmp/pgfn.log
 ```
 
 ### Verificação pós-run
