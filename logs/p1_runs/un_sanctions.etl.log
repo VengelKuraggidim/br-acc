@@ -1,14 +1,13 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:52:01,474 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
-2026-04-22 22:52:04,093 INFO [un_sanctions] Starting extraction...
-2026-04-22 22:52:04,093 INFO [un_sanctions] Reading ../data/un_sanctions/un_sanctions.json
-2026-04-22 22:52:04,100 INFO [un_sanctions] Extracted 1005 entries
-2026-04-22 22:52:04,101 INFO [un_sanctions] Starting transformation...
-2026-04-22 22:52:04,131 INFO [un_sanctions] Transformed 1005 InternationalSanction nodes (733 person matches, 272 company matches)
-2026-04-22 22:52:04,131 INFO [un_sanctions] Starting load...
-2026-04-22 22:52:04,133 WARNING [provenance:nodes:InternationalSanction] 1005/1005 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
-2026-04-22 22:52:05,382 INFO [un_sanctions] Loaded 1005 InternationalSanction nodes
-2026-04-22 22:52:06,228 INFO [un_sanctions] Created 733 Person UN_SANCTIONED rels
-2026-04-22 22:52:06,659 INFO [un_sanctions] Created 272 Company UN_SANCTIONED rels
-2026-04-22 22:52:06,853 INFO [un_sanctions] Pipeline complete.
-2026-04-22 22:52:06,854 INFO No post-load linking hook configured for source=un_sanctions
+2026-04-23 01:03:02,342 INFO [un_sanctions] Starting extraction...
+2026-04-23 01:03:02,342 INFO [un_sanctions] Reading ../data/un_sanctions/un_sanctions.json
+2026-04-23 01:03:02,354 INFO [un_sanctions] Extracted 1005 entries
+2026-04-23 01:03:02,354 INFO [un_sanctions] Starting transformation...
+2026-04-23 01:03:02,389 INFO [un_sanctions] Transformed 1005 InternationalSanction nodes (733 person matches, 272 company matches)
+2026-04-23 01:03:02,389 INFO [un_sanctions] Starting load...
+2026-04-23 01:03:02,393 WARNING [provenance:nodes:InternationalSanction] 1005/1005 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:03:02,844 INFO [un_sanctions] Loaded 1005 InternationalSanction nodes
+2026-04-23 01:03:03,027 INFO [un_sanctions] Created 733 Person UN_SANCTIONED rels
+2026-04-23 01:03:03,153 INFO [un_sanctions] Created 272 Company UN_SANCTIONED rels
+2026-04-23 01:03:03,165 INFO [un_sanctions] Pipeline complete.
+2026-04-23 01:03:03,172 INFO No post-load linking hook configured for source=un_sanctions

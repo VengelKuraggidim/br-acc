@@ -1,58 +1,11 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:49:43,674 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
-2026-04-22 22:49:46,289 INFO [ofac] Starting extraction...
-2026-04-22 22:49:46,289 INFO [ofac] Reading ../data/ofac/sdn.csv
-2026-04-22 22:49:46,404 INFO [ofac] Extracted 18773 rows
-2026-04-22 22:49:46,405 INFO [ofac] Starting transformation...
-2026-04-22 22:49:48,227 INFO [ofac] Transformed 7416 InternationalSanction nodes
-2026-04-22 22:49:48,227 INFO [ofac] Starting load...
-2026-04-22 22:49:48,311 WARNING [provenance:nodes:InternationalSanction] 7416/7416 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
-Traceback (most recent call last):
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/bin/bracc-etl", line 10, in <module>
-    sys.exit(cli())
-             ^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1485, in __call__
-    return self.main(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1406, in main
-    rv = self.invoke(ctx)
-         ^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1873, in invoke
-    return _process_result(sub_ctx.command.invoke(sub_ctx))
-                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1269, in invoke
-    return ctx.invoke(self.callback, **ctx.params)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 824, in invoke
-    return callback(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/runner.py", line 354, in run
-    pipeline.run()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/base.py", line 114, in run
-    self.load()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/pipelines/ofac.py", line 216, in load
-    loaded = loader.load_nodes(
-             ^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 111, in load_nodes
-    return self._run_batches(query, rows)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 46, in _run_batches
-    self._run_batch_once(query, batch)
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 40, in _run_batch_once
-    session.run(query, {"rows": batch}).consume()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/work/result.py", line 569, in consume
-    self._exhaust()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/work/result.py", line 499, in _exhaust
-    for _ in self:
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/work/result.py", line 407, in __iter__
-    self._connection.fetch_message()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
-    func(*args, **kwargs)
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
-    res = self._process_message(tag, fields)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_bolt6.py", line 548, in _process_message
-    response.on_failure(summary_metadata or {})
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
-    raise self._hydrate_error(metadata)
-neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 7416 nodes would reach 202298 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 7416 nodes would reach 202298 nodes). Please consider upgrading to the next tier.}
+2026-04-23 01:01:21,193 INFO [ofac] Starting extraction...
+2026-04-23 01:01:21,195 INFO [ofac] Reading ../data/ofac/sdn.csv
+2026-04-23 01:01:21,451 INFO [ofac] Extracted 18773 rows
+2026-04-23 01:01:21,451 INFO [ofac] Starting transformation...
+2026-04-23 01:01:30,488 INFO [ofac] Transformed 7416 InternationalSanction nodes
+2026-04-23 01:01:30,490 INFO [ofac] Starting load...
+2026-04-23 01:01:30,549 WARNING [provenance:nodes:InternationalSanction] 7416/7416 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:01:34,465 INFO [ofac] Loaded 7416 InternationalSanction nodes
+2026-04-23 01:01:34,490 INFO [ofac] Pipeline complete.
+2026-04-23 01:01:34,490 INFO No post-load linking hook configured for source=ofac

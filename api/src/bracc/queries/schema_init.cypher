@@ -417,8 +417,15 @@ CREATE INDEX tax_waiver_id IF NOT EXISTS
 // ── Fulltext Search Index ───────────────────────────────
 // standard-folding analyzer makes search accent-insensitive ("João" ~ "joao").
 // Analyzer changes on an existing index are handled by ensure_schema().
+// FederalLegislator/StateLegislator/Senator/GoVereador indexados pela
+// prop ``name`` (pipelines gravam o nome do parlamentar em ``name``, não
+// ``nome``). Sem esses labels, a busca ``/buscar-tudo`` só achava o
+// ``:Person`` TSE irmao do cluster canonico — por isso cada deputado
+// aparecia com icone "Pessoa publica" em vez de "Deputado Federal", e os
+// 3 federais GO sem ``:Person`` TSE irmao (Adriano do Baldy, 204412,
+// 220571) nao apareciam na busca.
 CREATE FULLTEXT INDEX entity_search IF NOT EXISTS
-  FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|Inquiry|InquiryRequirement|MunicipalContract|MunicipalBid|MunicipalGazetteAct|JudicialCase|SourceDocument)
+  FOR (n:Person|Partner|Company|Health|Education|Contract|Amendment|Convenio|Embargo|PublicOffice|Inquiry|InquiryRequirement|MunicipalContract|MunicipalBid|MunicipalGazetteAct|JudicialCase|SourceDocument|FederalLegislator|StateLegislator|Senator|GoVereador)
   ON EACH [n.name, n.razao_social, n.cpf, n.cnpj, n.doc_partial, n.doc_raw, n.cnes_code, n.object, n.contracting_org, n.convenente, n.infraction, n.org, n.function, n.subject, n.text, n.topic, n.case_number, n.url]
   OPTIONS { indexConfig: { `fulltext.analyzer`: 'standard-folding' } };
 

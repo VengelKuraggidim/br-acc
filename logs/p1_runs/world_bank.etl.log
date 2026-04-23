@@ -1,11 +1,10 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:52:12,353 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
-2026-04-22 22:52:14,916 INFO [world_bank] Starting extraction...
-2026-04-22 22:52:14,935 INFO [world_bank] Extracted 1379 rows
-2026-04-22 22:52:14,935 INFO [world_bank] Starting transformation...
-2026-04-22 22:52:15,160 INFO [world_bank] Transformed 1325 InternationalSanction nodes
-2026-04-22 22:52:15,161 INFO [world_bank] Starting load...
-2026-04-22 22:52:15,162 WARNING [provenance:nodes:InternationalSanction] 1325/1325 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
-2026-04-22 22:52:18,109 INFO [world_bank] Loaded 1325 InternationalSanction nodes
-2026-04-22 22:52:18,284 INFO [world_bank] Pipeline complete.
-2026-04-22 22:52:18,285 INFO No post-load linking hook configured for source=world_bank
+2026-04-23 01:03:16,138 INFO [world_bank] Starting extraction...
+2026-04-23 01:03:16,241 INFO [world_bank] Extracted 1379 rows
+2026-04-23 01:03:16,251 INFO [world_bank] Starting transformation...
+2026-04-23 01:03:17,647 INFO [world_bank] Transformed 1325 InternationalSanction nodes
+2026-04-23 01:03:17,647 INFO [world_bank] Starting load...
+2026-04-23 01:03:17,648 WARNING [provenance:nodes:InternationalSanction] 1325/1325 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:03:19,179 INFO [world_bank] Loaded 1325 InternationalSanction nodes
+2026-04-23 01:03:19,570 INFO [world_bank] Pipeline complete.
+2026-04-23 01:03:19,570 INFO No post-load linking hook configured for source=world_bank

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run P1 pipelines serially against Aura prod.
+# Run P1 pipelines serially against Neo4j local (fiscal-neo4j docker).
 # Usage: bash scripts/run_p1_wave.sh <src1> <src2> ...
 set -u
 cd "$(dirname "$0")/../etl"
 
-AURA="--neo4j-uri neo4j+s://5cb9f76f.databases.neo4j.io --neo4j-user 5cb9f76f --neo4j-database 5cb9f76f"
+TARGET="--neo4j-uri bolt://localhost:7687 --neo4j-user neo4j --neo4j-database neo4j --neo4j-password changeme"
 LOGDIR="../logs/p1_runs"
 mkdir -p "$LOGDIR"
 
@@ -26,7 +26,7 @@ for src in "$@"; do
     fi
 
     echo "=== $(date -Is) $src: etl ===" | tee -a "$SUMMARY"
-    if uv run bracc-etl run --source "$src" --data-dir ../data $AURA > "$LOGDIR/${src}.etl.log" 2>&1; then
+    if uv run bracc-etl run --source "$src" --data-dir ../data $TARGET > "$LOGDIR/${src}.etl.log" 2>&1; then
         TAIL=$(grep -E "Pipeline complete|Batch written" "$LOGDIR/${src}.etl.log" | tail -3 | tr '\n' '|')
         echo "  etl OK | $TAIL" | tee -a "$SUMMARY"
     else

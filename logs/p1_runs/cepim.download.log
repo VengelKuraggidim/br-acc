@@ -1,7 +1,3 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:40:08,498 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/cepim "HTTP/1.1 200 OK"
-2026-04-22 22:40:08,513 INFO bracc_etl.pipelines.cepim [cepim] downloading https://portaldatransparencia.gov.br/download-de-dados/cepim/20260420 -> cepim_20260420.zip
-2026-04-22 22:40:08,607 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/cepim/20260420 "HTTP/1.1 302 Moved Temporarily"
-2026-04-22 22:40:08,730 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/cepim/20260420_CEPIM.zip "HTTP/1.1 200 OK"
-2026-04-22 22:40:08,782 INFO bracc_etl.pipelines.cepim [cepim] wrote ../data/cepim/cepim.csv (633.8 KB)
-2026-04-22 22:40:08,782 INFO download_cepim [download_cepim] wrote ../data/cepim/cepim.csv (649005 bytes)
+2026-04-23 00:50:24,086 INFO bracc_etl.pipelines.cepim [cepim] skipping existing cepim.csv
+2026-04-23 00:50:24,086 INFO download_cepim [download_cepim] wrote ../data/cepim/cepim.csv (649005 bytes)

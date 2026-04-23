@@ -1,10 +1,10 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:50:11,883 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] GET https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList/content?token=dG9rZW4tMjAxNw
-2026-04-22 22:50:13,488 INFO httpx: HTTP Request: GET https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList/content?token=dG9rZW4tMjAxNw "HTTP/1.1 200 OK"
-2026-04-22 22:50:19,458 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] wrote ../data/eu_sanctions/eu_sanctions.csv (17958490 bytes)
-2026-04-22 22:50:19,458 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] GET https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw
-2026-04-22 22:50:20,021 INFO httpx: HTTP Request: GET https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw "HTTP/1.1 200 OK"
-2026-04-22 22:50:26,597 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] wrote ../data/eu_sanctions/eu_sanctions.xml (24263206 bytes)
+2026-04-23 01:01:40,248 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] GET https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList/content?token=dG9rZW4tMjAxNw
+2026-04-23 01:01:41,947 INFO httpx: HTTP Request: GET https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList/content?token=dG9rZW4tMjAxNw "HTTP/1.1 200 OK"
+2026-04-23 01:01:47,297 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] wrote ../data/eu_sanctions/eu_sanctions.csv (17958490 bytes)
+2026-04-23 01:01:47,297 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] GET https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw
+2026-04-23 01:01:47,828 INFO httpx: HTTP Request: GET https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw "HTTP/1.1 200 OK"
+2026-04-23 01:01:54,438 INFO bracc_etl.pipelines.eu_sanctions: [eu_sanctions.fetch_to_disk] wrote ../data/eu_sanctions/eu_sanctions.xml (24263206 bytes)
 Wrote 2 file(s) to /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/eu_sanctions:
   /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/eu_sanctions/eu_sanctions.csv  (17958490 bytes)
   /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/eu_sanctions/eu_sanctions.xml  (24263206 bytes)

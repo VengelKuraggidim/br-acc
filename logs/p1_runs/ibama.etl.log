@@ -1,58 +1,15 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:52:29,005 INFO [secrets] resolvendo projects/fiscal-cidadao-493716/secrets/fiscal-cidadao-neo4j-password/versions/latest via GCP Secret Manager
-2026-04-22 22:52:31,596 INFO [ibama] Starting extraction...
-2026-04-22 22:52:31,596 INFO [ibama] Reading ../data/ibama/areas_embargadas.csv
-2026-04-22 22:52:32,818 INFO [ibama] Extracted 113667 rows
-2026-04-22 22:52:32,818 INFO [ibama] Starting transformation...
-2026-04-22 22:53:38,354 INFO [ibama] Transformed: 101956 embargoes, 13017 companies, 67952 persons, 101956 rels
-2026-04-22 22:53:38,368 INFO [ibama] Starting load...
-2026-04-22 22:53:38,369 INFO [ibama] Loading 101956 Embargo nodes...
-2026-04-22 22:53:38,759 WARNING [provenance:nodes:Embargo] 101956/101956 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
-Traceback (most recent call last):
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/bin/bracc-etl", line 10, in <module>
-    sys.exit(cli())
-             ^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1485, in __call__
-    return self.main(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1406, in main
-    rv = self.invoke(ctx)
-         ^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1873, in invoke
-    return _process_result(sub_ctx.command.invoke(sub_ctx))
-                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 1269, in invoke
-    return ctx.invoke(self.callback, **ctx.params)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/click/core.py", line 824, in invoke
-    return callback(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/runner.py", line 354, in run
-    pipeline.run()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/base.py", line 114, in run
-    self.load()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/pipelines/ibama.py", line 352, in load
-    loader.load_nodes("Embargo", self.embargoes, key_field="embargo_id")
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 111, in load_nodes
-    return self._run_batches(query, rows)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 46, in _run_batches
-    self._run_batch_once(query, batch)
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/src/bracc_etl/loader.py", line 40, in _run_batch_once
-    session.run(query, {"rows": batch}).consume()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/work/result.py", line 569, in consume
-    self._exhaust()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/work/result.py", line 499, in _exhaust
-    for _ in self:
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/work/result.py", line 407, in __iter__
-    self._connection.fetch_message()
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
-    func(*args, **kwargs)
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
-    res = self._process_message(tag, fields)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_bolt6.py", line 548, in _process_message
-    response.on_failure(summary_metadata or {})
-  File "/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl/.venv/lib/python3.12/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
-    raise self._hydrate_error(metadata)
-neo4j.exceptions.ClientError: {neo4j_code: Neo.ClientError.Transaction.TransactionHookFailed} {message: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 208907 nodes). Please consider upgrading to the next tier.} {gql_status: 50N00} {gql_status_description: error: general processing exception - internal error. Internal exception raised TransactionEventListeners: You have exceeded the logical size limit of 200000 nodes in your database (attempt to add 10000 nodes would reach 208907 nodes). Please consider upgrading to the next tier.}
+2026-04-23 01:03:49,042 INFO [ibama] Starting extraction...
+2026-04-23 01:03:49,042 INFO [ibama] Reading ../data/ibama/areas_embargadas.csv
+2026-04-23 01:03:51,382 INFO [ibama] Extracted 113667 rows
+2026-04-23 01:03:51,389 INFO [ibama] Starting transformation...
+2026-04-23 01:06:33,087 INFO [ibama] Transformed: 101956 embargoes, 13017 companies, 67952 persons, 101956 rels
+2026-04-23 01:06:33,113 INFO [ibama] Starting load...
+2026-04-23 01:06:33,113 INFO [ibama] Loading 101956 Embargo nodes...
+2026-04-23 01:06:33,944 WARNING [provenance:nodes:Embargo] 101956/101956 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:08:41,882 INFO   Batch written: 101956 rows (cumulative: 101956)
+2026-04-23 01:08:41,893 INFO [ibama] MERGEing 13017 Company nodes...
+2026-04-23 01:08:42,740 WARNING [provenance:nodes:Company] 13017/13017 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])
+2026-04-23 01:08:55,963 INFO   Batch written: 13017 rows (cumulative: 114973)
+2026-04-23 01:08:55,972 INFO [ibama] MERGEing 67952 Person nodes...
+2026-04-23 01:08:56,551 WARNING [provenance:nodes:Person] 67952/67952 rows violate contract (sample: row 0: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 1: missing ['source_id', 'source_url', 'ingested_at', 'run_id']; row 2: missing ['source_id', 'source_url', 'ingested_at', 'run_id'])

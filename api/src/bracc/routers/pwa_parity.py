@@ -49,6 +49,14 @@ _GO_TYPES = {
     "goappointment",
     "go_vereador",
     "govereador",
+    # Parlamentares — entraram no fulltext ``entity_search`` em 2026-04-22.
+    # Precisam de filtro de UF (same-uf-as-GO) porque o indice cobre o
+    # Brasil inteiro — ``_format_item`` aplica ``_is_person_go`` pra eles.
+    "federal_legislator",
+    "federallegislator",
+    "state_legislator",
+    "statelegislator",
+    "senator",
 }
 
 _LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}[\]^"~*?:\\/])')
@@ -93,7 +101,16 @@ def _format_item(result: dict[str, Any]) -> BuscarTudoItem | None:
     props = result.get("properties") or {}
     tipo_raw = str(result.get("type") or "").lower()
 
-    if tipo_raw == "person":
+    # Tipos cuja escopo é nacional no fulltext precisam filtrar por
+    # ``uf=='GO'`` pra respeitar o escopo do app. ``Senator`` entra aqui
+    # (Caiado é GO, mas o indice cobre todos os 81 senadores).
+    _PARLAMENTAR_BR_TYPES = {
+        "federal_legislator", "federallegislator",
+        "state_legislator", "statelegislator",
+        "senator",
+    }
+
+    if tipo_raw == "person" or tipo_raw in _PARLAMENTAR_BR_TYPES:
         if not _is_person_go(props):
             return None
     elif tipo_raw not in _GO_TYPES:
@@ -142,6 +159,33 @@ def _format_item(result: dict[str, Any]) -> BuscarTudoItem | None:
     elif tipo_raw in {"go_vereador", "govereador"}:
         item.icone = "vereador"
         item.detalhe = f"Vereador(a) - {props.get('party', '')}"
+    elif tipo_raw in {"federal_legislator", "federallegislator"}:
+        item.icone = "pessoa"
+        partido = str(props.get("partido") or "").strip()
+        item.detalhe = (
+            f"Deputado(a) Federal - {partido}" if partido else "Deputado(a) Federal"
+        )
+        foto_raw = props.get("foto_url") or props.get("url_foto")
+        if foto_raw:
+            item.foto_url = str(foto_raw)
+    elif tipo_raw in {"state_legislator", "statelegislator"}:
+        item.icone = "pessoa"
+        partido = str(props.get("party") or props.get("partido") or "").strip()
+        item.detalhe = (
+            f"Deputado(a) Estadual - {partido}" if partido else "Deputado(a) Estadual"
+        )
+        foto_raw = props.get("foto_url") or props.get("url_foto")
+        if foto_raw:
+            item.foto_url = str(foto_raw)
+    elif tipo_raw == "senator":
+        item.icone = "pessoa"
+        partido = str(props.get("partido") or "").strip()
+        item.detalhe = (
+            f"Senador(a) - {partido}" if partido else "Senador(a)"
+        )
+        foto_raw = props.get("foto_url") or props.get("url_foto")
+        if foto_raw:
+            item.foto_url = str(foto_raw)
     elif tipo_raw == "company":
         item.icone = "empresa"
         item.detalhe = str(props.get("razao_social") or "")

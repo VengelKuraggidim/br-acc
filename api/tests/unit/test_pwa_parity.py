@@ -239,6 +239,92 @@ async def test_buscar_tudo_keeps_go_typed_results(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
+async def test_buscar_tudo_maps_parlamentar_labels(client: AsyncClient) -> None:
+    """Covers the 3 labels added to entity_search in 2026-04-22 so the
+    PWA stops showing deputados/senadores as generic ``person``.
+
+    Also asserts the UF filter (``uf!='GO'`` → dropped), which keeps
+    the Brasil-wide index scope-compatible with Goias-only usage."""
+
+    fed_go = _fake_search_record(
+        node_id="fed:1",
+        labels=["FederalLegislator"],
+        props={
+            "name": "Adriano do Baldy",
+            "uf": "GO",
+            "partido": "PP",
+            "foto_url": "https://example.test/adriano.jpg",
+        },
+        score=8.0,
+        document_id="4:x:1",
+    )
+    fed_sp = _fake_search_record(
+        node_id="fed:2",
+        labels=["FederalLegislator"],
+        props={"name": "Outro Deputado", "uf": "SP", "partido": "PT"},
+        score=7.5,
+        document_id="4:x:2",
+    )
+    senator_go = _fake_search_record(
+        node_id="sen:1",
+        labels=["Senator"],
+        props={"name": "Jorge Kajuru", "uf": "GO", "partido": "PSB"},
+        score=6.0,
+        document_id="4:x:3",
+    )
+    state_leg_go = _fake_search_record(
+        node_id="state:1",
+        labels=["StateLegislator"],
+        props={"name": "Fulano Alego", "uf": "GO", "party": "MDB"},
+        score=5.0,
+        document_id="4:x:4",
+    )
+
+    async def fake_execute_query(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        if name == "search":
+            if params.get("entity_type") == "person":
+                return []
+            return [fed_go, fed_sp, senator_go, state_leg_go]
+        raise AssertionError(name)
+
+    async def fake_execute_query_single(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"total": 4}
+
+    with (
+        patch(
+            "bracc.routers.pwa_parity.execute_query",
+            new=AsyncMock(side_effect=fake_execute_query),
+        ),
+        patch(
+            "bracc.routers.pwa_parity.execute_query_single",
+            new=AsyncMock(side_effect=fake_execute_query_single),
+        ),
+    ):
+        response = await client.get("/buscar-tudo?q=politico")
+
+    assert response.status_code == 200
+    resultados = response.json()["resultados"]
+    tipos = {item["tipo"]: item for item in resultados}
+
+    # Non-GO deputado filtered out.
+    assert "fed:2" not in {r["id"] for r in resultados}
+
+    assert tipos["federallegislator"]["detalhe"] == "Deputado(a) Federal - PP"
+    assert tipos["federallegislator"]["icone"] == "pessoa"
+    assert tipos["federallegislator"]["foto_url"] == "https://example.test/adriano.jpg"
+
+    assert tipos["senator"]["detalhe"] == "Senador(a) - PSB"
+    assert tipos["senator"]["icone"] == "pessoa"
+
+    assert tipos["statelegislator"]["detalhe"] == "Deputado(a) Estadual - MDB"
+    assert tipos["statelegislator"]["icone"] == "pessoa"
+
+
+@pytest.mark.anyio
 async def test_buscar_tudo_empty_results(client: AsyncClient) -> None:
     async def fake_execute_query(
         session: Any, name: str, params: dict[str, Any]

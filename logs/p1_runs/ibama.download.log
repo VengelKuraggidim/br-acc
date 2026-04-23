@@ -1,6 +1,6 @@
 warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-2026-04-22 22:52:19,419 INFO bracc_etl.pipelines.ibama [ibama.fetch_to_disk] Downloading https://dadosabertos.ibama.gov.br/dados/SIFISC/termo_embargo/termo_embargo/termo_embargo_csv.zip (uf=ALL, limit=None) -> ../data/ibama/areas_embargadas.csv
-2026-04-22 22:52:19,649 INFO httpx HTTP Request: GET https://dadosabertos.ibama.gov.br/dados/SIFISC/termo_embargo/termo_embargo/termo_embargo_csv.zip "HTTP/1.1 200 OK"
-2026-04-22 22:52:20,538 INFO bracc_etl.pipelines.ibama [ibama.fetch_to_disk] ZIP received: 44.76 MB
-2026-04-22 22:52:26,012 INFO bracc_etl.pipelines.ibama [ibama.fetch_to_disk] wrote 113667 / 113667 rows to ../data/ibama/areas_embargadas.csv (35.70 MB)
-2026-04-22 22:52:26,017 INFO download_ibama [download_ibama] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/ibama/areas_embargadas.csv (37438965 bytes)
+2026-04-23 01:03:24,515 INFO bracc_etl.pipelines.ibama [ibama.fetch_to_disk] Downloading https://dadosabertos.ibama.gov.br/dados/SIFISC/termo_embargo/termo_embargo/termo_embargo_csv.zip (uf=ALL, limit=None) -> ../data/ibama/areas_embargadas.csv
+2026-04-23 01:03:25,069 INFO httpx HTTP Request: GET https://dadosabertos.ibama.gov.br/dados/SIFISC/termo_embargo/termo_embargo/termo_embargo_csv.zip "HTTP/1.1 200 OK"
+2026-04-23 01:03:27,868 INFO bracc_etl.pipelines.ibama [ibama.fetch_to_disk] ZIP received: 44.76 MB
+2026-04-23 01:03:46,332 INFO bracc_etl.pipelines.ibama [ibama.fetch_to_disk] wrote 113667 / 113667 rows to ../data/ibama/areas_embargadas.csv (35.70 MB)
+2026-04-23 01:03:46,336 INFO download_ibama [download_ibama] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/ibama/areas_embargadas.csv (37438965 bytes)
