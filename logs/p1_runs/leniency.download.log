@@ -1,0 +1,8 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-22 22:40:59,057 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/acordos-leniencia "HTTP/1.1 200 OK"
+2026-04-22 22:40:59,068 INFO bracc_etl.pipelines.leniency [leniency] downloading https://portaldatransparencia.gov.br/download-de-dados/acordos-leniencia/20260422 -> acordos_leniencia_20260422.zip
+2026-04-22 22:40:59,203 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/acordos-leniencia/20260422 "HTTP/1.1 302 Moved Temporarily"
+2026-04-22 22:40:59,374 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/acordos-leniencia/20260422_AcordosLeniencia.zip "HTTP/1.1 200 OK"
+2026-04-22 22:40:59,497 INFO bracc_etl.pipelines.leniency [leniency] wrote 146 rows to ../data/leniency/leniencia.csv
+2026-04-22 22:40:59,498 INFO download_leniency [download_leniency] wrote ../data/leniency/leniencia.csv (80427 bytes)
+2026-04-22 22:40:59,498 INFO download_leniency [download_leniency] wrote ../data/leniency/raw/20260422_Acordos.csv (83596 bytes)

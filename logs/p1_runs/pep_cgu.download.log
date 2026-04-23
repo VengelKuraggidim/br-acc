@@ -1,0 +1,14 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-22 22:41:53,874 INFO bracc_etl.pipelines.pep_cgu [pep_cgu.fetch_to_disk] trying https://portaldatransparencia.gov.br/download-de-dados/pep/202604
+2026-04-22 22:41:54,070 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/pep/202604 "HTTP/1.1 302 Moved Temporarily"
+2026-04-22 22:41:54,226 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/pep/202604_PEP.zip "HTTP/1.1 403 Forbidden"
+2026-04-22 22:41:54,226 INFO bracc_etl.pipelines.pep_cgu [pep_cgu.fetch_to_disk] https://portaldatransparencia.gov.br/download-de-dados/pep/202604 returned HTTP 403
+2026-04-22 22:41:54,227 INFO bracc_etl.pipelines.pep_cgu [pep_cgu.fetch_to_disk] trying https://portaldatransparencia.gov.br/download-de-dados/pep/202603
+2026-04-22 22:41:54,297 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/pep/202603 "HTTP/1.1 302 Moved Temporarily"
+2026-04-22 22:41:54,481 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/pep/202603_PEP.zip "HTTP/1.1 403 Forbidden"
+2026-04-22 22:41:54,481 INFO bracc_etl.pipelines.pep_cgu [pep_cgu.fetch_to_disk] https://portaldatransparencia.gov.br/download-de-dados/pep/202603 returned HTTP 403
+2026-04-22 22:41:54,481 INFO bracc_etl.pipelines.pep_cgu [pep_cgu.fetch_to_disk] trying https://portaldatransparencia.gov.br/download-de-dados/pep/202602
+2026-04-22 22:41:54,569 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/pep/202602 "HTTP/1.1 302 Moved Temporarily"
+2026-04-22 22:41:54,694 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/pep/202602_PEP.zip "HTTP/1.1 200 OK"
+2026-04-22 22:41:55,511 INFO bracc_etl.pipelines.pep_cgu [pep_cgu.fetch_to_disk] wrote ../data/pep_cgu/pep.csv (16.06 MB) from 202602_PEP.csv [202602]
+2026-04-22 22:41:55,512 INFO download_pep_cgu [download_pep_cgu] wrote /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data/pep_cgu/pep.csv (16841585 bytes)

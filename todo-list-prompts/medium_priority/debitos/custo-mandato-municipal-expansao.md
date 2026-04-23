@@ -1,5 +1,35 @@
 # Custo de mandato — esfera municipal (prefeito + vereador)
 
+## Status 2026-04-22 — MVP Goiânia entregue
+
+- **Pipeline** `etl/src/bracc_etl/pipelines/custo_mandato_municipal_go.py`
+  cobre `prefeito_goiania` e `vereador_goiania`. Mesmo padrão de
+  `custo_mandato_br`; `archive_fetch` das fontes legais;
+  `CustoMandato` + `CustoComponente` + `TEM_COMPONENTE`.
+- **Valores**: vereador = 75% × subsídio dep estadual GO (CF Art. 29 VI)
+  = R$ 26.080,98/mês. Prefeito fica `None` com observação "Lei Orgânica
+  Municipal; consulte DOM-GYN" (padrão do `governador_go`).
+- **API**: router `GET /custo-mandato/{cargo}` aceita os 2 cargos novos
+  via `CargoEnum`. Service `CARGOS_SUPORTADOS` idem. Modelo ganhou
+  campo `municipio`.
+- **Testes**: 18 novos em `etl/tests/test_custo_mandato_municipal_go.py`
+  + atualizados em `api/tests/unit/test_custo_mandato_service.py`. Todos
+  passam.
+- **Runner + registry**: registrado em `runner.py::SOURCES` e
+  `docs/source_registry_br_v1.csv`.
+- **Rodado no Docker Neo4j local**: 2 cargos + 4 componentes + 4 rels
+  gravados. API local responde `/custo-mandato/vereador_goiania`
+  devolvendo R$ 26,1 mil/mês × 35 cadeiras = **R$ 10,95 mi/ano**.
+- **Aura prod NÃO rodado** — bloqueado por quota Free (200k nodes
+  atingidos). Ver `aura-free-quota-estourada.md`. Assim que o Aura
+  liberar espaço, re-rodar o pipeline em prod.
+
+**Escopo restante** (big project separado, não bloqueia o MVP): os
+245 municípios goianos restantes. Cada lei orgânica publicada em DOM
+municipal próprio sem API — mesmo padrão do débito original permanece.
+Candidato a fallback: `basedosdados.org` se materializar tabela
+consolidada.
+
 ## Contexto
 
 O endpoint `GET /custo-mandato/{cargo}` (pipeline `custo_mandato_br`)

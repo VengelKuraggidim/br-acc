@@ -221,6 +221,21 @@ no Aura prod (IngestionRun, nodes e rels). Slugs canônicos
 (`transparencia`, `tse`) já populados. Migração aparentemente aplicada
 antes ou o Aura prod foi populado direto com a versão pós-`d23baee`.
 
+Débito `custo-mandato-municipal.md` MVP entregue em 2026-04-22: pipeline
+novo `custo_mandato_municipal_go.py` (cargos `prefeito_goiania` +
+`vereador_goiania`), 18 testes unit + paridade com `custo_mandato_br`,
+integração em service/router/runner/registry. Vereador = 75% dep
+estadual GO = R$ 26.080,98/mês × 35 cadeiras = R$ 10,95 mi/ano.
+Prefeito sem valor (Lei Orgânica sem API — padrão do governador_go).
+Rodado localmente (Docker Neo4j) + validado via API local. **Não rodado
+em prod**: Aura Free atingiu 200.000 nodes — ver débito novo
+`aura-free-quota-estourada.md`. Expansão pros 245 municípios GO
+restantes migrou pra `medium_priority/debitos/custo-mandato-municipal-expansao.md`.
+
+**Novo débito aberto 2026-04-22**: `aura-free-quota-estourada.md` —
+qualquer ingestão futura em prod está bloqueada até cleanup (20k+ nós
+descartáveis candidatos) OU upgrade pro Aura Professional.
+
 ---
 
 ## Distribuição final
