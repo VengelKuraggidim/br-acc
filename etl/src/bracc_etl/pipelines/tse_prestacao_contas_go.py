@@ -97,6 +97,10 @@ _ZIP_CONTENT_TYPE = "application/zip"
 
 _DEFAULT_YEAR = 2022
 _DEFAULT_UF = "GO"
+
+# TSE 2024 mascara todos os CPFs como "-4". Quando detectado, usamos
+# SQ_CANDIDATO como chave secundária (mesmo padrão de tse.py/tse_bens).
+_MASKED_CPF_SENTINEL = "-4"
 _HTTP_TIMEOUT = 600.0
 
 _SOURCE_ID = "tse_prestacao_contas"
@@ -425,7 +429,11 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         by_committee_cnpj: dict[str, dict[str, Any]] = {}
 
         def _ensure(cpf_formatted: str, cpf_digits: str, nome: str, sq: str) -> dict[str, Any]:
-            entry = by_cpf.get(cpf_formatted)
+            # Quando CPF vem mascarado (TSE 2024+), usamos sq_candidato
+            # como chave do bucket. O dict by_cpf continua válido porque
+            # a chave é uma string qualquer — só a intenção muda.
+            key = cpf_formatted if cpf_formatted else f"sq:{sq}"
+            entry = by_cpf.get(key)
             if entry is None:
                 entry = {
                     "cpf": cpf_formatted,
@@ -445,7 +453,7 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                     "total_despesas": 0.0,
                     "cargo": "",
                 }
-                by_cpf[cpf_formatted] = entry
+                by_cpf[key] = entry
             elif nome and not entry["name"]:
                 entry["name"] = nome
             return entry
@@ -458,11 +466,17 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 or ""
             )
             cpf_digits = strip_document(cpf_raw)
-            if len(cpf_digits) != 11:
-                continue
-            cpf_formatted = format_cpf(cpf_raw)
-            nome = normalize_name(row.get("NM_CANDIDATO") or row.get("NOME_CANDIDATO") or "")
             sq = (row.get("SQ_CANDIDATO") or "").strip()
+            has_real_cpf = (
+                len(cpf_digits) == 11 and cpf_raw.strip() != _MASKED_CPF_SENTINEL
+            )
+            # TSE 2024 mascarou CPFs — fallback p/ sq_candidato.
+            if not has_real_cpf and not sq:
+                continue
+            cpf_formatted = format_cpf(cpf_raw) if has_real_cpf else ""
+            if not has_real_cpf:
+                cpf_digits = ""
+            nome = normalize_name(row.get("NM_CANDIDATO") or row.get("NOME_CANDIDATO") or "")
             valor_raw = row.get("VR_RECEITA") or row.get("VALOR_RECEITA") or "0"
             valor = parse_numeric_comma(valor_raw)
 
@@ -770,11 +784,16 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 or ""
             )
             cpf_digits = strip_document(cpf_raw)
-            if len(cpf_digits) != 11:
-                continue
-            cpf_formatted = format_cpf(cpf_raw)
-            nome = normalize_name(row.get("NM_CANDIDATO") or row.get("NOME_CANDIDATO") or "")
             sq = (row.get("SQ_CANDIDATO") or "").strip()
+            has_real_cpf = (
+                len(cpf_digits) == 11 and cpf_raw.strip() != _MASKED_CPF_SENTINEL
+            )
+            if not has_real_cpf and not sq:
+                continue
+            cpf_formatted = format_cpf(cpf_raw) if has_real_cpf else ""
+            if not has_real_cpf:
+                cpf_digits = ""
+            nome = normalize_name(row.get("NM_CANDIDATO") or row.get("NOME_CANDIDATO") or "")
             valor_raw = row.get("VR_BEM_CANDIDATO") or row.get("VALOR_BEM") or "0"
             valor = parse_numeric_comma(valor_raw)
             entry = _ensure(cpf_formatted, cpf_digits, nome, sq)
@@ -824,7 +843,16 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 ),
             )
 
+        # Em 2024 o CPF vem mascarado; Person com cpf='' seria tudo merged
+        # num ghost só. Split: Person com cpf real deduplica por cpf;
+        # Person sem cpf real deduplica por sq_candidato. O load phase
+        # usa key_field distinto pra cada sub-lista.
+        self._persons_nocpf = [
+            p for p in self.persons if not p.get("cpf")
+        ]
+        self.persons = [p for p in self.persons if p.get("cpf")]
         self.persons = deduplicate_rows(self.persons, ["cpf"])
+        self._persons_nocpf = deduplicate_rows(self._persons_nocpf, ["numero_candidato"])
         self.donations = deduplicate_rows(self.donations, ["donation_id"])
         self.donation_rels = deduplicate_rows(
             self.donation_rels, ["source_key", "target_key", "donation_id"],
@@ -892,7 +920,22 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         # ``:Person`` — MERGE by ``cpf``. Já existente no grafo via outros
         # pipelines (TSE, CNJ, camara_politicos_go) ganha as propriedades
         # novas por cima; ausente vira nó novo pra não bloquear validação.
-        loader.load_nodes("Person", self.persons, key_field="cpf")
+        if self.persons:
+            loader.load_nodes("Person", self.persons, key_field="cpf")
+        # TSE 2024+: Persons com CPF mascarado — MERGE via sq_candidato
+        # (mesmo campo numero_candidato). Esses Persons já existem na
+        # maioria dos casos (via pipeline tse), então é idempotente.
+        nocpf = getattr(self, "_persons_nocpf", [])
+        if nocpf:
+            # Renomeia chave p/ bater com Person.sq_candidato setado pelo
+            # pipeline tse. Remove cpf vazio pra não contaminar o node.
+            cleaned = []
+            for p in nocpf:
+                p2 = {k: v for k, v in p.items() if k != "cpf"}
+                p2["sq_candidato"] = p.pop("numero_candidato", "") or p2.get("sq_candidato", "")
+                if p2["sq_candidato"]:
+                    cleaned.append(p2)
+            loader.load_nodes("Person", cleaned, key_field="sq_candidato")
 
         # Campaign donation nodes + rels — fase opcional, mas já viabilizada.
         if self.donations:
