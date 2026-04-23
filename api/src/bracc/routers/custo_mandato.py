@@ -31,6 +31,8 @@ class CargoEnum(StrEnum):
     senador = "senador"
     dep_estadual_go = "dep_estadual_go"
     governador_go = "governador_go"
+    prefeito_goiania = "prefeito_goiania"
+    vereador_goiania = "vereador_goiania"
 
 
 @router.get("/custo-mandato/{cargo}", response_model=CustoMandato)

@@ -194,8 +194,15 @@ class SenadoPipeline(Pipeline):
                     "target_key": expense_id,
                 })
             elif senator_name:
+                # CEAPS CSV carrega o nome parlamentar curto (ex.: "VANDERLAN
+                # CARDOSO"); :Senator e :Person (senado_senadores_foto) carregam
+                # o nome civil completo (ex.: "VANDERLAN VIEIRA CARDOSO"). Sem
+                # esse remap, o MATCH por name falha e a rel GASTOU nunca é
+                # criada. parlamentares.json traz nome_completo no lookup.
+                nome_completo = normalize_name(senator_info.get("nome_completo", ""))
+                match_name = nome_completo or senator_name
                 gastou_by_name.append({
-                    "senator_name": senator_name,
+                    "senator_name": match_name,
                     "target_key": expense_id,
                 })
 

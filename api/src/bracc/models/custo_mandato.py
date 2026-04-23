@@ -70,6 +70,7 @@ class CustoMandato(BaseModel):
     rotulo_humano: str
     esfera: str
     uf: str | None = None
+    municipio: str | None = None
     n_titulares: int = 0
     custo_mensal_individual: float = 0.0
     custo_mensal_individual_fmt: str = "R$ 0,00"

@@ -33,7 +33,11 @@ class Neo4jBatchLoader:
 
     def _run_batch_once(self, query: str, batch: list[dict[str, Any]]) -> None:
         with self.driver.session(database=self.neo4j_database) as session:
-            session.run(query, {"rows": batch})
+            # .consume() força o driver a ler o SUCCESS/FAILURE do servidor.
+            # Sem isso, o session.run() retorna sem dispatchar e a exceção
+            # do servidor (ex.: Aura TransactionHookFailed por node cap) é
+            # engolida — o pipeline reporta sucesso mesmo sem persistir nada.
+            session.run(query, {"rows": batch}).consume()
 
     def _run_batches(self, query: str, rows: list[dict[str, Any]]) -> int:
         total = 0

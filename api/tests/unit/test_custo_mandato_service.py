@@ -106,10 +106,12 @@ def _fake_dep_federal_record() -> MagicMock:
 
 class TestObterCustoMandato:
     def test_cargos_suportados_alinhado_com_pipeline(self) -> None:
-        # MVP: dep_federal, senador, dep_estadual_go, governador_go.
+        # MVP federal + estadual (custo_mandato_br) + municipal GYN
+        # (custo_mandato_municipal_go).
         cargos = set(CARGOS_SUPORTADOS)
         assert cargos == {
             "dep_federal", "senador", "dep_estadual_go", "governador_go",
+            "prefeito_goiania", "vereador_goiania",
         }
 
     @pytest.mark.anyio
@@ -211,7 +213,8 @@ class TestRouter:
 
     @pytest.mark.anyio
     async def test_cargo_fora_do_enum_422(self, client: AsyncClient) -> None:
-        # FastAPI rejeita antes de tocar o serviço.
+        # FastAPI rejeita antes de tocar o serviço. Note: "prefeito" (sem
+        # município) cai aqui porque só "prefeito_goiania" está no enum.
         resp = await client.get("/custo-mandato/prefeito")
         assert resp.status_code == 422
 

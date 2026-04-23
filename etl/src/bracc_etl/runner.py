@@ -26,6 +26,9 @@ from bracc_etl.pipelines.cnpj import CNPJPipeline
 from bracc_etl.pipelines.comprasnet import ComprasnetPipeline
 from bracc_etl.pipelines.cpgf import CpgfPipeline
 from bracc_etl.pipelines.custo_mandato_br import CustoMandatoBrPipeline
+from bracc_etl.pipelines.custo_mandato_municipal_go import (
+    CustoMandatoMunicipalGoPipeline,
+)
 from bracc_etl.pipelines.cvm import CvmPipeline
 from bracc_etl.pipelines.cvm_funds import CvmFundsPipeline
 from bracc_etl.pipelines.datajud import DatajudPipeline
@@ -157,6 +160,7 @@ PIPELINES: dict[str, type] = {
     "propagacao_fotos_person": PropagacaoFotosPersonPipeline,
     "entity_resolution_politicos_go": EntityResolutionPoliticosGoPipeline,
     "custo_mandato_br": CustoMandatoBrPipeline,
+    "custo_mandato_municipal_go": CustoMandatoMunicipalGoPipeline,
 }
 
 

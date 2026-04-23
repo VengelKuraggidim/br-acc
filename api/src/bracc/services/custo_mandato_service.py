@@ -25,9 +25,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Cargos do MVP. Usado pelo router pra validação de path. Manter alinhado
-# com ``etl/src/bracc_etl/pipelines/custo_mandato_br.py::_COMPONENTS``.
+# com ``etl/src/bracc_etl/pipelines/custo_mandato_br.py::_COMPONENTS`` (federal
+# + estadual) e ``custo_mandato_municipal_go.py::_COMPONENTS`` (municipal GYN).
 CARGOS_SUPORTADOS: frozenset[str] = frozenset(
-    {"dep_federal", "senador", "dep_estadual_go", "governador_go"},
+    {
+        "dep_federal", "senador", "dep_estadual_go", "governador_go",
+        "prefeito_goiania", "vereador_goiania",
+    },
 )
 
 
@@ -123,6 +127,11 @@ async def obter_custo_mandato(
         uf=(
             str(mandato_node["uf"])
             if mandato_node.get("uf")
+            else None
+        ),
+        municipio=(
+            str(mandato_node["municipio"])
+            if mandato_node.get("municipio")
             else None
         ),
         n_titulares=int(mandato_node.get("n_titulares") or 0),

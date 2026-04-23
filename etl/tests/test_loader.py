@@ -117,7 +117,7 @@ class TestNeo4jBatchLoader:
     @patch("bracc_etl.loader.time.sleep")
     def test_run_query_with_retry_recovers_from_deadlock(self, mock_sleep: MagicMock) -> None:
         loader, session = self._make_loader()
-        session.run.side_effect = [TransientError("deadlock"), None]
+        session.run.side_effect = [TransientError("deadlock"), MagicMock()]
         rows = [{"a": 1}]
         count = loader.run_query_with_retry("UNWIND $rows AS row CREATE (n:T)", rows, batch_size=10)
         assert count == 1
