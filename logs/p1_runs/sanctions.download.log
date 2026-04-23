@@ -1,0 +1,13 @@
+warning: `VIRTUAL_ENV=/home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+2026-04-22 20:31:37,995 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/ceis "HTTP/1.1 200 OK"
+2026-04-22 20:31:38,011 INFO bracc_etl.pipelines.sanctions [sanctions] downloading ceis snapshot 20260422
+2026-04-22 20:31:38,109 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/ceis/20260422 "HTTP/1.1 302 Moved Temporarily"
+2026-04-22 20:31:38,326 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/ceis/20260422_CEIS.zip "HTTP/1.1 200 OK"
+2026-04-22 20:31:45,909 INFO bracc_etl.pipelines.sanctions [sanctions] wrote ../data/sanctions/ceis.csv (22417 rows, 21.61 MB)
+2026-04-22 20:31:46,191 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/cnep "HTTP/1.1 200 OK"
+2026-04-22 20:31:46,203 INFO bracc_etl.pipelines.sanctions [sanctions] downloading cnep snapshot 20260422
+2026-04-22 20:31:46,310 INFO httpx HTTP Request: GET https://portaldatransparencia.gov.br/download-de-dados/cnep/20260422 "HTTP/1.1 302 Moved Temporarily"
+2026-04-22 20:31:46,456 INFO httpx HTTP Request: GET https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/cnep/20260422_CNEP.zip "HTTP/1.1 200 OK"
+2026-04-22 20:31:47,374 INFO bracc_etl.pipelines.sanctions [sanctions] wrote ../data/sanctions/cnep.csv (1619 rows, 0.78 MB)
+2026-04-22 20:31:47,378 INFO download_sanctions [download_sanctions] wrote ../data/sanctions/ceis.csv (22658687 bytes)
+2026-04-22 20:31:47,378 INFO download_sanctions [download_sanctions] wrote ../data/sanctions/cnep.csv (818756 bytes)

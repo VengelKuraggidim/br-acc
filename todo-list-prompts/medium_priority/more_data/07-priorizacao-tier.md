@@ -178,7 +178,7 @@ da lista.
 | Source | Blocker | Débito ativo em | Ação |
 |---|---|---|---|
 | `caged` | `.7z` + form-wall; dep `py7zr` não aprovada | `very_high_priority/script-download-conversions/medium-tier/caged.md` | Esperar aprovação de dep ou mirror CSV oficial |
-| `rais` | Multi-GB PDET behind login; basedosdados exige creds GCP | `very_high_priority/script-download-conversions/medium-tier/rais.md` | Esperar creds GCP (cruzamento com `iam-secret-accessor-vengel`) |
+| `rais` | Multi-GB PDET behind login; basedosdados exige creds GCP | `very_high_priority/script-download-conversions/medium-tier/rais.md` | Creds GCP já liberadas (secretAccessor concedido 2026-04-22); resta dependência login PDET |
 | `datajud` | Credenciais CNJ não operacionais em prod | `blocked_external` no registry | Retomar quando credencial prod sair |
 | `tce_go` (irregulares + fiscalizações) | Qlik Sense WebSocket scrape, fragil + volumoso | `high_priority/debitos/tce-go-qlik-scraper.md` | Decisões já `loaded` via `iago-search-api`; completar Qlik quando ROI justificar |
 | `tcmgo_sancoes` (impedidos de licitar) | `robots.txt` do subdomínio `tcmgo.tc.br` tem `Disallow: /` | `high_priority/debitos/tcmgo-impedidos-jsf-scraper.md` | Scraper entregue mas bloqueado por robots; fallback LAI |
@@ -187,9 +187,9 @@ da lista.
 | `pncp` nacional | Volume (completo, não só UF=GO); janela dedicada | `high_priority/debitos/rodar-pipelines-pesados.md` | Pipeline existe; rodar em janela planejada |
 | `comprasnet` | Volume ~6.4 GB; agendamento dedicado | `high_priority/debitos/rodar-pipelines-pesados.md` | OOM fix já aplicado em `0d407d5`, falta rodar |
 | `pgfn` (full history) | ~1.2 GB, transform `iterrows()` ~10M rows (>1h) | `high_priority/debitos/rodar-pipelines-pesados.md` | Idem — janela dedicada |
-| Aura prod operações | Acesso prod + APOC queries ad-hoc | `high_priority/debitos/aura-prod-source-id-migracao.md`, `backfill-ano-doou-rels.md`, `repopular-ceap-aura.md` | Precisa do owner prod |
-| `archival` root ownership | `etl/archival/` owned by root no dev local | `high_priority/debitos/archival-chown.md` | `chown` manual (fora do Docker) |
-| Pipelines TSE que exigem BigQuery | GCP creds | `medium_priority/reexecutar/01-tse_filiados.md`, `high_priority/debitos/iam-secret-accessor-vengel.md` | Cruza com provisão IAM |
+| ~~Aura prod operações~~ | — | — | Todos os 3 débitos (source_id, ano DOOU, CEAP) resolvidos em 2026-04-22 |
+| ~~`archival` root ownership~~ | — | — | `chown` aplicado + commit `7c1b872` fixou compose; falta só rerun fotos (ver memo `project_fotos_politicos_pendente`) |
+| Pipelines TSE que exigem BigQuery | GCP creds | `medium_priority/reexecutar/01-tse_filiados.md` | IAM secretAccessor já concedido 2026-04-22 — destravado |
 
 **Saíram da tabela desde 2026-04-19** (todos viraram `loaded` ou
 `script_download` no registry + contract + data no grafo):
@@ -197,6 +197,29 @@ da lista.
 `siconfi` (parcial), `alego`, `tcmgo_sancoes` (REST/1.4k rows),
 `ssp_go` (nível estadual), `tce_go` (decisões). O `querido_diario`
 federal foi `deprecated` em `7208381` (substituído por `querido_diario_go`).
+Débito `repopular-ceap-aura.md` resolvido em 2026-04-22: pipeline
+`camara_politicos_go` já havia rodado (17 FedLeg GO + 12.080
+`:LegislativeExpense` em prod), mas rels `:INCURRED` estavam sem props
+(run anterior ao fix `21cc860`). Backfill Cypher preencheu
+`tipo/ano/mes/valor_liquido`; API `/politico/<id_camara>` agora retorna
+`despesas_gabinete` populado. Débito colateral de observabilidade aberto
+em `medium_priority/debitos/meta-stats-legislative-expense-count.md`.
+
+Débito `backfill-ano-doou-rels.md` resolvido em 2026-04-22: 34.164/46.449
+rels `:DOOU` em prod tinham `ano IS NULL` (todas com `year` preenchido —
+pipelines TSE legados). Backfill `SET r.ano = r.year` via
+`apoc.periodic.iterate` cobriu 100%. API `/politico/<eid>` agora devolve
+doadores PJ/PF (validado: Jovair Arantes, CPF `040.359.761-72` → 4
+doadores pessoa + 2 empresa, R$ 605k em 2022). Follow-up opcional em
+`medium_priority/debitos/tightening-filtro-ano-doou.md` (restringir
+filtro pra descartar `ano IS NULL` — só faz sentido junto do próximo
+deploy da `bracc-api`).
+
+Débito `aura-prod-source-id-migracao.md` resolvido em 2026-04-22: dry-run
+mostrou zero resíduos de `portal_transparencia` / `tribunal_superior_eleitoral`
+no Aura prod (IngestionRun, nodes e rels). Slugs canônicos
+(`transparencia`, `tse`) já populados. Migração aparentemente aplicada
+antes ou o Aura prod foi populado direto com a versão pós-`d23baee`.
 
 ---
 
