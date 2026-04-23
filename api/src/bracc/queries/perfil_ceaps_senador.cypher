@@ -31,6 +31,11 @@ MATCH (p)-[:GASTOU]->(e:Expense)
 WHERE e.source = "senado"
   AND e.date IS NOT NULL
   AND toInteger(substring(e.date, 0, 4)) IN $anos
+// `WITH DISTINCT e` defende contra múltiplos :Person homônimos (mesmo
+// name, CPFs diferentes) que causariam soma inflada no Python. O pipeline
+// também pega 1 Person por nome, mas mantemos o DISTINCT como 2ª camada
+// pra que runs antigos ou outros bridges (cluster canônico) não quebrem.
+WITH DISTINCT e
 RETURN e.type AS tipo_raw,
        e.value AS valor,
        toInteger(substring(e.date, 0, 4)) AS ano

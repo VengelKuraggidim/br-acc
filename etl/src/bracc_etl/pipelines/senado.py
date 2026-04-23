@@ -325,10 +325,19 @@ class SenadoPipeline(Pipeline):
                 self._stamp(r, record_id=r["target_key"])
                 for r in self.gastou_by_name_rels
             ]
+            # `MATCH (p:Person {name: ...})` sozinho pega TODOS os homônimos
+            # — no dump local há 5 "LUIZ CARLOS DO CARMO" e 2 "VANDERLAN
+            # VIEIRA CARDOSO", criando rels duplicadas que inflavam o total
+            # na PWA. Ordenamos por (tem CPF) DESC e pegamos o primeiro via
+            # `collect(p)[0]` pra fixar 1 Person canônica por nome.
             query = (
                 "UNWIND $rows AS row "
                 "MATCH (e:Expense {expense_id: row.target_key}) "
                 "MATCH (p:Person {name: row.senator_name}) "
+                "WITH row, e, p "
+                "ORDER BY (p.cpf IS NOT NULL) DESC, p.cpf "
+                "WITH row, e, collect(p)[0] AS p "
+                "WHERE p IS NOT NULL "
                 "MERGE (p)-[r:GASTOU]->(e) "
                 "SET r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
