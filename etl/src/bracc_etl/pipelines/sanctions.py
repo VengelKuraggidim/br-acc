@@ -336,26 +336,57 @@ class SanctionsPipeline(Pipeline):
         self.sanctions = deduplicate_rows(all_sanctions, ["sanction_id"])
         self.sanctioned_entities = all_entities
 
+    def _stamp(self, row: dict[str, Any], *, record_id: object) -> dict[str, Any]:
+        """Shorthand pra ``attach_provenance`` com URL canonica de CEIS/CNEP.
+
+        O Portal da Transparencia nao expoe deep-link estavel por sancao —
+        usamos a pagina de consulta de sancoes como ``source_url``.
+        """
+        return self.attach_provenance(
+            row,
+            record_id=record_id,
+            record_url="https://portaldatransparencia.gov.br/sancoes/consulta",
+        )
+
     def load(self) -> None:
         loader = Neo4jBatchLoader(self.driver)
 
         if self.sanctions:
-            loader.load_nodes("Sanction", self.sanctions, key_field="sanction_id")
+            stamped_sanctions = [
+                self._stamp(s, record_id=s["sanction_id"]) for s in self.sanctions
+            ]
+            loader.load_nodes("Sanction", stamped_sanctions, key_field="sanction_id")
 
+        # Dedup entities por chave (cpf/cnpj) e separa por label, pra carregar
+        # em batches em vez de 1 chamada por linha (24k chamadas vira 2).
+        person_by_doc: dict[str, dict[str, Any]] = {}
+        company_by_doc: dict[str, dict[str, Any]] = {}
         for ent in self.sanctioned_entities:
-            label = ent["entity_label"]
-            key_field = ent["entity_key_field"]
             doc = ent["entity_doc"]
             name = ent["entity_name"]
+            if ent["entity_label"] == "Company":
+                company_by_doc.setdefault(doc, {
+                    "cnpj": doc,
+                    "name": name,
+                    "razao_social": name,
+                })
+            else:
+                person_by_doc.setdefault(doc, {"cpf": doc, "name": name})
 
-            node_row: dict[str, Any] = {key_field: doc, "name": name}
-            if label == "Company":
-                node_row["razao_social"] = name
-            loader.load_nodes(label, [node_row], key_field=key_field)
+        if person_by_doc:
+            stamped = [self._stamp(r, record_id=r["cpf"]) for r in person_by_doc.values()]
+            loader.load_nodes("Person", stamped, key_field="cpf")
+
+        if company_by_doc:
+            stamped = [self._stamp(r, record_id=r["cnpj"]) for r in company_by_doc.values()]
+            loader.load_nodes("Company", stamped, key_field="cnpj")
 
         if self.sanctioned_entities:
             rel_rows = [
-                {"source_key": e["source_key"], "target_key": e["target_key"]}
+                self._stamp(
+                    {"source_key": e["source_key"], "target_key": e["target_key"]},
+                    record_id=e["target_key"],
+                )
                 for e in self.sanctioned_entities
             ]
 
@@ -364,8 +395,13 @@ class SanctionsPipeline(Pipeline):
                 "MATCH (s:Sanction {sanction_id: row.target_key}) "
                 "OPTIONAL MATCH (c:Company {cnpj: row.source_key}) "
                 "OPTIONAL MATCH (p:Person {cpf: row.source_key}) "
-                "WITH s, coalesce(c, p) AS entity "
+                "WITH s, coalesce(c, p) AS entity, row "
                 "WHERE entity IS NOT NULL "
-                "MERGE (entity)-[:SANCIONADA]->(s)"
+                "MERGE (entity)-[r:SANCIONADA]->(s) "
+                "SET r.source_id = row.source_id, "
+                "    r.source_record_id = row.source_record_id, "
+                "    r.source_url = row.source_url, "
+                "    r.ingested_at = row.ingested_at, "
+                "    r.run_id = row.run_id"
             )
             loader.run_query(query, rel_rows)
