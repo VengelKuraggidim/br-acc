@@ -431,11 +431,10 @@ def classificar(
             # múltiplas eleições ingeridas (o CSV TSE por ano gera uma
             # rel ``:DOOU`` por linha, com ``ano`` carimbado).
             #
-            # Rels sem ``ano`` carimbada (legacy: Company/Person → Person
-            # de pipelines não-TSE) passam — descartá-las zera doadores
-            # PJ/PF do candidato. Débito: backfill de ``ano`` em todos
-            # pipelines que criam :DOOU
-            # (todo-list-prompts/high_priority/debitos/backfill-ano-doou-rels.md).
+            # Contrato atual: toda :DOOU tem ``r.ano`` (backfill 2026-04-22
+            # + pipelines ativos tse.py e tse_prestacao_contas_go.py
+            # carimbam). Rels sem ``ano`` são descartadas quando o filtro
+            # está ativo — falha rápido se pipeline futuro regredir.
             if ano_doacao is not None:
                 rel_ano_raw = rel_props.get("ano")
                 try:
@@ -444,7 +443,7 @@ def classificar(
                     )
                 except (TypeError, ValueError):
                     rel_ano = None
-                if rel_ano is not None and rel_ano != ano_doacao:
+                if rel_ano != ano_doacao:
                     continue
             valor = _valor_doacao(rel_props)
             donated_at = _donated_at_iso(rel_props)

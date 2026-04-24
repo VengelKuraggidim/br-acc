@@ -1,4 +1,15 @@
-# Tightening do filtro `ano_doacao` em `conexoes_service.py`
+# Tightening do filtro `ano_doacao` em `conexoes_service.py` — ✅ RESOLVIDO 2026-04-24
+
+> Filtro restrito em `api/src/bracc/services/conexoes_service.py:447`: agora
+> `if rel_ano != ano_doacao: continue` — rels sem `ano` carimbada são
+> descartadas quando o filtro está ativo. Teste renomeado para
+> `test_ano_doacao_rel_sem_ano_e_descartada_quando_filtro_ativo` reflete o
+> novo contrato. Comentário no service atualizado pra apontar o backfill de
+> 2026-04-22 + os dois pipelines ativos que carimbam `r.ano`. Sem regressão:
+> `cd api && uv run pytest` → 863 passed. Sem rebuild/redeploy feito — fica
+> pro próximo push regular da API.
+
+## Original
 
 ## Estado atual (2026-04-22)
 

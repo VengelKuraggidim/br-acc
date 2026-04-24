@@ -379,21 +379,20 @@ class TestFiltroAnoDoacao:
         assert resultado.doadores_pessoa[0].valor_total == 200.0
         assert resultado.doadores_pessoa[0].n_doacoes == 1
 
-    def test_ano_doacao_rel_sem_ano_e_mantida_quando_filtro_ativo(self) -> None:
-        """Rels legadas (sem ``ano`` carimbado) são MANTIDAS mesmo com filtro
-        ativo — pipelines não-TSE (Company/Person → Person) não carimbam
-        ``ano``, e descartá-las zera doadores PJ/PF (regressão observada após
-        ``f71052f`` em prod). Trade-off: rels ``ano=2014/2018`` ainda são
-        descartadas (objetivo do filtro), mas legacy passa.
-        Débito: backfill em
-        ``todo-list-prompts/high_priority/debitos/backfill-ano-doou-rels.md``.
+    def test_ano_doacao_rel_sem_ano_e_descartada_quando_filtro_ativo(self) -> None:
+        """Rels sem ``ano`` carimbado são descartadas quando o filtro está
+        ativo. Contrato pós backfill 2026-04-22 (todo resolvido
+        ``backfill-ano-doou-rels.md``): 100% das :DOOU têm ``r.ano`` e os dois
+        pipelines ativos (``tse.py``, ``tse_prestacao_contas_go.py``)
+        carimbam. Manter rels ``ano=NULL`` passando mascararia qualquer
+        regressão futura em que um pipeline novo esquecesse de carimbar.
         """
         conexoes = [
             _conn(
                 rel_type="DOOU",
                 target_id="emp_1",
                 politico_is_source=False,
-                rel_props={"valor": 999.0},  # sem "ano" (legacy)
+                rel_props={"valor": 999.0},  # sem "ano" — descartada
             ),
             _conn(
                 rel_type="DOOU",
@@ -405,7 +404,7 @@ class TestFiltroAnoDoacao:
                 rel_type="DOOU",
                 target_id="emp_1",
                 politico_is_source=False,
-                rel_props={"valor": 1.0, "ano": 2018},  # ainda descartada
+                rel_props={"valor": 1.0, "ano": 2018},  # descartada
             ),
         ]
         entidades = {
@@ -418,9 +417,9 @@ class TestFiltroAnoDoacao:
             conexoes, entidades, POLITICO_ID, ano_doacao=2022,
         )
         assert len(resultado.doadores_empresa) == 1
-        # 999 (sem ano) + 50_000 (ano=2022) somam; 1 (ano=2018) é descartada.
-        assert resultado.doadores_empresa[0].valor_total == 50_999.0
-        assert resultado.doadores_empresa[0].n_doacoes == 2
+        # Só a rel ano=2022 bate; 999 (sem ano) e 1 (ano=2018) ficam fora.
+        assert resultado.doadores_empresa[0].valor_total == 50_000.0
+        assert resultado.doadores_empresa[0].n_doacoes == 1
 
     def test_ano_doacao_aceita_ano_como_string_numerica(self) -> None:
         """Neo4j às vezes devolve props numéricos como string (loader varia).

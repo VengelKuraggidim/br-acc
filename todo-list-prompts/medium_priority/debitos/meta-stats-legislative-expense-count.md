@@ -1,4 +1,14 @@
-# Observabilidade: `legislative_expense_count` em meta_stats.cypher
+# Observabilidade: `legislative_expense_count` em meta_stats.cypher — ✅ RESOLVIDO
+
+> Confirmed 2026-04-24: `api/src/bracc/queries/meta_stats.cypher:59` já
+> computa `legislative_expense_count` e devolve no RETURN (linha 149). O
+> router expõe em `api/src/bracc/routers/meta.py:100-102`. O débito foi
+> fechado em alguma revisão entre a redação deste doc e hoje (não localizada
+> no `git log --follow` por ter passado pelo mesmo commit que renomeou o
+> Cypher). Teste `tests/unit/test_health.py::test_meta_stats` cobre o
+> campo no shape de resposta.
+
+## Original
 
 ## Problema
 
