@@ -325,6 +325,88 @@ async def test_buscar_tudo_maps_parlamentar_labels(client: AsyncClient) -> None:
 
 
 @pytest.mark.anyio
+async def test_buscar_tudo_dedupes_by_canonical_cluster(client: AsyncClient) -> None:
+    """Person + FederalLegislator + Person TSE no mesmo CanonicalPerson
+    devem colapsar para o nó de maior oficialidade (FedLeg). Sintoma
+    documentado em busca-duplica-politico-cluster.md (query "Flavia
+    Morais" devolvia 3 linhas para o mesmo perfil)."""
+
+    person_camara = _fake_search_record(
+        node_id="person:camara",
+        labels=["Person"],
+        props={"name": "FLAVIA MORAIS", "uf": "GO"},
+        score=12.0,
+        document_id="4:x:1",
+        canonical_id="canon_camara_160598",
+    )
+    fed = _fake_search_record(
+        node_id="fed:flavia",
+        labels=["FederalLegislator"],
+        props={"name": "FLAVIA MORAIS", "uf": "GO", "partido": "PDT"},
+        score=11.5,
+        document_id="4:x:2",
+        canonical_id="canon_camara_160598",
+    )
+    person_tse = _fake_search_record(
+        node_id="person:tse",
+        labels=["Person"],
+        props={
+            "name": "FLAVIA CARREIRO ALBUQUERQUE MORAIS",
+            "uf": "GO",
+        },
+        score=10.0,
+        document_id="12345678900",
+        canonical_id="canon_camara_160598",
+    )
+    # Pessoa não-clusterizada — passa direto sem dedup.
+    pessoa_solta = _fake_search_record(
+        node_id="person:solo",
+        labels=["Person"],
+        props={"name": "FULANA MORAIS", "uf": "GO"},
+        score=4.0,
+        document_id="98765432100",
+        canonical_id=None,
+    )
+
+    async def fake_execute_query(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        if name == "search":
+            if params.get("entity_type") == "person":
+                return [person_camara, person_tse, pessoa_solta]
+            return [fed]
+        raise AssertionError(name)
+
+    async def fake_execute_query_single(
+        session: Any, name: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"total": 4}
+
+    with (
+        patch(
+            "bracc.routers.pwa_parity.execute_query",
+            new=AsyncMock(side_effect=fake_execute_query),
+        ),
+        patch(
+            "bracc.routers.pwa_parity.execute_query_single",
+            new=AsyncMock(side_effect=fake_execute_query_single),
+        ),
+    ):
+        response = await client.get("/buscar-tudo?q=flavia")
+
+    assert response.status_code == 200
+    resultados = response.json()["resultados"]
+    ids = [r["id"] for r in resultados]
+    # Os 3 rows do cluster colapsam para o FederalLegislator (maior
+    # oficialidade); a pessoa solta sobrevive intacta.
+    assert "fed:flavia" in ids
+    assert "person:camara" not in ids
+    assert "person:tse" not in ids
+    assert "person:solo" in ids
+    assert len(resultados) == 2
+
+
+@pytest.mark.anyio
 async def test_buscar_tudo_empty_results(client: AsyncClient) -> None:
     async def fake_execute_query(
         session: Any, name: str, params: dict[str, Any]
@@ -365,6 +447,7 @@ def _fake_search_record(
     props: dict[str, Any],
     score: float,
     document_id: str,
+    canonical_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a dict that mimics the neo4j Record shape consumed by
     ``_run_search`` (which only does dictionary-style access, so a
@@ -376,4 +459,5 @@ def _fake_search_record(
         "node_labels": labels,
         "node_id": node_id,
         "document_id": document_id,
+        "canonical_id": canonical_id,
     }

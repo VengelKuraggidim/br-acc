@@ -61,6 +61,21 @@ _GO_TYPES = {
 
 _LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}[\]^"~*?:\\/])')
 
+# Mesma hierarquia do perfil_politico_connections.cypher: quando vários
+# rows do fulltext apontam pro mesmo CanonicalPerson, fica apenas o de
+# label mais oficial. GoVereador entra acima de Person (cargo eletivo
+# municipal), porque pode coexistir com :Person no mesmo cluster.
+_CLUSTER_RANK = {
+    "Senator": 0,
+    "FederalLegislator": 1,
+    "StateLegislator": 2,
+    "GoVereador": 3,
+}
+
+
+def _cluster_rank(labels: list[str]) -> int:
+    return min((_CLUSTER_RANK.get(lbl, 4) for lbl in labels), default=4)
+
 
 def _to_lucene_query(query: str) -> str:
     """Lucene-escape the user query; ``*`` keeps its match-all semantics."""
@@ -261,6 +276,8 @@ async def _run_search(
                 "score": float(record["score"] or 0.0),
                 "document": document,
                 "properties": props,
+                "labels": labels,
+                "canonical_id": record.get("canonical_id"),
             }
         )
     return results, total
@@ -353,8 +370,37 @@ async def pwa_buscar_tudo(
 
     total = max(pessoas_total, outros_total)
 
+    # Segundo passo de dedup: colapsa rows do mesmo CanonicalPerson
+    # (Person + cargo + Person TSE no mesmo cluster) para o nó mais
+    # oficial. Sem cluster passa direto. Empate de oficialidade é
+    # resolvido por score; tie-breaker final pelo id pra ordem estável.
+    by_cluster: dict[str, dict[str, Any]] = {}
+    deduped: list[dict[str, Any]] = []
+    for r in combined.values():
+        canonical = r.get("canonical_id")
+        if not canonical:
+            deduped.append(r)
+            continue
+        current = by_cluster.get(canonical)
+        if current is None:
+            by_cluster[canonical] = r
+            continue
+        candidate_key = (
+            _cluster_rank(r.get("labels") or []),
+            -float(r.get("score") or 0.0),
+            str(r.get("id")),
+        )
+        current_key = (
+            _cluster_rank(current.get("labels") or []),
+            -float(current.get("score") or 0.0),
+            str(current.get("id")),
+        )
+        if candidate_key < current_key:
+            by_cluster[canonical] = r
+    deduped.extend(by_cluster.values())
+
     items: list[BuscarTudoItem] = []
-    for r in sorted(combined.values(), key=lambda x: -x.get("score", 0)):
+    for r in sorted(deduped, key=lambda x: -x.get("score", 0)):
         item = _format_item(r)
         if item is not None:
             items.append(item)
