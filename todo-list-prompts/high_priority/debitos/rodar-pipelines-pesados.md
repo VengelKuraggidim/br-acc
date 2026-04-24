@@ -1,27 +1,37 @@
 # Rodar pipelines pesados — `pgfn` + `comprasnet`
 
-## Estado 2026-04-24 06:30 — download comprasnet em progresso, pgfn pronto
-
-Sessão overnight 2026-04-24 disparou o download de comprasnet em
-background (BG `bnelxyias`, log em `/tmp/comprasnet_dl.log`):
-
-- 2019/2020: `[]` (pre-PNCP, esperado).
-- 2021: 9 MB ✅
-- 2022: 69 MB ✅
-- 2023: 406 MB ✅
-- **2024: ~27% (página ~590/2175 às 06:30, ETA mais ~80 min só pra fechar 2024).**
-- 2025/2026: pendentes; total ETA da run ~3-4h mais.
+## Estado 2026-04-24 20:25 — download em andamento, ETL runs adiados
 
 `data/pgfn/`: **54 CSVs GO-scoped já em disco** (mar/2024 → mar/2026,
-SIDA_1 a SIDA_6, ~2 GB). Pronto pra ingestão.
+SIDA_1 a SIDA_6, ~1.9 GB). Pronto pra ingestão.
 
-### Quando a usuária acordar
+`data/comprasnet/`: download da overnight 2026-04-24 (BG `bnelxyias`,
+PID 218558, log `/tmp/comprasnet_dl.log`) ainda rodando às 20:25:
 
-1. Confirmar download terminou: `tail /tmp/comprasnet_dl.log` deve
-   mostrar "Done" ou ausência de novas requests por ~10min. Se ainda
-   estiver rodando 2025/2026, esperar.
-2. Rodar **comprasnet** (fix OOM streaming já aplicado em commit
-   `0d407d5`):
+- 2019/2020: `[]` (pre-PNCP, esperado)
+- 2021: 8.7 MB ✅
+- 2022: 66 MB ✅
+- 2023: 388 MB ✅
+- 2024: 1.7 GB ✅ consolidado (com 2 gaps menores em pgs 883/1479 — script avisa "Re-run to fill")
+- **2025: em progresso, página 757/4049 às 20:25** (~18% do ano, ETA ~165 min)
+- 2026: pendente
+
+ETA total restante: ~3-4h. Não disparar 2º download paralelo — duas
+instâncias escrevendo em `data/comprasnet/` se atropelam (page-pruning
+do consolidador apaga arquivos que o outro processo precisa).
+
+### Quando download terminar
+
+1. Confirmar: `tail /tmp/comprasnet_dl.log` deve mostrar "Done" ou
+   ausência de novas requests por ~10min. Validar com:
+   ```bash
+   ls -lh data/comprasnet/{2025,2026}_contratos.json
+   ```
+2. **Coordenar com outras instâncias antes do ETL run** — comprasnet
+   gera milhões de Contract/Company nodes em transações longas; rodar
+   junto com ER ou outro pipeline pesado no mesmo Neo4j local pode dar
+   contenção/deadlock.
+3. Rodar **comprasnet** (fix OOM streaming em commit `0d407d5`):
    ```bash
    cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl
    uv run python -m bracc_etl.runner run --source comprasnet \
@@ -30,12 +40,12 @@ SIDA_1 a SIDA_6, ~2 GB). Pronto pra ingestão.
      2>&1 | tee /tmp/comprasnet_ingest.log
    ```
    Peak RSS previsto ~3-5 GB; ETA ~40min.
-3. Validar IngestionRun no Neo4j local:
+4. Validar IngestionRun no Neo4j local:
    ```bash
    docker exec fiscal-neo4j cypher-shell -u neo4j -p changeme \
      "MATCH (r:IngestionRun {source_id:'comprasnet'}) RETURN r.run_id, r.status, r.rows_in, r.rows_loaded ORDER BY r.started_at DESC LIMIT 1"
    ```
-4. Rodar **pgfn** (independente, dados já em disco):
+5. Rodar **pgfn** (independente, dados já em disco):
    ```bash
    cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl
    uv run python -m bracc_etl.runner run --source pgfn \
@@ -44,8 +54,8 @@ SIDA_1 a SIDA_6, ~2 GB). Pronto pra ingestão.
      2>&1 | tee /tmp/pgfn_ingest.log
    ```
    `transform()` usa `iterrows()` (memo TODO) — ETA >1h. Dataset
-   GO-only pode ser menor que o memo previu (1.2GB filtrado upstream).
-5. Validar nodes/rels no grafo:
+   GO-only pode ser menor que o memo previu (1.9 GB filtrado upstream).
+6. Validar nodes/rels no grafo:
    ```cypher
    MATCH (c:Contract) WHERE c.source_id='comprasnet' RETURN count(c);
    MATCH (f:Finance) WHERE f.source_id='pgfn' RETURN count(f);
