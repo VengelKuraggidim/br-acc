@@ -2302,7 +2302,19 @@ function renderResultados(items, total, query) {
       <span class="badge badge-accent">${total}</span>
     </div>`;
 
-  const TIPOS_PERFIL = new Set(['person','federal_legislator','state_legislator','senator','go_vereador','citycouncilor']);
+  // Aceita as duas formas que a API devolve: ``state_legislator`` (underscored,
+  // passado pelos adapters do backend) e ``statelegislator`` (label Neo4j
+  // lowercased direto, formato que ``/buscar-tudo`` emite hoje via
+  // pwa_parity). Sem aceitar os dois, parlamentares (Lincoln Tejota,
+  // Vanderlan, etc.) aparecem na busca mas nao ficam clicaveis.
+  const TIPOS_PERFIL = new Set([
+    'person',
+    'federal_legislator', 'federallegislator',
+    'state_legislator', 'statelegislator',
+    'senator',
+    'go_vereador', 'govereador',
+    'citycouncilor',
+  ]);
   items.forEach((item, i) => {
     const icon = avatarIcons[item.icone] || avatarIcons.outro;
     const pepBadge = item.is_pep ? '<span class="pep-badge">PEP</span>' : '';
