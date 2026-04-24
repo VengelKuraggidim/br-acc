@@ -103,9 +103,9 @@ class TestMetadata:
         # CF Art. 29 VI: vereador em município >500k hab → até 75% do
         # subsídio do dep estadual. Invariante: se o subsídio base mudar
         # em custo_mandato_br, o cap do vereador precisa ser re-derivado.
-        assert _VEREADOR_GOIANIA_CAP == pytest.approx(
+        assert pytest.approx(
             _SUBSIDIO_DEP_ESTADUAL_GO * 0.75, rel=1e-9,
-        )
+        ) == _VEREADOR_GOIANIA_CAP
 
 
 # ---------------------------------------------------------------------------

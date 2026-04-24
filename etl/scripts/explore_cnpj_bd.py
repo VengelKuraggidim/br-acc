@@ -17,8 +17,12 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -152,8 +156,14 @@ def _export_full(
 
 @click.command()
 @click.option("--limit", type=int, default=None, help="Max rows per table (default: no limit)")
-@click.option("--export-state", type=str, default=None, help="Export subset for state (e.g. DF, SP)")
-@click.option("--full-export", is_flag=True, default=False, help="Export all 3 tables directly (no state filter)")
+@click.option(
+    "--export-state", type=str, default=None,
+    help="Export subset for state (e.g. DF, SP)",
+)
+@click.option(
+    "--full-export", is_flag=True, default=False,
+    help="Export all 3 tables directly (no state filter)",
+)
 @click.option("--output-dir", default="./data/cnpj/extracted", help="Output directory for exports")
 @click.option("--billing-project", type=str, default=None, help="GCP billing project ID")
 def main(
