@@ -1,3 +1,3 @@
-codigo_autor,nome_autor,objeto,valor
-1234,Maria da Silva Santos,Servico de limpeza,"500.000,00"
-5678,João Pedro Oliveira,Obra de reforma,"1.000.000,00"
+codigo_autor,nome_autor,objeto,valor,uf
+1234,Maria da Silva Santos,Servico de limpeza,"500.000,00",GOIÁS
+5678,João Pedro Oliveira,Obra de reforma,"1.000.000,00",GOIÁS
