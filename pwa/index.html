@@ -2302,10 +2302,12 @@ function renderResultados(items, total, query) {
       <span class="badge badge-accent">${total}</span>
     </div>`;
 
+  const TIPOS_PERFIL = new Set(['person','federal_legislator','state_legislator','senator','go_vereador','citycouncilor']);
   items.forEach((item, i) => {
     const icon = avatarIcons[item.icone] || avatarIcons.outro;
     const pepBadge = item.is_pep ? '<span class="pep-badge">PEP</span>' : '';
-    const onclick = item.tipo === 'person' ? `onclick="abrirPerfil('${item.id}')"` : '';
+    const temPerfil = TIPOS_PERFIL.has(item.tipo);
+    const onclick = temPerfil ? `onclick="abrirPerfil('${item.id}')"` : '';
     const avatarInner = item.foto_url
       ? `<img src="${item.foto_url}" alt="${item.nome}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${icon}'}))">`
       : icon;
@@ -2316,7 +2318,7 @@ function renderResultados(items, total, query) {
           <div class="result-name">${item.nome}${pepBadge}</div>
           <div class="result-detail">${item.detalhe || item.tipo}</div>
         </div>
-        ${item.tipo === 'person' ? '<span class="result-arrow">&#8250;</span>' : ''}
+        ${temPerfil ? '<span class="result-arrow">&#8250;</span>' : ''}
       </div>`;
   });
 

@@ -21,6 +21,11 @@
 // (sem id_camara → sem emendas, sem CEAP) quando o mesmo cluster tem um
 // ``:FederalLegislator`` com emendas carimbadas.
 //
+// Rescue por nome (Branch D): quando o seed é :Person orfao (ER perdeu
+// o cluster — TSE 2024 com cpf='sq:...', homonimos mesmo partido), a
+// query ainda tenta achar um cargo sibling por (name, uf). Match unico
+// = promove focal; ambiguidade ou ausencia = seed solitario como antes.
+//
 // Shape de retorno:
 //   politico {dict}    — properties + element_id + labels do político
 //   conexoes [list]    — lista de dicts, um por aresta que toca o político,
@@ -99,6 +104,44 @@ CALL {
   UNION
     // Branch C: match via canonical_id explícito (formato `canon_*`).
     MATCH (:CanonicalPerson {canonical_id: $entity_id})-[:REPRESENTS]->(p)
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    // Branch D: rescue por (name, uf) quando o seed é :Person orfao (sem
+    // cluster canonico). O ER ``entity_resolution_politicos_go`` deveria
+    // ter anexado, mas perde casos: TSE 2024 grava cpf="sq:{sq_cand}"
+    // (nao bate cpf_exact/cpf_suffix), e homonimos no mesmo partido
+    // quebram o disambiguate_by_partido (name_ambiguous → skip).
+    //
+    // Guards anti-falso-positivo:
+    //   * Seed e :Person SEM label de cargo (rescues so :Person puros).
+    //   * Seed nao tem CanonicalPerson — senao ja foi coberto pelas B/C.
+    //   * Seed tem name + uf definidos.
+    //   * Exatamente 1 cargo sibling (s) com (name, uf) identicos — size=1
+    //     guard evita promover em cenario ambiguo (2 senadores diferentes
+    //     homonimos na mesma UF e virtualmente impossivel, mas guard
+    //     cobre qualquer caso raro).
+    MATCH (p_seed:Person)
+    WHERE elementId(p_seed) = $entity_id
+    WITH p_seed
+    WHERE NOT (p_seed:Senator OR p_seed:FederalLegislator
+               OR p_seed:StateLegislator OR p_seed:GoVereador)
+      AND NOT EXISTS { (p_seed)<-[:REPRESENTS]-(:CanonicalPerson) }
+      AND coalesce(p_seed.name, '') <> ''
+      AND coalesce(p_seed.uf, '') <> ''
+    MATCH (s)
+    WHERE s.name = p_seed.name
+      AND coalesce(s.uf, p_seed.uf) = p_seed.uf
+      AND (s:Senator OR s:FederalLegislator
+           OR s:StateLegislator OR s:GoVereador)
+    WITH p_seed, collect(DISTINCT s) AS cargos
+    WHERE size(cargos) = 1
+    UNWIND (cargos + [p_seed]) AS p
     RETURN p,
            CASE
              WHEN 'Senator' IN labels(p) THEN 0
