@@ -653,18 +653,23 @@ class TestAnalisarEmendasForaBase:
 
 
 class TestCalcularRedFlagsSummary:
-    def test_sem_alertas_baixo(self) -> None:
-        summary = calcular_red_flags_summary([])
-        assert summary.pontos == 0
-        assert summary.classificacao == "baixo"
-        assert summary.num_grave == 0
+    def test_sem_alertas_retorna_none(self) -> None:
+        """Sem alertas reais: não mostra "Baixo Risco" enganoso — omite banner."""
+        assert calcular_red_flags_summary([]) is None
 
-    def test_ignora_aviso_avaliacao_indisponivel(self) -> None:
-        """Alerta padrão de 'dados insuficientes' não infla score."""
+    def test_so_aviso_avaliacao_indisponivel_retorna_none(self) -> None:
+        """Só o sentinela de dados insuficientes: omite o banner."""
         alertas = [{"tipo": "info", "texto": "Avaliação indisponível no momento"}]
+        assert calcular_red_flags_summary(alertas) is None
+
+    def test_info_real_gera_summary(self) -> None:
+        """Alerta info *real* (não-sentinela): score sai de 0, banner aparece."""
+        alertas = [{"tipo": "info", "texto": "Sem emendas registradas"}]
         summary = calcular_red_flags_summary(alertas)
-        assert summary.pontos == 0
-        assert summary.classificacao == "baixo"
+        assert summary is not None
+        assert summary.pontos == 1
+        assert summary.classificacao == "medio"
+        assert summary.num_info == 1
 
     def test_um_grave_critico(self) -> None:
         alertas = [{"tipo": "grave", "texto": "X"}]

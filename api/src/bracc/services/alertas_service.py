@@ -963,13 +963,17 @@ _RED_FLAG_PESOS: dict[str, int] = {
 
 def calcular_red_flags_summary(
     alertas: list[dict[str, str]],
-) -> RedFlagsSummary:
+) -> RedFlagsSummary | None:
     """Agrega alertas em um score numérico + classificação legível.
 
     Pesos: grave=10, atencao=3, info=1, ok=0. Classificação:
     >=10 crítico, 5-9 alto, 1-4 médio, 0 baixo. Alertas informativos
     genéricos ("Avaliação indisponível") são ignorados pra não inflar
     a pontuação quando o perfil simplesmente não tem dados.
+
+    Retorna ``None`` quando nenhum alerta real sobra após o filtro — aí
+    o PWA omite o banner em vez de mostrar "Baixo Risco" enganoso para
+    perfis sem dados suficientes pra análise.
     """
     # Import tardio pra evitar ciclo alertas_service ↔ models.perfil
     # (models.perfil é referenciado só em TYPE_CHECKING no topo).
@@ -979,10 +983,12 @@ def calcular_red_flags_summary(
     num_atencao = 0
     num_info = 0
     pontos = 0
+    considerados = 0
     for a in alertas:
         texto = a.get("texto", "")
         if "Avaliação indisponível" in texto or "Avaliacao indisponivel" in texto:
             continue
+        considerados += 1
         tipo = a.get("tipo", "info")
         pontos += _RED_FLAG_PESOS.get(tipo, 0)
         if tipo == "grave":
@@ -991,6 +997,9 @@ def calcular_red_flags_summary(
             num_atencao += 1
         elif tipo == "info":
             num_info += 1
+
+    if considerados == 0:
+        return None
 
     classificacao: Literal["baixo", "medio", "alto", "critico"]
     if pontos >= 10:

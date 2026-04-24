@@ -1,62 +1,109 @@
-# Medium — `caged` (Novo CAGED, emprego formal) — 🚫 BLOQUEADO (2026-04-18)
+# Converter `caged` de `file_manifest` pra `script_download`
 
-> Bloqueado por dependência ausente `py7zr` (formato 7z dos dumps CAGED).
-> Reativar quando puder adicionar dep ao `pyproject.toml`.
+## Contexto
 
-**Status per registry**: `stale` — "Aggregate-only implementation". Upstream data-quality issue, not pure transport.
+Pipeline `caged` (Novo CAGED — emprego formal PDET/MTE) é um dos
+últimos 2 pipelines ainda em `acquisition_mode: file_manifest` no
+`config/bootstrap_all_contract.yml` (o outro é `rais`). Todos os ~32
+outros já migraram pra `script_download` com padrão `fetch_to_disk()`
+no módulo + CLI em `scripts/download_<name>.py`.
 
-**URL hints**:
-- PDET/MTE FTP: `ftp://ftp.mtps.gov.br/pdet/microdados/NOVO%20CAGED/<YYYY>/<YYYYMM>/CAGEDMOV<YYYYMM>.7z` (7z format — needs `py7zr` or `libarchive`)
-- HTTP mirror: `https://pdet.mte.gov.br/microdados-novo-caged` → login wall. Not usable programmatically.
+Bloqueado desde 2026-04-18 pela dependência ausente `py7zr` — upstream
+PDET serve microdados em `.7z` e stdlib Python não lê esse formato.
 
-**Gotchas**:
-- **7z archives**: Python stdlib does NOT include 7z. `py7zr` is the pure-Python lib; not in current deps. DO NOT add it unless no alternative — instead check if upstream also ships `.csv.gz` or similar.
-- Aggregate-only means the pipeline only computes totals, not per-CPF. That limits downstream graph enrichment — consider whether conversion is worth the scope complexity.
+Registro atual no contrato:
 
----
-
-## Paste-ready Agent prompt
-
-```
-## Context
-Brazilian fiscal-data project `br-acc`. Working dir: /home/alladrian/PycharmProjects/br-acc.
-
-Goal: convert `caged` (Novo CAGED employment stats) from file_manifest to script_download.
-
-Pipeline is registered as "stale, aggregate-only" — the conversion may be simpler than it looks if the extract() just reads a single monthly/annual CSV rather than the microdado dump.
-
-## Task
-
-1. **INVESTIGATE FIRST**:
-   - Read etl/src/bracc_etl/pipelines/caged.py carefully. What exactly does extract() read? Aggregate CSV? 7z archive? Parquet?
-   - Check etl/tests/fixtures/caged/ for schema hints.
-   - Only if extract() expects the raw 7z microdado, the conversion requires py7zr dep (DO NOT add without confirming no alternative).
-2. Find the matching upstream:
-   - PDET: https://pdet.mte.gov.br/microdados-novo-caged (may require form submission)
-   - FTP: ftp://ftp.mtps.gov.br/pdet/microdados/NOVO%20CAGED/
-3. Write fetch_to_disk matching the pipeline's schema. If upstream serves 7z and pipeline expects CSV, decide: use py7zr in fetch_to_disk OR punt and mark skipped.
-4. Smoke-test 1 month.
-
-## Constraints
-
-- DO NOT edit config/bootstrap_all_contract.yml.
-- DO NOT commit, update memory.
-- **ASK before adding py7zr** — it's a non-trivial dep.
-- File scope: scripts/download_caged.py + etl/src/bracc_etl/pipelines/caged.py.
-- If you conclude the conversion is blocked (7z + no dep, or auth wall, or upstream deprecated), DO NOT force it. Report back with a clear blocker.
-
-## Deliverable
-
-URL + format, output sizes, extract+transform counts, contract snippet (OR a skip-reason paragraph if blocked):
 ```json
 {
   "pipeline_id": "caged",
-  "acquisition_mode": "script_download",
+  "acquisition_mode": "file_manifest",
   "required_inputs": ["data/caged/*"],
-  "blocking_reason_if_any": "Aggregate-only implementation; upstream monthly dumps use 7z archives — conversion may require py7zr dep.",
-  "core": false,
-  "download_commands": ["cd /workspace/etl && uv run python ../scripts/download_caged.py --output-dir ../data/caged"]
+  "blocking_reason_if_any": "Upstream PDET serve microdados em .7z; py7zr nao esta nos deps. Pipeline aggregate-only/stale — conversao tem ROI baixo. Re-avaliar quando py7zr for aprovado ou quando PDET expor mirror .csv.gz.",
+  "core": false
 }
 ```
-Plus files modified.
+
+Pipeline é **aggregate-only / stale**: só computa totais de admissão e
+desligamento por `ano+mês+UF+município+CNAE subclasse+CBO+tipo` e grava
+como nó `:LaborStats`. Não faz linkage a `:Person`/`:Company`. ROI de
+converter é baixo comparado ao esforço de destravar o `.7z`.
+
+## Status atual do upstream
+
+- **PDET/MTE FTP**: `ftp://ftp.mtps.gov.br/pdet/microdados/NOVO%20CAGED/<YYYY>/<YYYYMM>/CAGEDMOV<YYYYMM>.7z` — cada mês ~150–400 MB descompactado.
+- **Portal HTTP**: `https://pdet.mte.gov.br/microdados-novo-caged` — login wall; não programático.
+- **Extract do pipeline** (`etl/src/bracc_etl/pipelines/caged.py:96-100`): espera `caged_*.csv` em `data/caged/`. Lê como `dtype=str`, `keep_default_na=False`, separador default (vírgula). Colunas esperadas: `ano`, `mes`, `sigla_uf`, `id_municipio`, `cnae_2_subclasse`, `cbo_2002`, `tipo_movimentacao`, `salario_mensal`.
+
+Ou seja, `fetch_to_disk` teria que: baixar `.7z` mensal → descompactar
+→ renomear/remapear colunas (PDET usa `UF`, `Município`, `Seção`,
+`Subclasse 2.0 CNAE`, etc., em maiúsculas e com acento) → salvar como
+`caged_<YYYYMM>.csv` no layout que o `extract()` já consome.
+
+## Bloqueios
+
+1. **`py7zr` não está em `pyproject.toml`.** Alternativas:
+   - `libarchive` → binding C, depende de lib de sistema (`libarchive-dev`); ruim em Docker slim.
+   - `7z` CLI via `subprocess` → precisa do binário instalado no host; frágil.
+   - Pura-Python sem dep → inviável para 7z.
+2. **Aggregate-only / stale**: conversão não desbloqueia enriquecimento de grafo — `:LaborStats` CAGED fica como sector reference data, e nem é consumido em query política GO hoje.
+
+## Como investigar antes de mexer
+
+Antes de defender `py7zr`, checar se PDET começou a publicar mirror em
+formato que stdlib lê:
+
+```bash
+# listing do diretório do mês
+curl -s 'ftp://ftp.mtps.gov.br/pdet/microdados/NOVO%20CAGED/2024/202401/'
+# procurar extensões alternativas: .csv.gz, .zip, .parquet
 ```
+
+Se houver `.csv.gz` ou `.zip`, vira quick-win: `fetch_to_disk` usa só
+`httpx` + stdlib (`gzip` / `zipfile`), sem dep nova.
+
+## Fix proposto (quando desbloquear)
+
+### Rota A — PDET publicar mirror `.csv.gz`/`.zip` (preferida)
+
+1. `fetch_to_disk(output_dir, *, year, month, limit=None)` em `etl/src/bracc_etl/pipelines/caged.py`:
+   - `httpx` stream download → descomprime com `gzip`/`zipfile` → remapeia colunas pra layout lower-case esperado pelo `extract()` → salva `caged_<YYYYMM>.csv`.
+   - Respeita `limit` cortando linhas pré-gravação.
+2. Criar `scripts/download_caged.py` (argparse):
+   - `--year` obrigatório, `--month` repetível (default = todos os 12), `--output-dir`, `--limit`.
+3. Smoke test:
+   ```python
+   from unittest.mock import MagicMock
+   from bracc_etl.pipelines.caged import CagedPipeline
+   p = CagedPipeline(driver=MagicMock(), data_dir="./data")
+   p.extract(); p.transform(); p.load()  # load escreve LaborStats
+   ```
+4. Flip contract entry: `acquisition_mode: script_download`, limpar `blocking_reason_if_any`, adicionar `download_commands`.
+
+### Rota B — adicionar `py7zr` ao projeto
+
+Só se Rota A não render e algum débito concreto pedir LaborStats CAGED.
+Confirmar com dona do projeto antes de mexer em `pyproject.toml`.
+Passos iguais à Rota A, mas com descompactação via `py7zr.SevenZipFile`.
+
+## Prioridade
+
+**Baixa.** Pipeline é aggregate-only e não está no caminho quente da
+ingesta política GO. Deixar na fila até:
+
+- Alguém pedir `:LaborStats` CAGED em análise; OU
+- PDET publicar mirror `.csv.gz`/`.zip` (então vira quick-win, fica alta); OU
+- Projeto decidir adicionar `py7zr` por outro motivo.
+
+## Arquivos envolvidos
+
+- `etl/src/bracc_etl/pipelines/caged.py` — adicionar `fetch_to_disk()` no módulo.
+- `scripts/download_caged.py` — criar (CLI argparse).
+- `config/bootstrap_all_contract.yml` — flip `acquisition_mode` + limpar `blocking_reason_if_any` + adicionar `download_commands`.
+- `pyproject.toml` — (condicional, só Rota B) adicionar `py7zr`.
+
+## Referências
+
+- Padrão canônico: `todo-list-prompts/very_high_priority/script-download-conversions/PATTERN.md`.
+- Exemplo minimalista: `etl/src/bracc_etl/pipelines/tcu.py` + `scripts/download_tcu.py`.
+- CSV Portal Transparência: `etl/src/bracc_etl/pipelines/tesouro_emendas.py` + `scripts/download_tesouro_emendas.py`.
+- ZIP em memória (pattern se upstream publicar `.zip`): `etl/src/bracc_etl/pipelines/camara.py::_download_ceap_csv`.
