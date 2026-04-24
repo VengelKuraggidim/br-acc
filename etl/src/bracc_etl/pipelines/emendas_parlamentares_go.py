@@ -434,6 +434,14 @@ class EmendasParlamentaresGoPipeline(Pipeline):
             autor_normalizado = normalize_name(autor_nome)
             for item in items:
                 fields = _extract_fields(item)
+                # Guard anti-homônimo: o endpoint /emendas?nomeAutor= do Portal
+                # filtra por nome, então retorna emendas de deputados de outras
+                # UFs que tenham o mesmo nome de um deputado GO. Descartamos
+                # tudo que não seja GO — emenda individual de deputado GO vai
+                # pra base eleitoral GO; cross-UF é raro e não vale o risco de
+                # contaminar o perfil com dados de homônimo.
+                if fields["uf"] not in ("GO", "GOIÁS", "GOIAS"):
+                    continue
                 aid = _amendment_id(
                     autor_normalizado,
                     fields["ano"],
