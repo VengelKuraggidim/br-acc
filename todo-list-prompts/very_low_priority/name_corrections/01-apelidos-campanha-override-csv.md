@@ -1,4 +1,18 @@
-# Override manual para apelidos de campanha sem honorífico — ⏳ PENDENTE (2026-04-18)
+# Override manual para apelidos de campanha sem honorífico — 🟡 CASO CANÔNICO RESOLVIDO (2026-04-24)
+
+> Audit 2026-04-24 no Neo4j local: canon_camara_204419 (GLAUSTIN DA FOKUS)
+> **já está matched** via fase 4 `cpf_suffix_cargo` (Person "GLAUSKSTON
+> BATISTA RIOS", CPF `607.512.661-91`, conf 0.85). A regra 4 foi adicionada
+> depois que esta TODO foi redigida (2026-04-18) e resolveu o caso original
+> sem infra manual. Auditoria confirma zero clusters GO atualmente órfãos
+> por apelido de campanha.
+>
+> Rebaixado pra `very_low_priority/`: infra de override CSV vira reserva
+> pra eventual caso futuro onde nenhuma regra automática (1-4) aplique.
+> Se usuária vir um cluster órfão que não case com CPF-suffix, só aí o
+> débito volta pra ativa.
+
+## Original
 
 > Complemento do pipeline `entity_resolution_politicos_go` pra cobrir o
 > "longo tail" de apelidos que o `name_stripped` não pega. Caso canônico:

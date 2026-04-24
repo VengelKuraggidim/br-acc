@@ -202,18 +202,20 @@ Débito `repopular-ceap-aura.md` resolvido em 2026-04-22: pipeline
 `:LegislativeExpense` em prod), mas rels `:INCURRED` estavam sem props
 (run anterior ao fix `21cc860`). Backfill Cypher preencheu
 `tipo/ano/mes/valor_liquido`; API `/politico/<id_camara>` agora retorna
-`despesas_gabinete` populado. Débito colateral de observabilidade aberto
-em `medium_priority/debitos/meta-stats-legislative-expense-count.md`.
+`despesas_gabinete` populado. Débito colateral
+`meta-stats-legislative-expense-count.md` fechado em 2026-04-24: cypher
+(`meta_stats.cypher:59`) e router (`meta.py:100-102`) já expunham o
+campo antes desta auditoria — o md é que estava desatualizado.
 
 Débito `backfill-ano-doou-rels.md` resolvido em 2026-04-22: 34.164/46.449
 rels `:DOOU` em prod tinham `ano IS NULL` (todas com `year` preenchido —
 pipelines TSE legados). Backfill `SET r.ano = r.year` via
 `apoc.periodic.iterate` cobriu 100%. API `/politico/<eid>` agora devolve
 doadores PJ/PF (validado: Jovair Arantes, CPF `040.359.761-72` → 4
-doadores pessoa + 2 empresa, R$ 605k em 2022). Follow-up opcional em
-`medium_priority/debitos/tightening-filtro-ano-doou.md` (restringir
-filtro pra descartar `ano IS NULL` — só faz sentido junto do próximo
-deploy da `bracc-api`).
+doadores pessoa + 2 empresa, R$ 605k em 2022). Follow-up
+`medium_priority/debitos/tightening-filtro-ano-doou.md` fechado em
+2026-04-24 (commit `0c28ce5`): filtro agora descarta `ano IS NULL`
+ativamente — falha rápido se pipeline futuro esquecer de carimbar.
 
 Débito `aura-prod-source-id-migracao.md` resolvido em 2026-04-22: dry-run
 mostrou zero resíduos de `portal_transparencia` / `tribunal_superior_eleitoral`
