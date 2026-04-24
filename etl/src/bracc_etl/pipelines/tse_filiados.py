@@ -306,7 +306,7 @@ def fetch_to_disk(
     # default flow). If ADC is missing, the Client() ctor below would raise
     # DefaultCredentialsError mid-query — more useful to surface up front.
     try:
-        import google.auth  # type: ignore[import-untyped]
+        import google.auth
         google.auth.default()
     except google.auth.exceptions.DefaultCredentialsError as exc:
         logger.warning(

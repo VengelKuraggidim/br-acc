@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pandas as pd
-from defusedxml import ElementTree as DefusedET
+from defusedxml import ElementTree as DefusedET  # type: ignore[import-untyped]
 
 from bracc_etl.archival import archive_fetch
 from bracc_etl.base import Pipeline

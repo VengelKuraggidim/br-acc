@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import httpx
@@ -333,7 +333,7 @@ class TestFetchToDisk:
     """``fetch_to_disk`` paginates the search API and writes the CSV."""
 
     def _mock_client(
-        self, pages: list[list[dict]],
+        self, pages: list[list[dict[str, Any]]],
     ) -> httpx.Client:
         """Build an httpx.Client with MockTransport that returns pages in
         Spring Boot Page shape. Last page sets ``last: True``."""
@@ -342,7 +342,7 @@ class TestFetchToDisk:
             page = int(params.get("page", "0"))
             size = int(params.get("size", "25"))
             if page >= len(pages):
-                content: list[dict] = []
+                content: list[dict[str, Any]] = []
                 is_last = True
             else:
                 content = pages[page]

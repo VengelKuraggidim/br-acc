@@ -223,6 +223,7 @@ def fetch_to_disk(
             follow_redirects=True,
             headers={"User-Agent": _USER_AGENT},
         )
+    assert client is not None  # narrowed by both branches above
     try:
         rows_written = 0
         with out_csv.open("w", encoding="utf-8", newline="") as fh:

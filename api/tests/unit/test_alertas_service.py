@@ -736,6 +736,7 @@ class TestCalcularRedFlagsSummary:
     def test_um_grave_critico(self) -> None:
         alertas = [{"tipo": "grave", "texto": "X"}]
         summary = calcular_red_flags_summary(alertas)
+        assert summary is not None
         assert summary.pontos == 10
         assert summary.classificacao == "critico"
         assert summary.num_grave == 1
@@ -746,6 +747,7 @@ class TestCalcularRedFlagsSummary:
             {"tipo": "atencao", "texto": "Y"},
         ]
         summary = calcular_red_flags_summary(alertas)
+        assert summary is not None
         assert summary.pontos == 6
         assert summary.classificacao == "alto"
         assert summary.num_atencao == 2
@@ -753,6 +755,7 @@ class TestCalcularRedFlagsSummary:
     def test_um_atencao_medio(self) -> None:
         alertas = [{"tipo": "atencao", "texto": "X"}]
         summary = calcular_red_flags_summary(alertas)
+        assert summary is not None
         assert summary.pontos == 3
         assert summary.classificacao == "medio"
 

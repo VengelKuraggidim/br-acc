@@ -206,7 +206,7 @@ def _pipeline_accepts_kwarg(pipeline_cls: type, name: str) -> bool:
     if not has_var_kw:
         return False
     try:
-        src = inspect.getsource(pipeline_cls.__init__)
+        src = inspect.getsource(pipeline_cls.__init__)  # type: ignore[misc]
     except (OSError, TypeError):
         return False
     return f'kwargs.pop("{name}"' in src or f"kwargs.pop('{name}'" in src
