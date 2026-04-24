@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -136,3 +137,13 @@ if os.getenv("ENABLE_FEDERAL_ROUTES", "false").strip().lower() == "true":
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Archival snapshots: PWA abre `snapshot_url` (/archival/...) no browser
+# pra mostrar a cópia imutável do arquivo original. Em prod o nginx serve
+# esse prefixo; em dev/container montamos o diretório aqui pra que o mesmo
+# link funcione sem depender de reverse proxy.
+_archival_dir = os.getenv("ARCHIVAL_DIR", "/archival")
+if os.path.isdir(_archival_dir):
+    app.mount("/archival", StaticFiles(directory=_archival_dir), name="archival")
+    _logger.info("mounted /archival from %s", _archival_dir)

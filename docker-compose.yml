@@ -56,6 +56,9 @@ services:
       BRACC_SOURCES_COPY_PATH: /app/docs/sources_public_copy.json
     volumes:
       - ./docs:/app/docs:ro
+      # Snapshots archival servidos pelo `/archival/` prefix (StaticFiles).
+      # :ro porque a API só lê; a gravação é feita pelos pipelines do ETL.
+      - ./archival:/archival:ro
     depends_on:
       neo4j:
         condition: service_healthy

@@ -1543,6 +1543,17 @@ const API = (window.location.hostname === "localhost" || window.location.hostnam
   : "https://fiscal-cidadao-api-xfzjqhaisa-rj.a.run.app";
 let buscaTimeout = null;
 
+// Snapshots archival sao servidos pelo bracc-api em /archival/ (StaticFiles).
+// A API devolve o URL relativo (/archival/...) porque em prod o nginx casa
+// esse prefixo no mesmo host do PWA; em dev o PWA roda em :8001 e a API em
+// :8000, entao precisamos prefixar com API pra bater no host certo. URLs
+// absolutas (http/https) passam intactas.
+function resolverSnapshotUrl(url) {
+  if (!url) return url;
+  if (url.startsWith("/archival/")) return API + url;
+  return url;
+}
+
 // === CHIP DE FONTE (proveniência rastreável) ===
 // Renderiza rodapé discreto com ProvenanceBlock do backend.
 // Campos exibidos: source_id, source_record_id, ingested_at (data),
@@ -1662,7 +1673,7 @@ function renderDetalhesProveniencia(provenance, extras) {
     botoes += `<a class="btn-fonte" href="${escaparHTML(srcUrl)}" target="_blank" rel="noopener noreferrer">&#128279; Ver fonte original</a>`;
   }
   if (snapUrl) {
-    botoes += `<a class="btn-fonte btn-fonte-snapshot" href="${escaparHTML(snapUrl)}" target="_blank" rel="noopener noreferrer">&#128247; Ver cópia preservada</a>`;
+    botoes += `<a class="btn-fonte btn-fonte-snapshot" href="${escaparHTML(resolverSnapshotUrl(snapUrl))}" target="_blank" rel="noopener noreferrer">&#128247; Ver cópia preservada</a>`;
   }
   const botoesHtml = botoes ? `<div class="detalhes-botoes">${botoes}</div>` : "";
 
@@ -1691,7 +1702,7 @@ function renderListaDoacoes(doacoes) {
     }
     if (snapUrl) {
       links.push(
-        `<a href="${escaparHTML(snapUrl)}" target="_blank" rel="noopener noreferrer" title="Cópia preservada">&#128247; cópia</a>`,
+        `<a href="${escaparHTML(resolverSnapshotUrl(snapUrl))}" target="_blank" rel="noopener noreferrer" title="Cópia preservada">&#128247; cópia</a>`,
       );
     }
     const linksHtml = links.length
@@ -2122,7 +2133,7 @@ function renderChipFonte(provenance, variant) {
   }
   if (snapUrl) {
     const tip = ingDate ? `Ver cópia de ${ingDate}` : "Cópia preservada";
-    html += `<a href="${escaparHTML(snapUrl)}" target="_blank" rel="noopener noreferrer" title="${escaparHTML(tip)}">&#128247; Cópia preservada</a>`;
+    html += `<a href="${escaparHTML(resolverSnapshotUrl(snapUrl))}" target="_blank" rel="noopener noreferrer" title="${escaparHTML(tip)}">&#128247; Cópia preservada</a>`;
   }
   html += `</div>`;
   return html;
@@ -2846,6 +2857,10 @@ function renderPerfil(d) {
     const ordem = {abusivo: 0, elevado: 1, normal: 2};
     const sorted = [...d.comparacao_cidada].sort((a, b) => ordem[a.classificacao] - ordem[b.classificacao]);
 
+    html += `<details class="collapsible">
+        <summary>Ver ${sorted.length} categoria(s)</summary>
+        <div class="collapsible-body">`;
+
     sorted.forEach(c => {
       const labelMap = {abusivo: 'ABUSIVO', elevado: 'ELEVADO', normal: 'ACEITÁVEL'};
       // Barra proporcional: razao de 1x = 12.5%, capped at 100%
@@ -2867,7 +2882,7 @@ function renderPerfil(d) {
       </div>`;
     });
 
-    html += '</div>';
+    html += '</div></details></div>';
   }
 
   // Cross-check: valor declarado ao TSE vs valor ingerido no sistema
