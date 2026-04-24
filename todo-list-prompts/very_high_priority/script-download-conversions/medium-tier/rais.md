@@ -58,6 +58,15 @@ fundamentalmente o ROI da conversão.
    - Manter `credential_env: [GOOGLE_APPLICATION_CREDENTIALS]` no contrato.
    - Aceitar que pipeline só roda em ambientes com creds provisionadas (local dela hoje não é um deles).
 
+### Investigação 2026-04-23
+
+FTP listing `RAIS/2022/` retorna apenas `.7z` (RAIS_ESTAB_PUB.7z 91 MB
++ RAIS_VINC_PUB_*.7z um por região, total ~3 GB). Sem `.csv.gz`,
+`.zip` ou `.parquet` no espelho oficial. **Rota A via PDET fica
+indisponível** — ainda depende de outro espelho aberto (IPEA, FGV,
+DataLake) ou da Rota B (BigQuery + creds GCP). Próxima ação requer
+decisão da dona sobre dep + creds.
+
 ## Fix proposto (quando desbloquear)
 
 ### Rota A — CSV agregado em URL aberta (preferida)
