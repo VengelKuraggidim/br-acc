@@ -749,6 +749,75 @@ class TestAmbiguity:
         matched = next(e for e in pipeline.represents_rels if e["method"] == "name_exact_partido")
         assert matched["target_element_id"] == "n3"
 
+    def test_senador_sem_cpf_multiplos_persons_mesmo_partido_anexa_todos(
+        self, tmp_path: Path,
+    ) -> None:
+        # Caso Vanderlan: Senator PSD/GO sem CPF + 2 Persons homônimos
+        # PSD/GO (registros TSE de anos diferentes). name_exact pega
+        # ambos → disambiguate_by_partido retorna None (ambos PSD) →
+        # cairia no audit. Nova fase ``name_partido_multi`` anexa os
+        # dois sob a premissa de que homonimia real com partido+UF
+        # idênticos é virtualmente zero.
+        rows = [
+            _senator(
+                "n1", "VANDERLAN VIEIRA CARDOSO", partido="PSD",
+                id_senado="5899",
+            ),
+            _person(
+                "n2", "VANDERLAN VIEIRA CARDOSO",
+                cpf="144.649.692-91", partido="PSD", uf="GO",
+            ),
+            _person(
+                "n3", "VANDERLAN VIEIRA CARDOSO",
+                cpf=None, partido="PSD", uf="GO",
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        assert len(pipeline.canonical_rows) == 1
+        canonical = pipeline.canonical_rows[0]
+        assert canonical["canonical_id"] == "canon_senado_5899"
+        assert canonical["num_sources"] == 3
+
+        methods = sorted(e["method"] for e in pipeline.represents_rels)
+        assert methods == [
+            "cargo_root", "name_partido_multi", "name_partido_multi",
+        ]
+        # Confidence 0.78 (abaixo do name_exact=0.95).
+        multi_edges = [
+            e for e in pipeline.represents_rels
+            if e["method"] == "name_partido_multi"
+        ]
+        for edge in multi_edges:
+            assert edge["confidence"] == pytest.approx(0.78)
+        # Ambos Persons foram anexados.
+        attached_ids = {e["target_element_id"] for e in multi_edges}
+        assert attached_ids == {"n2", "n3"}
+
+    def test_sentinel_sq_cpf_nao_polui_indice_cpf(self, tmp_path: Path) -> None:
+        # Person com cpf='sq:90002105951' NÃO entra em persons_by_cpf
+        # (sem isso, virava o CPF fake '90002105951' e poderia colidir
+        # com cargo real). Validado indiretamente: Fed com CPF pleno
+        # cujos 4 últimos dígitos batem com o sq não puxa o sentinel
+        # pelo path cpf_suffix_*.
+        fed = _fed("n1", "DIFFERENT PERSON", id_camara="9999", partido="PT")
+        fed["cpf"] = "***.***.*51-00"  # suffix 5100
+        rows = [
+            fed,
+            _person(
+                "n2", "ALGUEM COM SQ",
+                cpf="sq:12345675100",  # suffix 5100 casualmente
+                partido="PT", uf="GO",
+                cargo_tse_values=["DEPUTADO FEDERAL"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+        # Só o cargo_root — sentinel sq não entrou em nenhum índice CPF.
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert methods == ["cargo_root"]
+
     def test_shadow_com_multiplos_clusters_vira_audit(self, tmp_path: Path) -> None:
         # 2 Feds com mesmo nome (improvável mas garante que shadow
         # não "chuta" entre eles).

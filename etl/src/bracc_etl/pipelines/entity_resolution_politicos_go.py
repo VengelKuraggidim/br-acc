@@ -59,6 +59,20 @@ regras 1-3 não pegam:
   acumulado em ~400-1000 candidatos GO por cargo gera ambiguidade
   frequente; audit+skip quando >1.
 
+* **name_partido_multi** (fase 4.5) — pra cargos SEM CPF publicado
+  (Senadores do pipeline ``senado_senadores_foto``; ``:StateLegislator``
+  quando a fonte ALEGO não traz CPF) onde ``name_exact`` retornou N>1
+  hits e ``_disambiguate_by_partido`` devolveu None. Anexa TODOS os
+  ``:Person`` GO com ``(name_normalized, partido, uf)`` idênticos ao
+  cargo. Justificativa: homonimia completa (mesmo nome + mesmo
+  partido + mesma UF) entre pessoas reais distintas é virtualmente
+  inexistente em cargos legislativos ativos — os N Persons são
+  registros TSE do mesmo candidato em anos diferentes (receitas,
+  bens, candidato). Conf 0.78 (mais baixa que name_exact). Sem essa
+  fase, o Senador Vanderlan Vieira Cardoso (PSD/GO) fica orfão com
+  ≥1 ``:Person`` GO PSD/GO com o mesmo nome e o perfil perde o
+  cluster canônico.
+
 * **shadow_name_exact** (fase 5) — ``:Person`` sem CPF, sem UF (nós bare
   "só name" originados de referências em outros pipelines, ex.: autores
   de inquéritos) com nome normalizado batendo exatamente com UM dos
@@ -96,7 +110,7 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
   "name_stripped" | "cpf_suffix_name" | "cpf_suffix_cargo" |
-  "shadow_name_exact" | "cargo_root"``.
+  "name_partido_multi" | "shadow_name_exact" | "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -250,6 +264,19 @@ def _is_masked_cpf(raw: str | None) -> bool:
     ``cpf_exact`` (vão pro ``name_*`` depois).
     """
     return bool(raw) and "*" in str(raw)
+
+
+def _is_sq_sentinel_cpf(raw: str | None) -> bool:
+    """Retorna True se o campo ``cpf`` é o sentinel ``sq:{sq_candidato}``.
+
+    O pipeline ``tse_prestacao_contas_go`` grava ``cpf="sq:{sq}"`` quando
+    o TSE 2024+ mascara o CPF. Esse valor não é um CPF real — ``_digits_only``
+    extrai os dígitos do sq como se fosse CPF, o que polui o índice
+    ``persons_by_cpf`` do ER com fake-CPFs que podem colidir com CPFs
+    plenos de outras pessoas (1/10^11, raro mas não zero). Detectamos
+    pelo prefixo ``sq:`` antes de normalizar pra dígitos.
+    """
+    return bool(raw) and str(raw).startswith("sq:")
 
 
 def _visible_cpf_suffix(raw: str | None) -> str:
@@ -566,7 +593,15 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         persons_by_name_stripped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         name_norm_counts: Counter[str] = Counter()
         for person in persons_go:
-            cpf_digits = _digits_only(person["cpf"])
+            cpf_raw = person["cpf"]
+            # Exclui sentinel ``sq:{sq_cand}`` do tse_prestacao_contas 2024
+            # e CPFs mascarados (``***.***.*NN-NN``) do índice CPF — não
+            # são CPFs reais. Sem isso, ``sq:90002105951`` virava CPF fake
+            # ``90002105951`` no índice.
+            if _is_sq_sentinel_cpf(cpf_raw) or _is_masked_cpf(cpf_raw):
+                cpf_digits = ""
+            else:
+                cpf_digits = _digits_only(cpf_raw)
             if cpf_digits and cpf_digits != "00000000000":
                 persons_by_cpf[cpf_digits].append(person)
             if person["name_normalized"]:
@@ -611,6 +646,25 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         # ("PROFESSOR ALCIDES") difere do registro TSE ("ALCIDES RIBEIRO
         # FILHO") por token honorífico não-padrão.
         self._attach_cpf_suffix_cargo_matches(
+            persons_go=persons_go,
+            claimed=person_elt_ids_in_cluster,
+        )
+
+        # ---- Fase 4.5: name + partido attach pra cargos sem CPF ----
+        # Senadores (senado_senadores_foto não publica CPF) e clusters
+        # de FederalLegislator onde o CPF não bateu pelas regras
+        # cpf_suffix_* caem aqui. name_exact com múltiplos hits no mesmo
+        # partido normalmente ia pro audit "name_ambiguous" e ficava
+        # órfão; aqui anexamos TODOS os Person GO com (name, partido,
+        # uf) identicos ao cargo. Justificativa: homonimia completa
+        # (mesmo nome + mesmo partido + mesma UF) entre pessoas reais
+        # distintas é virtualmente inexistente em cargos legislativos
+        # ativos. O que geramos são duplicatas de registros TSE do
+        # mesmo candidato em anos diferentes.
+        # Conf 0.78 (mais baixa que name_exact=0.95 porque o trade-off
+        # de ambiguidade é mais fraco — ``confidence_min`` no cluster
+        # sinaliza pro PWA que o match foi mais permissivo).
+        self._attach_name_partido_matches(
             persons_go=persons_go,
             claimed=person_elt_ids_in_cluster,
         )
@@ -820,7 +874,10 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         """
         persons_by_suffix: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for person in persons_go:
-            cpf_digits = _digits_only(person.get("cpf"))
+            cpf_raw = person.get("cpf")
+            if _is_sq_sentinel_cpf(cpf_raw) or _is_masked_cpf(cpf_raw):
+                continue
+            cpf_digits = _digits_only(cpf_raw)
             if len(cpf_digits) != 11 or cpf_digits == "00000000000":
                 continue
             persons_by_suffix[cpf_digits[-4:]].append(person)
@@ -899,7 +956,10 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         persons_with_full_cpf: set[str] = set()
         persons_by_suffix: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for person in persons_go:
-            cpf_digits = _digits_only(person.get("cpf"))
+            cpf_raw = person.get("cpf")
+            if _is_sq_sentinel_cpf(cpf_raw) or _is_masked_cpf(cpf_raw):
+                continue
+            cpf_digits = _digits_only(cpf_raw)
             if len(cpf_digits) != 11 or cpf_digits == "00000000000":
                 continue
             persons_with_full_cpf.add(person["element_id"])
@@ -960,6 +1020,95 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                         for p in candidates
                     ],
                 })
+
+    def _attach_name_partido_matches(
+        self,
+        persons_go: list[dict[str, Any]],
+        claimed: set[str],
+    ) -> None:
+        """Anexa Person GO ao cluster via (name + partido + uf) — cargo sem CPF.
+
+        Cenário-alvo: cargos sem CPF publicado (Senadores, porque o
+        pipeline ``senado_senadores_foto`` só traz id_senado + partido;
+        StateLegislator quando a fonte ALEGO não tem partido) onde
+        ``name_exact`` retorna múltiplos Persons e
+        ``_disambiguate_by_partido`` devolve None (todos com mesmo
+        partido ou partido do cargo ausente).
+
+        Regra: se o cargo tem ``partido`` e existe ≥1 Person GO com
+        (name_normalized, partido, uf) idênticos que ainda não está em
+        nenhum cluster, anexa TODOS. Mesma pessoa real, múltiplas
+        inscrições TSE ao longo dos anos (receitas, bens, candidato)
+        geram N Person nodes no grafo com o mesmo conjunto de atributos.
+
+        Salvaguarda: só roda em clusters cujo cargo tem CPF ausente
+        (None, '', ou sentinel ``sq:``) — se o cargo tem CPF, as
+        regras cpf_* já deveriam ter convergido.
+
+        Confidence 0.78 — intencionalmente mais baixa que name_exact
+        (0.95) porque homonimia completa em mesma UF + mesmo partido é
+        rara mas teoricamente possível; ``confidence_min`` do cluster
+        decresce e o PWA pode sinalizar "match permissivo" no futuro.
+        """
+        # Indexa Persons por (name_normalized, partido_upper, uf).
+        persons_by_name_partido: dict[
+            tuple[str, str, str], list[dict[str, Any]],
+        ] = defaultdict(list)
+        for person in persons_go:
+            name_norm = person.get("name_normalized")
+            partido_raw = person.get("partido")
+            uf_raw = person.get("uf")
+            if not name_norm or not partido_raw or not uf_raw:
+                continue
+            partido_upper = str(partido_raw).strip().upper()
+            uf_upper = str(uf_raw).strip().upper()
+            if not partido_upper or not uf_upper:
+                continue
+            persons_by_name_partido[
+                (name_norm, partido_upper, uf_upper)
+            ].append(person)
+
+        for cluster in self._clusters.values():
+            cargo = cluster.get("cargo")
+            if not cargo:
+                continue
+            cargo_cpf = cargo.get("cpf")
+            # Pula cargo com CPF pleno ou mascarado — as regras
+            # cpf_exact/cpf_suffix_* já tiveram chance. Prossegue só
+            # quando CPF é literalmente ausente/vazio ou sentinel sq.
+            if cargo_cpf and not _is_sq_sentinel_cpf(cargo_cpf):
+                # Inclui mascarado ``***.***.*NN-NN`` no skip porque fase 3/4
+                # já cobrem esse formato.
+                cpf_digits = _digits_only(cargo_cpf)
+                if len(cpf_digits) >= 4 or _is_masked_cpf(cargo_cpf):
+                    continue
+            cargo_name = cargo.get("name_normalized") or ""
+            cargo_partido = str(cargo.get("partido") or "").strip().upper()
+            cargo_uf = str(cargo.get("uf") or "").strip().upper()
+            if not cargo_name or not cargo_partido or not cargo_uf:
+                continue
+            canonical_id = cluster["canonical"]["canonical_id"]
+            already_in_cluster = {
+                e["target_element_id"] for e in cluster["edges"]
+            }
+
+            candidates = [
+                p for p in persons_by_name_partido.get(
+                    (cargo_name, cargo_partido, cargo_uf), [],
+                )
+                if p["element_id"] not in claimed
+                and p["element_id"] not in already_in_cluster
+            ]
+            if not candidates:
+                continue
+            for person in candidates:
+                self._attach_source(
+                    canonical_id=canonical_id,
+                    node=person,
+                    method="name_partido_multi",
+                    confidence=0.78,
+                )
+                claimed.add(person["element_id"])
 
     def _disambiguate_by_partido(
         self,
