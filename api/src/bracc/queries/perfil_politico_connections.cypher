@@ -134,14 +134,20 @@ CALL {
       AND NOT EXISTS { (p_seed)<-[:REPRESENTS]-(:CanonicalPerson) }
       AND coalesce(p_seed.name, '') <> ''
       AND coalesce(p_seed.uf, '') <> ''
-    MATCH (s)
-    WHERE s.name = p_seed.name
-      AND coalesce(s.uf, p_seed.uf) = p_seed.uf
-      AND (s:Senator OR s:FederalLegislator
-           OR s:StateLegislator OR s:GoVereador)
-    WITH p_seed, collect(DISTINCT s) AS cargos
+    MATCH (cargo)
+    WHERE cargo.name = p_seed.name
+      AND coalesce(cargo.uf, p_seed.uf) = p_seed.uf
+      AND (cargo:Senator OR cargo:FederalLegislator
+           OR cargo:StateLegislator OR cargo:GoVereador)
+    WITH p_seed, collect(DISTINCT cargo) AS cargos
     WHERE size(cargos) = 1
-    UNWIND (cargos + [p_seed]) AS p
+    WITH p_seed, cargos[0] AS cargo
+    // Quando o cargo tem cluster canonico proprio (caso normal), traz
+    // TODOS os irmaos — essencial pra surfacear edges AUTOR_EMENDA/DOOU
+    // que ficam no :Person TSE irmao do cargo, nao no cargo em si.
+    OPTIONAL MATCH (cargo)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(cluster_sib)
+    WITH p_seed, cargo, collect(DISTINCT cluster_sib) AS cluster_sibs
+    UNWIND (cluster_sibs + [cargo, p_seed]) AS p
     RETURN p,
            CASE
              WHEN 'Senator' IN labels(p) THEN 0
