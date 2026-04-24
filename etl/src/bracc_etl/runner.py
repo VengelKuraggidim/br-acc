@@ -287,6 +287,17 @@ def cli() -> None:
         "limitar volume em Aura Free tier."
     ),
 )
+@click.option(
+    "--max-expense-months",
+    type=int,
+    default=None,
+    help=(
+        "Quantos meses-periodo baixar no fetch online de despesas "
+        "parlamentares (so honored por pipelines que expoem o kwarg, ex. "
+        "alego). Default do pipeline e 3 (trimestre); passar 12 pega a "
+        "legislatura anual, 0 baixa todos os periodos publicados."
+    ),
+)
 def run(
     source: str,
     neo4j_uri: str,
@@ -302,6 +313,7 @@ def run(
     history: bool,
     batch_size: int | None,
     start_year: int | None,
+    max_expense_months: int | None,
 ) -> None:
     """Run an ETL pipeline."""
     os.environ["NEO4J_DATABASE"] = neo4j_database
@@ -339,6 +351,14 @@ def run(
             pipeline_cls, "start_year",
         ):
             extra_kwargs["start_year"] = start_year
+        # max_expense_months idem (ex.: AlegoPipeline). 0 no CLI vira None
+        # pra o pipeline (baixa todos os periodos); 1+ passa direto.
+        if max_expense_months is not None and _pipeline_accepts_kwarg(
+            pipeline_cls, "max_expense_months",
+        ):
+            extra_kwargs["max_expense_months"] = (
+                None if max_expense_months == 0 else max_expense_months
+            )
         pipeline = pipeline_cls(
             driver=driver,
             data_dir=data_dir,

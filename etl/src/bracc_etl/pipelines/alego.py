@@ -467,6 +467,12 @@ class AlegoPipeline(Pipeline):
         chunk_size: int = 50_000,
         **kwargs: Any,
     ) -> None:
+        # Quantos meses-período puxar do endpoint /verbas_indenizatorias/exibir
+        # no fallback online. Default 3 cobre o trimestre corrente (uso normal
+        # pra não bombardear a API), 12 cobre a legislatura anual, None baixa
+        # tudo (~180 períodos 2011→hoje). Consumido via kwargs.pop pra o
+        # runner poder injetar sem quebrar outros pipelines.
+        self._max_expense_months: int | None = kwargs.pop("max_expense_months", 3)
         super().__init__(driver, data_dir, limit=limit, chunk_size=chunk_size, **kwargs)
         self._raw_deputados: pd.DataFrame = pd.DataFrame()
         self._raw_cota: pd.DataFrame = pd.DataFrame()
@@ -526,7 +532,7 @@ class AlegoPipeline(Pipeline):
         # ``source_snapshot_uri`` (offline/fixture path preserva o
         # contrato opt-in).
         if not have_local:
-            self._fetch_from_api()
+            self._fetch_from_api(max_expense_months=self._max_expense_months)
 
         if self.limit:
             self._raw_deputados = self._raw_deputados.head(self.limit)
