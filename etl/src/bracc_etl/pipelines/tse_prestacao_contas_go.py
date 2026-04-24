@@ -800,10 +800,16 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             entry["patrimonio_declarado"] += valor
 
         # --- Consolidar :Person rows com proveniência ---
-        for cpf_formatted, entry in by_cpf.items():
+        # Itera por ``entry`` somente — a dict key em ``by_cpf`` é
+        # overloaded ("sq:<X>" quando CPF mascarado) e contaminaria o node.
+        # O valor real do CPF vive em ``entry["cpf"]`` (string vazia quando
+        # sem CPF real). Usar a key direto aqui gerava :Person {cpf:"sq:X"}
+        # paralelos ao :Person {sq_candidato:X} do pipeline ``tse_bens``
+        # (19k pares duplicados no grafo antes da migração mergedora).
+        for entry in by_cpf.values():
             sq = str(entry["sq_candidato"] or "")
             props: dict[str, Any] = {
-                "cpf": cpf_formatted,
+                "cpf": entry["cpf"],
                 "name": entry["name"],
                 "uf": self.uf,
                 "numero_candidato": sq,
@@ -912,7 +918,12 @@ class TsePrestacaoContasGoPipeline(Pipeline):
     # ------------------------------------------------------------------
 
     def load(self) -> None:
-        if not self.persons:
+        # Early-return abrange ``self.persons`` E ``_persons_nocpf``:
+        # em 2024+ o TSE publica CPFs mascarados e é comum um ZIP só ter
+        # rows no bucket nocpf (persons = [], nocpf = N). Checar só
+        # ``self.persons`` silenciosamente descartava esses loads.
+        nocpf_pending = bool(getattr(self, "_persons_nocpf", None))
+        if not self.persons and not nocpf_pending:
             logger.warning("[tse_prestacao_contas_go] nothing to load")
             return
         loader = Neo4jBatchLoader(self.driver)

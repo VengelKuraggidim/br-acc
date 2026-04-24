@@ -607,6 +607,49 @@
       border-top: 1px solid var(--border);
     }
 
+    /* === INFO TIP (ⓘ clicavel compacto) === */
+    details.info-tip {
+      display: inline-block;
+      position: relative;
+      vertical-align: middle;
+      margin: 0 2px;
+    }
+    details.info-tip > summary {
+      list-style: none;
+      cursor: pointer;
+      display: inline-block;
+      padding: 1px 4px;
+      font-size: 13px;
+      line-height: 1;
+      color: var(--text-muted);
+      user-select: none;
+      transition: color 0.15s;
+    }
+    details.info-tip > summary::-webkit-details-marker { display: none; }
+    details.info-tip > summary::marker { content: ""; }
+    details.info-tip > summary:hover { color: var(--text); }
+    details.info-tip[open] > summary { color: var(--accent); }
+    details.info-tip > .info-tip-body {
+      position: absolute;
+      top: 24px;
+      left: 0;
+      z-index: 50;
+      width: max-content;
+      max-width: min(320px, calc(100vw - 40px));
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.55;
+      color: var(--text-secondary);
+      text-align: left;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+      white-space: normal;
+    }
+    details.info-tip > .info-tip-body a { color: var(--text-accent); }
+
     /* === EMENDA CARD === */
     .emenda-card {
       background: var(--bg-card);
@@ -1680,6 +1723,13 @@ function renderDatasDoacao(doador) {
   return ` &middot; em ${escaparHTML(primeira || ultima)}`;
 }
 
+// Renderiza um pequeno icone ⓘ clicavel com conteudo explicativo em popover.
+// Usa <details> nativo; conteudo pode conter HTML (links ja escapados a montante).
+function renderInfoTip(conteudoHTML) {
+  if (!conteudoHTML) return '';
+  return `<details class="info-tip"><summary title="Mais informacoes">&#9432;</summary><div class="info-tip-body">${conteudoHTML}</div></details>`;
+}
+
 // ===================== Doadores de campanha (PJ + PF) =====================
 // Helpers top-level porque o bloco "Quem financiou a campanha" tem controles
 // reativos (busca/ordem/filtro) que re-renderizam só o container de grupos.
@@ -2658,10 +2708,18 @@ function renderPerfil(d) {
     const corFundo = v.status === 'ok' ? 'rgba(16,185,129,0.08)' : v.status === 'atencao' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
     const icone = v.status === 'ok' ? '&#10004;' : v.status === 'atencao' ? '&#9888;' : '&#128680;';
     const txtStatus = v.status === 'ok' ? `Bateu com o TSE (diferença de ${v.divergencia_pct}%)` : v.status === 'atencao' ? `Divergência moderada de ${v.divergencia_pct}%` : `Divergência grande de ${v.divergencia_pct}%`;
+    let infoTipTse = '';
+    if (v.status !== 'ok') {
+      const linkTse = `<a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal de prestação de contas TSE</a>`;
+      const msgDivergencia = v.direcao === 'gap_ingestao'
+        ? `<strong>Por que a diferença?</strong> Nosso banco ingeriu menos doações que o TSE declarou. Alguns repasses (fundo partidário, FEFC) podem não ter sido carregados no grafo. O valor <strong>oficial é o do TSE</strong> — verifique a fonte no ${linkTse}.`
+        : `<strong>Por que a diferença?</strong> Estranho: nosso sistema mostra mais doações agregadas que o TSE declarou. Como nossa fonte primária é o próprio TSE, isso provavelmente indica duplicação na nossa agregação. Verifique as fontes oficiais no ${linkTse} — não estamos acusando ninguém.`;
+      infoTipTse = renderInfoTip(msgDivergencia);
+    }
     html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:20px;">${icone}</span>
-        <div style="font-weight:700; font-size:14px;">Confere com o TSE? ${txtStatus}</div>
+        <div style="font-weight:700; font-size:14px;">Confere com o TSE? ${txtStatus}${infoTipTse}</div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
@@ -2673,15 +2731,6 @@ function renderPerfil(d) {
           <div style="font-size:16px; font-weight:700;">${v.total_ingerido_fmt}</div>
         </div>
       </div>`;
-    if (v.status !== 'ok') {
-      const linkTse = `<a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener" style="color:var(--text-accent); text-decoration:underline;">portal de prestação de contas TSE</a>`;
-      const msgDivergencia = v.direcao === 'gap_ingestao'
-        ? `&#9432; <strong>Por que a diferença?</strong> Nosso banco ingeriu menos doações que o TSE declarou. Alguns repasses (fundo partidário, FEFC) podem não ter sido carregados no grafo. O valor <strong>oficial é o do TSE</strong> — verifique a fonte no ${linkTse}.`
-        : `&#9432; <strong>Por que a diferença?</strong> Estranho: nosso sistema mostra mais doações agregadas que o TSE declarou. Como nossa fonte primária é o próprio TSE, isso provavelmente indica duplicação na nossa agregação (débito aberto: investigar-duplicacao-doacoes-tse). Verifique as fontes oficiais no ${linkTse} — não estamos acusando ninguém.`;
-      html += `<div style="font-size:12px; color:var(--text-secondary); line-height:1.55; padding:8px 10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:10px;">
-        ${msgDivergencia}
-      </div>`;
-    }
     if (v.breakdown_tse && v.breakdown_tse.length) {
       html += `<details class="collapsible" style="margin-top:4px;">
         <summary>Ver detalhamento oficial do TSE (${v.breakdown_tse.length} origens)</summary>
@@ -2709,10 +2758,17 @@ function renderPerfil(d) {
       : c.status === 'atencao'
         ? `Divergência moderada de ${c.divergencia_pct}%`
         : `Divergência grande de ${c.divergencia_pct}%`;
+    let infoTipContas = '';
+    if (c.status !== 'ok') {
+      const msg = c.direcao === 'despesas_excedem'
+        ? `O candidato declarou ter gasto MAIS do que arrecadou. Pode ter explicação legítima (empréstimo declarado, doação posterior, gastos próprios). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`
+        : `O candidato declarou ter arrecadado MAIS do que gastou. Sobra de campanha pode ter destino regulamentado (devolução ao TSE, transferência ao partido). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`;
+      infoTipContas = renderInfoTip(msg);
+    }
     html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:20px;">${icone}</span>
-        <div style="font-weight:700; font-size:14px;">Contas batem? Despesas vs Receitas TSE ${c.ano_eleicao} &mdash; ${txtStatus}</div>
+        <div style="font-weight:700; font-size:14px;">Contas batem? Despesas vs Receitas TSE ${c.ano_eleicao} &mdash; ${txtStatus}${infoTipContas}</div>
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
@@ -2724,26 +2780,14 @@ function renderPerfil(d) {
           <div style="font-size:16px; font-weight:700;">${c.total_despesas_fmt}</div>
         </div>
       </div>`;
-    if (c.status !== 'ok') {
-      const msg = c.direcao === 'despesas_excedem'
-        ? `O candidato declarou ter gasto MAIS do que arrecadou. Pode ter explicação legítima (empréstimo declarado, doação posterior, gastos próprios). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`
-        : `O candidato declarou ter arrecadado MAIS do que gastou. Sobra de campanha pode ter destino regulamentado (devolução ao TSE, transferência ao partido). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`;
-      html += `<div style="font-size:12px; color:var(--text-secondary); line-height:1.55; padding:8px 10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:4px;">
-        &#9432; ${msg}
-      </div>`;
-    }
     html += `</div>`;
   }
 
-  // Introducao leiga das conexoes (aparece antes dos cards especificos)
+  // Conexoes (doadores, socios, familia). Intro generica (descricao_conexoes)
+  // e aviso ADI 4650 ficam atras de ⓘ pra reduzir poluicao visual.
   const temDoadores = (d.doadores_empresa && d.doadores_empresa.length) || (d.doadores_pessoa && d.doadores_pessoa.length);
   const temSocios = d.socios && d.socios.length;
   const temFamilia = d.familia && d.familia.length;
-  if ((temDoadores || temSocios || temFamilia) && d.descricao_conexoes) {
-    html += `<div class="section fade-in" style="background:rgba(139,92,246,0.06);border-left:3px solid #8b5cf6;">
-      <div style="font-size:13px; line-height:1.55; color:var(--text-secondary);">${d.descricao_conexoes}</div>
-    </div>`;
-  }
 
   // Quem financiou a campanha
   if (temDoadores) {
@@ -2751,21 +2795,28 @@ function renderPerfil(d) {
       empresa: d.doadores_empresa || [],
       pessoa: d.doadores_pessoa || [],
     };
+    const tipIntroConexoes = d.descricao_conexoes
+      ? renderInfoTip(d.descricao_conexoes)
+      : '';
+    const tipADI = renderInfoTip(
+      `<strong>Empresas privadas NÃO podem doar para campanhas</strong> desde 2015 (decisão do STF — ADI 4650). Pessoas físicas podem doar até 10% da renda do ano anterior.<div style="margin-top:6px; font-size:11px; color:var(--text-muted);">CNPJs privados com doação após 2015 aparecem destacados em vermelho — verifique a fonte no link do card.</div>`
+    );
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(16,185,129,0.15);">&#128176;</span>
-          Quem financiou a campanha
+          Quem financiou a campanha${tipIntroConexoes}${tipADI}
         </div>
         <span class="badge badge-accent">${d.total_doacoes_fmt}</span>
       </div>
-      <div style="padding:10px 12px; margin-bottom:10px; background:rgba(59,130,246,0.08); border-left:3px solid #3b82f6; border-radius:6px; font-size:12px; line-height:1.55; color:var(--text-secondary);">
-        &#9432; <strong>Empresas privadas NÃO podem doar para campanhas</strong> desde 2015 (decisão do STF — ADI 4650).
-        Pessoas físicas podem doar até 10% da renda do ano anterior.
-        <div style="margin-top:6px; font-size:11px; color:var(--text-muted);">CNPJs privados com doação após 2015 aparecem destacados em vermelho — verifique a fonte no link do card.</div>
-      </div>
       ${renderDoadoresControles()}
       <div id="doadores-grupos">${renderDoadoresGrupos(window._doadoresDados.empresa, window._doadoresDados.pessoa)}</div>
+    </div>`;
+  } else if ((temSocios || temFamilia) && d.descricao_conexoes) {
+    // Sem doadores mas tem outras conexoes: preserva intro num ⓘ standalone
+    // ancorado num pequeno rotulo, pra nao deixar boia solta.
+    html += `<div style="padding:6px 2px 0; font-size:11px; color:var(--text-muted);">
+      Sobre as conexões abaixo ${renderInfoTip(d.descricao_conexoes)}
     </div>`;
   }
 

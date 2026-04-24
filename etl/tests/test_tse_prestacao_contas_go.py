@@ -1116,3 +1116,98 @@ class TestDonatedAt:
         assert doou_calls
         query_str = str(doou_calls[0][0][0])
         assert "r.donated_at = row.donated_at" in query_str
+
+
+# ---------------------------------------------------------------------------
+# Masked CPF (TSE 2024+) — Person vai pra bucket sq-keyed, sem surrogate no cpf
+# ---------------------------------------------------------------------------
+
+_C_MASKED = {
+    "sq_prestador": "5000000001",
+    "sq_candidato": "GO9024001",
+    "nr_candidato": "55024",
+    "cpf": "-4",  # _MASKED_CPF_SENTINEL — TSE 2024 publica CPFs mascarados
+    "nome": "CANDIDATO MASCARADO",
+    "cargo": "Vereador",
+    "cd_cargo": "13",
+    "partido": "10",
+    "sg_partido": "REP",
+    "nm_partido": "Republicanos",
+    "cnpj_prestador": "47574000000100",
+}
+
+
+class TestMaskedCpfDoesNotContaminateNode:
+    """Regressão: ``cpf_formatted`` (dict key em ``by_cpf``) passava
+    "sq:<X>" pro node quando CPF vinha mascarado, criando :Person
+    {cpf:"sq:X"} em paralelo ao :Person {sq_candidato:X} do pipeline
+    tse_bens (19k pares duplicados observados no grafo). O fix trocou
+    a iteração pra usar ``entry["cpf"]``, que carrega ""/empty pro
+    caso mascarado e roteia o row via _persons_nocpf → MERGE por
+    sq_candidato.
+    """
+
+    @pytest.fixture()
+    def pipeline_with_masked_row(
+        self,
+        archival_root: Path,  # noqa: ARG002
+        tmp_path: Path,
+    ) -> TsePrestacaoContasGoPipeline:
+        p = TsePrestacaoContasGoPipeline(
+            driver=MagicMock(), data_dir=str(tmp_path), year=2024, uf="GO",
+        )
+        # Bypass extract() — 1 row mascarado basta pra exercitar o path.
+        p._receitas_raw = [
+            _receita_row(
+                _C_MASKED, ue="GO", sq_receita="RM0001",
+                origem="Recursos próprios", valor="250,00",
+                doador_cpf_cnpj="-4", doador_nome=_C_MASKED["nome"],
+            ),
+        ]
+        p._despesas_raw = []
+        p._despesas_contratadas_raw = []
+        p._bens_raw = []
+        p._zip_url = "https://example/fake.zip"
+        p._snapshot_uri = "tse_prestacao_contas/fake/snapshot.bin"
+        return p
+
+    def test_person_cpf_is_empty_not_sq_surrogate(
+        self, pipeline_with_masked_row: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline_with_masked_row.transform()
+        # Row mascarado NÃO entra em self.persons (filtro `p.get("cpf")`
+        # precisa cair fora — se caísse dentro, vinha com cpf="sq:X" e
+        # seria MERGEd como node paralelo).
+        assert pipeline_with_masked_row.persons == []
+        nocpf = pipeline_with_masked_row._persons_nocpf
+        assert len(nocpf) == 1
+        # O cpf foi pra "" (sem surrogate). numero_candidato carrega o sq
+        # pra o load() poder MERGEar por sq_candidato.
+        assert nocpf[0].get("cpf", "") == ""
+        assert nocpf[0]["numero_candidato"] == _C_MASKED["sq_candidato"]
+        assert nocpf[0]["name"] == _C_MASKED["nome"]
+
+    def test_load_merges_masked_by_sq_candidato_not_cpf(
+        self, pipeline_with_masked_row: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline_with_masked_row.transform()
+        pipeline_with_masked_row.load()
+        session = mock_session(pipeline_with_masked_row)
+        person_calls = [
+            call for call in session.run.call_args_list
+            if "MERGE (n:Person" in str(call)
+        ]
+        # Exatamente 1 call pro batch nocpf; sem real-CPF rows no fixture
+        # não há call keyed por :Person{cpf:...}.
+        assert len(person_calls) == 1
+        query_str = str(person_calls[0][0][0])
+        assert "MERGE (n:Person {sq_candidato: row.sq_candidato})" in query_str
+        # Props enviadas no batch não devem carregar cpf="sq:X" nem cpf="".
+        # loader.py invoca ``session.run(query, {"rows": batch})`` — args
+        # posicionais, não kwargs.
+        call_args = person_calls[0][0]
+        assert len(call_args) == 2
+        rows = call_args[1]["rows"]
+        assert len(rows) == 1
+        assert "cpf" not in rows[0]
+        assert rows[0]["sq_candidato"] == _C_MASKED["sq_candidato"]
