@@ -413,32 +413,50 @@ def _build_aviso_despesas(
 
     Quando ``despesas_gabinete`` esta vazio mas o politico tem label
     conhecida (federal/estadual GO/vereador GYN/senador), exibimos ainda
-    a fonte esperada pra nao deixar o PWA sem contexto.
+    a fonte esperada **e** um complemento que explicita a ausencia de
+    lancamentos no periodo. Sem o complemento, o texto da fonte sozinho
+    passa impressao de erro quando na verdade o orgao de transparencia
+    nao publicou despesa pro deputado (caso documentado 2026-04-24: 10
+    dos 42 StateLegislators GO nao aparecem no feed ALEGO mesmo com
+    janela de 12 meses — suplentes/licenciados/sem verba).
     """
+    descricao_fonte = ""
     if is_deputado_federal:
-        return (
+        descricao_fonte = (
             "Cota de atividade parlamentar da Camara Federal (CEAP) — "
             "inclui gastos de gabinete, telefone, combustivel e aluguel "
             "de escritorio."
         )
-    if is_senador_federal:
-        return (
+    elif is_senador_federal:
+        descricao_fonte = (
             "Cota para o Exercicio da Atividade Parlamentar dos Senadores "
             "(CEAPS) — ressarcimento de despesas de atividade legislativa "
             "federal (passagens, telefonia, aluguel de imoveis, divulgacao, "
             "combustivel). Regulada pelo Ato da Comissao Diretora no 3/2016."
         )
-    if is_estadual_go:
-        return (
+    elif is_estadual_go:
+        descricao_fonte = (
             "Verba indenizatoria da Assembleia Legislativa de Goias "
             "(ALEGO) — ressarcimento de despesas de atividade parlamentar."
         )
-    if is_vereador_goiania:
-        return (
+    elif is_vereador_goiania:
+        descricao_fonte = (
             "Cota parlamentar da Camara Municipal de Goiania (CMG) — "
             "despesas de gabinete publicadas no portal de transparencia "
             "municipal (goiania.go.leg.br)."
         )
+
+    if descricao_fonte and not despesas_gabinete:
+        # Label conhecida + lista vazia = orgao de transparencia nao
+        # publicou lancamentos pro deputado no periodo. Nao e bug do
+        # app — o feed simplesmente nao tem linhas pra ele.
+        return (
+            f"{descricao_fonte} Sem lancamentos publicados pra esse(a) "
+            "parlamentar no periodo consultado — possiveis razoes: "
+            "suplente sem mandato exercido, renuncia a verba ou licenca."
+        )
+    if descricao_fonte:
+        return descricao_fonte
     if despesas_gabinete:
         # Fallback improvavel: tem despesas mas nenhum label conhecido.
         return ""

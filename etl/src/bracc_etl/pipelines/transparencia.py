@@ -170,6 +170,12 @@ class TransparenciaPipeline(Pipeline):
 
         amendments: list[dict[str, Any]] = []
         for _, row in self._raw_emendas.iterrows():
+            # Scope GO: o CSV do Portal é nacional, mas o app é Goiás-only.
+            # Sem esse filtro, Persons-autor de outras UFs mesclam por nome
+            # em Persons GO homônimos e contaminam perfis.
+            uf_raw = str(row.get("uf", "")).strip().upper()
+            if uf_raw not in ("GO", "GOIÁS", "GOIAS"):
+                continue
             codigo = str(row.get("codigo_autor", "")).strip()
             nome = normalize_name(str(row["nome_autor"]))
             author_key = codigo if codigo else nome.replace(" ", "_")
