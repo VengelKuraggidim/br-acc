@@ -1,5 +1,59 @@
 # Rodar pipelines pesados — `pgfn` + `comprasnet`
 
+## Estado 2026-04-24 06:30 — download comprasnet em progresso, pgfn pronto
+
+Sessão overnight 2026-04-24 disparou o download de comprasnet em
+background (BG `bnelxyias`, log em `/tmp/comprasnet_dl.log`):
+
+- 2019/2020: `[]` (pre-PNCP, esperado).
+- 2021: 9 MB ✅
+- 2022: 69 MB ✅
+- 2023: 406 MB ✅
+- **2024: ~27% (página ~590/2175 às 06:30, ETA mais ~80 min só pra fechar 2024).**
+- 2025/2026: pendentes; total ETA da run ~3-4h mais.
+
+`data/pgfn/`: **54 CSVs GO-scoped já em disco** (mar/2024 → mar/2026,
+SIDA_1 a SIDA_6, ~2 GB). Pronto pra ingestão.
+
+### Quando a usuária acordar
+
+1. Confirmar download terminou: `tail /tmp/comprasnet_dl.log` deve
+   mostrar "Done" ou ausência de novas requests por ~10min. Se ainda
+   estiver rodando 2025/2026, esperar.
+2. Rodar **comprasnet** (fix OOM streaming já aplicado em commit
+   `0d407d5`):
+   ```bash
+   cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl
+   uv run python -m bracc_etl.runner run --source comprasnet \
+     --neo4j-password changeme \
+     --data-dir /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data \
+     2>&1 | tee /tmp/comprasnet_ingest.log
+   ```
+   Peak RSS previsto ~3-5 GB; ETA ~40min.
+3. Validar IngestionRun no Neo4j local:
+   ```bash
+   docker exec fiscal-neo4j cypher-shell -u neo4j -p changeme \
+     "MATCH (r:IngestionRun {source_id:'comprasnet'}) RETURN r.run_id, r.status, r.rows_in, r.rows_loaded ORDER BY r.started_at DESC LIMIT 1"
+   ```
+4. Rodar **pgfn** (independente, dados já em disco):
+   ```bash
+   cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/etl
+   uv run python -m bracc_etl.runner run --source pgfn \
+     --neo4j-password changeme \
+     --data-dir /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao/data \
+     2>&1 | tee /tmp/pgfn_ingest.log
+   ```
+   `transform()` usa `iterrows()` (memo TODO) — ETA >1h. Dataset
+   GO-only pode ser menor que o memo previu (1.2GB filtrado upstream).
+5. Validar nodes/rels no grafo:
+   ```cypher
+   MATCH (c:Contract) WHERE c.source_id='comprasnet' RETURN count(c);
+   MATCH (f:Finance) WHERE f.source_id='pgfn' RETURN count(f);
+   ```
+
+### Original
+
+
 ## Contexto
 
 Prompt `05-run-downloaded-pipelines.md` pedia re-executar 6 pipelines
