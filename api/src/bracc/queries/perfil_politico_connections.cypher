@@ -67,14 +67,9 @@
 // "outra ponta" real da aresta, não pro focal — o ``_adapt_connections``
 // no service já trata isso normalmente.
 CALL {
-    // Branch A: match direto por identificador → ranqueia por label
-    // (sem cluster canônico, esse é o único nó retornado).
+    // Branch A1: elementId direto — O(1) lookup por id interno do driver.
     MATCH (p)
     WHERE elementId(p) = $entity_id
-       OR p.id_camara = $entity_id
-       OR p.legislator_id = $entity_id
-       OR p.id_senado = $entity_id
-       OR p.senator_id = $entity_id
     RETURN p,
            CASE
              WHEN 'Senator' IN labels(p) THEN 0
@@ -83,17 +78,72 @@ CALL {
              ELSE 3
            END AS source_rank
   UNION
+    // Branch A2: FederalLegislator por id_camara — usa federal_legislator_id_camara.
+    MATCH (p:FederalLegislator {id_camara: $entity_id})
+    RETURN p, 1 AS source_rank
+  UNION
+    // Branch A3: StateLegislator por legislator_id — usa state_legislator_id.
+    MATCH (p:StateLegislator {legislator_id: $entity_id})
+    RETURN p, 2 AS source_rank
+  UNION
+    // Branch A4: Senator por id_senado — usa senator_id_senado.
+    MATCH (p:Senator {id_senado: $entity_id})
+    RETURN p, 0 AS source_rank
+  UNION
+    // Branch A5: Senator por senator_id (sem indice — label scan em 3 nos).
+    MATCH (p:Senator {senator_id: $entity_id})
+    RETURN p, 0 AS source_rank
+  UNION
     // Branch B: match direto + caminhada no cluster canônico pra achar
     // nó-irmão mais oficial. :REPRESENTS é direcional CanonicalPerson→source,
     // daí (p_seed)<-[:REPRESENTS]-(cp)-[:REPRESENTS]->(p). Inclui p=p_seed
-    // quando o cluster tem só o seed, mas aí o rank é igual ao da Branch A
-    // e o tie-breaker no ORDER BY mantém consistência.
-    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
+    // quando o cluster tem só o seed. O p_seed e resolvido via UNION das
+    // chaves conhecidas (elementId / id_camara / legislator_id / id_senado
+    // / senator_id) pra cada uma usar seu proprio indice.
+    MATCH (p_seed)
     WHERE elementId(p_seed) = $entity_id
-       OR p_seed.id_camara = $entity_id
-       OR p_seed.legislator_id = $entity_id
-       OR p_seed.id_senado = $entity_id
-       OR p_seed.senator_id = $entity_id
+    WITH p_seed
+    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    MATCH (p_seed:FederalLegislator {id_camara: $entity_id})
+    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    MATCH (p_seed:StateLegislator {legislator_id: $entity_id})
+    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    MATCH (p_seed:Senator {id_senado: $entity_id})
+    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
+    RETURN p,
+           CASE
+             WHEN 'Senator' IN labels(p) THEN 0
+             WHEN 'FederalLegislator' IN labels(p) THEN 1
+             WHEN 'StateLegislator' IN labels(p) THEN 2
+             ELSE 3
+           END AS source_rank
+  UNION
+    MATCH (p_seed:Senator {senator_id: $entity_id})
+    MATCH (p_seed)<-[:REPRESENTS]-(:CanonicalPerson)-[:REPRESENTS]->(p)
     RETURN p,
            CASE
              WHEN 'Senator' IN labels(p) THEN 0
