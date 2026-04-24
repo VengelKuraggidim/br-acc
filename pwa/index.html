@@ -1829,6 +1829,55 @@ function _percentualDoador(valor, total) {
 // "concentração alta". É heurística — não é ilegal, é só "vale olhar".
 const _DOADOR_CONCENTRACAO_ALTA_PCT = 30;
 
+// Constroi alertas de topo a partir dos doadores PF — mesmos sinais que
+// viram selos no card individual (familia + concentracao), mas promovidos
+// pra secao "Alertas" do perfil pra nao depender do usuario expandir a
+// lista de 16 pessoas fisicas pra notar o padrao.
+function _alertasDoadoresPF(doadoresPF, nomeCandidato) {
+  const alertas = [];
+  if (!Array.isArray(doadoresPF) || !doadoresPF.length) return alertas;
+  const total = doadoresPF.reduce((s, p) => s + (p.valor_total || 0), 0);
+  if (total <= 0) return alertas;
+
+  doadoresPF.forEach(p => {
+    const sobrenomes = _sobrenomesCompartilhados(nomeCandidato, p.nome);
+    const pct = _percentualDoador(p.valor_total || 0, total);
+    const flagFamilia = sobrenomes.length > 0;
+    const flagConcentracao = pct >= _DOADOR_CONCENTRACAO_ALTA_PCT;
+    if (!flagFamilia && !flagConcentracao) return;
+
+    const valorFmt = p.valor_total_fmt || _fmtBRLDoador(p.valor_total || 0);
+    const pctTxt = pct >= 10 ? Math.round(pct) : pct.toFixed(1);
+    const nomeEsc = escaparHTML(p.nome || 'Doador');
+
+    if (flagFamilia && flagConcentracao) {
+      const sobrenome = sobrenomes.map(s => s.charAt(0) + s.slice(1).toLowerCase()).join(', ');
+      alertas.push({
+        tipo: 'atencao',
+        icone: 'familia',
+        texto: `<strong>&#128681; Campanha bancada pela familia.</strong> ${nomeEsc} doou <strong>${valorFmt}</strong> &mdash; <strong>${pctTxt}%</strong> de tudo que pessoas fisicas deram &mdash; e compartilha o sobrenome <em>${escaparHTML(sobrenome)}</em> com ${escaparHTML(nomeCandidato || 'o candidato')}. Doacao familiar e legal, mas muda a leitura: a campanha foi bancada por parente, nao por apoio difuso.`,
+      });
+      return;
+    }
+    if (flagFamilia) {
+      const sobrenome = sobrenomes.map(s => s.charAt(0) + s.slice(1).toLowerCase()).join(', ');
+      alertas.push({
+        tipo: 'info',
+        icone: 'familia',
+        texto: `<strong>&#128681; Possivel doacao familiar.</strong> ${nomeEsc} doou <strong>${valorFmt}</strong> e compartilha o sobrenome <em>${escaparHTML(sobrenome)}</em> com ${escaparHTML(nomeCandidato || 'o candidato')}. Legal, mas vale saber que a campanha tem financiamento de parente.`,
+      });
+      return;
+    }
+    // flagConcentracao sozinha
+    alertas.push({
+      tipo: 'atencao',
+      icone: 'emenda',
+      texto: `<strong>&#128681; Concentracao alta de doacoes.</strong> ${nomeEsc} doou <strong>${valorFmt}</strong> &mdash; sozinho representa <strong>${pctTxt}%</strong> de tudo que pessoas fisicas deram a esta campanha. Concentracao alta indica dependencia de um unico financiador.`,
+    });
+  });
+  return alertas;
+}
+
 function _compararDoadores(ordem) {
   return (a, b) => {
     if (ordem === 'valor_asc') return (a.valor_total || 0) - (b.valor_total || 0);
@@ -2532,21 +2581,29 @@ function renderPerfil(d) {
   }
 
   // Alertas (agrupados por severidade: graves -> atencao -> info)
-  if (d.alertas.length) {
+  // Mescla alertas do backend com os que calculamos no cliente a partir
+  // dos doadores PF (sobrenome-casado + concentracao). Ficam todos juntos
+  // no topo do perfil pra o usuario nao ter que abrir a lista de doadores.
+  const alertasCliente = _alertasDoadoresPF(
+    d.doadores_pessoa || [],
+    (d.politico && d.politico.nome) || ''
+  );
+  const alertasTotal = [...(d.alertas || []), ...alertasCliente];
+  if (alertasTotal.length) {
     const grupos = [
-      { tipo: 'grave',   label: 'Graves',  alertas: d.alertas.filter(a => a.tipo === 'grave') },
-      { tipo: 'atencao', label: 'Atenção', alertas: d.alertas.filter(a => a.tipo === 'atencao') },
-      { tipo: 'info',    label: 'Info',    alertas: d.alertas.filter(a => a.tipo === 'info') },
-      { tipo: 'ok',      label: 'OK',      alertas: d.alertas.filter(a => a.tipo === 'ok') },
+      { tipo: 'grave',   label: 'Graves',  alertas: alertasTotal.filter(a => a.tipo === 'grave') },
+      { tipo: 'atencao', label: 'Atenção', alertas: alertasTotal.filter(a => a.tipo === 'atencao') },
+      { tipo: 'info',    label: 'Info',    alertas: alertasTotal.filter(a => a.tipo === 'info') },
+      { tipo: 'ok',      label: 'OK',      alertas: alertasTotal.filter(a => a.tipo === 'ok') },
     ].filter(g => g.alertas.length);
-    const badgeCls = d.alertas.some(a => a.tipo === 'grave') ? 'danger' : 'warning';
+    const badgeCls = alertasTotal.some(a => a.tipo === 'grave') ? 'danger' : 'warning';
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:var(--danger-bg);">&#9888;</span>
           Alertas
         </div>
-        <span class="badge badge-${badgeCls}">${d.alertas.length}</span>
+        <span class="badge badge-${badgeCls}">${alertasTotal.length}</span>
       </div>`;
     grupos.forEach(g => {
       g.alertas.forEach(a => {
