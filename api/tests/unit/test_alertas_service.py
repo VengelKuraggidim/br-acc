@@ -651,6 +651,68 @@ class TestAnalisarEmendasForaBase:
         # Base em maiusculo, emenda em minusculo — nao deve contar como fora.
         assert analisar_emendas_fora_base("GO", emendas) == []
 
+    def test_uf_nome_completo_reconhece_base(self) -> None:
+        """Regressão 2026-04-23: ``Amendment.uf`` vem com nome completo
+        ("GOIÁS") no grafo, mas ``politico_uf`` usa sigla ("GO"). Sem
+        normalizar, "GOIÁS" != "GO" e 100% das emendas do próprio estado
+        entravam como "fora da base"."""
+        emendas = [
+            _emenda("E1", "11111111000101",
+                    valor_pago=5_000_000, uf="GOIÁS"),
+            _emenda("E2", "22222222000102",
+                    valor_pago=300_000, uf="SÃO PAULO"),
+        ]
+        # Só R$ 300k em SP — abaixo de FORA_BASE_VALOR_MIN (500k) —
+        # não dispara. O bug fazia os 5M de GOIÁS somarem como "fora".
+        assert analisar_emendas_fora_base("GO", emendas) == []
+
+    def test_uf_nome_completo_dispara_outra_uf(self) -> None:
+        """Nome completo de outra UF (não-base) deve ser detectado como fora."""
+        emendas = [
+            _emenda("E1", "11111111000101",
+                    valor_pago=2_000_000, uf="GOIÁS"),
+            _emenda("E2", "22222222000102",
+                    valor_pago=FORA_BASE_VALOR_MIN + 100_000,
+                    uf="RIO DE JANEIRO"),
+        ]
+        alertas = analisar_emendas_fora_base("GO", emendas)
+        assert len(alertas) == 1
+        # Detalhe usa sigla (já normalizada) pra manter texto curto.
+        assert "RJ" in alertas[0]["texto"]
+
+    def test_marcadores_ambiguos_excluidos_do_denominador(self) -> None:
+        """"Múltiplo" / "Sem informação" não contam em nem fora nem total.
+
+        Se a usuária tem 1M em "Sem informação" (SIOP sem UF carimbado) +
+        600k em "BA", a pct relevante é 100% (sobre o subset conhecido),
+        não ~37% (se tivéssemos dividido pelo total bruto). Emendas
+        ambíguas entram no denominador só iriam inflar/deflar o pct
+        artificialmente.
+        """
+        emendas = [
+            _emenda("E1", "11111111000101",
+                    valor_pago=1_000_000, uf="Múltiplo"),
+            _emenda("E2", "22222222000102",
+                    valor_pago=500_000, uf="Sem informação"),
+            _emenda("E3", "33333333000103",
+                    valor_pago=FORA_BASE_VALOR_MIN + 100_000, uf="BA"),
+        ]
+        alertas = analisar_emendas_fora_base("GO", emendas)
+        # Subset conhecido = só a emenda BA ⇒ 100% fora, dispara.
+        assert len(alertas) == 1
+        assert "100%" in alertas[0]["texto"]
+        assert "BA" in alertas[0]["texto"]
+
+    def test_so_ambiguos_nao_dispara(self) -> None:
+        """Emendas só com uf ambígua: sem sinal, sem alerta."""
+        emendas = [
+            _emenda("E1", "11111111000101",
+                    valor_pago=5_000_000, uf="Múltiplo"),
+            _emenda("E2", "22222222000102",
+                    valor_pago=2_000_000, uf="Sem informação"),
+        ]
+        assert analisar_emendas_fora_base("GO", emendas) == []
+
 
 class TestCalcularRedFlagsSummary:
     def test_sem_alertas_retorna_none(self) -> None:

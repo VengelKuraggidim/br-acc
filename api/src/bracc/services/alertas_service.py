@@ -601,6 +601,49 @@ BENEFICIARIO_RECORRENTE_VALOR_MIN = 300_000.0
 FORA_BASE_VALOR_MIN = 500_000.0
 FORA_BASE_PCT_MIN = 0.20
 
+# ``Amendment.uf`` no grafo vem com o nome completo do estado (SIOP/Portal
+# da Transparência publicam "GOIÁS", "SÃO PAULO"), mas ``politico.uf``
+# está em sigla ("GO", "SP"). Sem normalizar, ``"GOIÁS" == "GO"`` é falso
+# e 100% das emendas entram como "fora da base" (reportado pela usuária
+# em 2026-04-23 pro perfil de deputado GO).
+_UF_NOME_PARA_SIGLA: dict[str, str] = {
+    "ACRE": "AC", "ALAGOAS": "AL", "AMAPA": "AP", "AMAZONAS": "AM",
+    "BAHIA": "BA", "CEARA": "CE", "DISTRITO FEDERAL": "DF",
+    "ESPIRITO SANTO": "ES", "GOIAS": "GO", "MARANHAO": "MA",
+    "MATO GROSSO": "MT", "MATO GROSSO DO SUL": "MS",
+    "MINAS GERAIS": "MG", "PARA": "PA", "PARAIBA": "PB",
+    "PARANA": "PR", "PERNAMBUCO": "PE", "PIAUI": "PI",
+    "RIO DE JANEIRO": "RJ", "RIO GRANDE DO NORTE": "RN",
+    "RIO GRANDE DO SUL": "RS", "RONDONIA": "RO", "RORAIMA": "RR",
+    "SANTA CATARINA": "SC", "SAO PAULO": "SP", "SERGIPE": "SE",
+    "TOCANTINS": "TO",
+}
+_SIGLAS_VALIDAS: frozenset[str] = frozenset(_UF_NOME_PARA_SIGLA.values())
+
+# Marcadores SIOP pra destino desconhecido ou multi-UF — emenda com essa
+# uf não deve contar como fora-da-base NEM entrar no denominador: seria
+# ruidoso em ambos os sentidos (Múltiplo pode incluir a base; Sem
+# informação é simplesmente ausência de dado).
+_UF_MARCADORES_AMBIGUOS: frozenset[str] = frozenset({"MULTIPLO", "SEM INFORMACAO"})
+
+
+def _normalizar_uf_emenda(uf: str | None) -> str | None:
+    """Retorna a sigla UF canônica, ou ``None`` quando ambígua/desconhecida.
+
+    Aceita nome completo ("Goiás", "SÃO PAULO") ou sigla ("GO", "sp").
+    Retorna None pra "Múltiplo", "Sem informação", valor vazio, ou
+    qualquer token não-mapeado (novo rótulo inesperado do SIOP vira
+    'desconhecido' em vez de inflar o fora-da-base).
+    """
+    if not uf:
+        return None
+    raw = _sem_acento(uf).strip().upper()
+    if not raw or raw in _UF_MARCADORES_AMBIGUOS:
+        return None
+    if len(raw) == 2 and raw in _SIGLAS_VALIDAS:
+        return raw
+    return _UF_NOME_PARA_SIGLA.get(raw)
+
 
 def analisar_beneficiario_novo(
     emendas: list[Emenda],
@@ -797,8 +840,8 @@ def analisar_emendas_fora_base(
     if not emendas or not politico_uf:
         return []
 
-    base = politico_uf.strip().upper()
-    if not base:
+    base = _normalizar_uf_emenda(politico_uf)
+    if base is None:
         return []
 
     total = 0.0
@@ -807,9 +850,14 @@ def analisar_emendas_fora_base(
         valor = emenda.valor_pago or emenda.valor_empenhado or 0.0
         if valor <= 0:
             continue
+        uf = _normalizar_uf_emenda(emenda.uf)
+        if uf is None:
+            # Destino ambíguo (Múltiplo / Sem informação / desconhecido):
+            # não entra no denominador — senão a pct fica inflada e o
+            # alerta dispara em perfis onde o grosso do dado é SIOP ruído.
+            continue
         total += valor
-        uf = (emenda.uf or "").strip().upper()
-        if not uf or uf == base:
+        if uf == base:
             continue
         fora_por_uf[uf] = fora_por_uf.get(uf, 0.0) + valor
 
