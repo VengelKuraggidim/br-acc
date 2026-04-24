@@ -178,22 +178,42 @@ def _write_csv(path: Path, header: list[str], rows: list[dict[str, Any]]) -> Non
 def _fetch_deputados_listing(
     client: httpx.Client, periodos: list[tuple[int, int]]
 ) -> list[dict[str, Any]]:
-    """Return the distinct deputy roster. The API requires ``ano`` and ``mes``;
-    we walk newest-first until we get a non-empty list."""
+    """Return the union of deputies across ``periodos``, deduped by ``id``.
+
+    A API da ALEGO (``/verbas_indenizatorias/deputados?ano=&mes=``) só
+    devolve quem lançou verba naquele mês. Suplentes rotativos entram
+    em 1–2 meses e saem — se a gente parasse no primeiro período com
+    dados (comportamento anterior), esses nomes ficariam fora do roster
+    e suas despesas viravam rels órfãs pro :StateLegislator-fantasma
+    que o load_relationships nunca conseguiria MATCH.
+
+    Agora agregamos: primeiro-visto vence na prop (preserva ordem
+    newest-first do caller, útil pra pegar partido/dados mais recentes).
+    """
+    seen: dict[int, dict[str, Any]] = {}
     for ano, mes in periodos:
         payload = _http_get_json(
             _ENDPOINTS["deputados_listing"],
             params={"ano": ano, "mes": mes},
             client=client,
         )
-        if isinstance(payload, list) and payload:
-            logger.info(
-                "[alego] deputy roster taken from %d-%02d (n=%d)",
-                ano, mes, len(payload),
-            )
-            return [p for p in payload if isinstance(p, dict)]
-    logger.warning("[alego] no deputy roster found across any period")
-    return []
+        if not isinstance(payload, list):
+            continue
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            dep_id = item.get("id")
+            if not isinstance(dep_id, int) or dep_id in seen:
+                continue
+            seen[dep_id] = item
+    if not seen:
+        logger.warning("[alego] no deputy roster found across any period")
+        return []
+    logger.info(
+        "[alego] deputy roster aggregated over %d periods (n_unique=%d)",
+        len(periodos), len(seen),
+    )
+    return list(seen.values())
 
 
 def _fetch_deputado_exibir(
@@ -351,7 +371,12 @@ def fetch_to_disk(
         time.sleep(_RATE_LIMIT_SECONDS)
 
         # --- 2. deputados listing -----------------------------------------
-        raw_deputies = _fetch_deputados_listing(client, periodos)
+        # Aggregate across the same window we'll iterate for expenses so
+        # rotating substitutes (present only in 1–2 months) are included.
+        target_periods = (
+            periodos[:max_expense_months] if max_expense_months else periodos
+        )
+        raw_deputies = _fetch_deputados_listing(client, target_periods)
         if limit is not None:
             raw_deputies = raw_deputies[:limit]
         time.sleep(_RATE_LIMIT_SECONDS)
@@ -359,9 +384,6 @@ def fetch_to_disk(
         # --- 3. expenses + party enrichment -------------------------------
         cota_rows: list[dict[str, Any]] = []
         deputy_rows: list[dict[str, Any]] = []
-        target_periods = (
-            periodos[:max_expense_months] if max_expense_months else periodos
-        )
 
         for dep in raw_deputies:
             dep_id = dep.get("id")
@@ -593,33 +615,46 @@ class AlegoPipeline(Pipeline):
                 )
                 return
 
-            # ---- deputados listing (newest period with data) -------------
+            # ---- deputados listing (union across target_periods) ---------
+            # Varre a mesma janela usada pra expenses e agrega a união
+            # por id. Antes pegava só o primeiro periodo com dados -->
+            # suplentes rotativos (Luiz Sampaio, Leo Portilho, Delegada
+            # Fernanda, Renato de Castro em 2024-2026) ficavam de fora
+            # mesmo quando lançavam despesa na janela.
+            target_periods = (
+                periodos[:max_expense_months] if max_expense_months else periodos
+            )
             deputy_rows: list[dict[str, Any]] = []
             deputy_uris: list[str | None] = []
-            listing_uri: str | None = None
-            for ano, mes in periodos:
+            seen: dict[int, tuple[dict[str, Any], str | None]] = {}
+            for ano, mes in target_periods:
                 payload, content, ctype = _http_get_json_raw(
                     _ENDPOINTS["deputados_listing"],
                     params={"ano": ano, "mes": mes},
                     client=client,
                 )
-                if (
-                    isinstance(payload, list)
-                    and payload
-                    and content is not None
-                    and ctype is not None
-                ):
-                    listing_uri = archive_fetch(
+                if not isinstance(payload, list) or not payload:
+                    continue
+                snap_uri: str | None = None
+                if content is not None and ctype is not None:
+                    snap_uri = archive_fetch(
                         url=f"{_API_BASE}{_ENDPOINTS['deputados_listing']}",
                         content=content,
                         content_type=ctype,
                         run_id=self.run_id,
                         source_id=self.source_id,
                     )
-                    raw_deputies = [p for p in payload if isinstance(p, dict)]
-                    break
-            else:
-                raw_deputies = []
+                for item in payload:
+                    if not isinstance(item, dict):
+                        continue
+                    dep_id = item.get("id")
+                    if not isinstance(dep_id, int) or dep_id in seen:
+                        continue
+                    seen[dep_id] = (item, snap_uri)
+            raw_deputies = [row for row, _ in seen.values()]
+            listing_uri = next(
+                (uri for _, uri in seen.values() if uri), None,
+            )
 
             if self.limit is not None:
                 raw_deputies = raw_deputies[: self.limit]
@@ -627,9 +662,6 @@ class AlegoPipeline(Pipeline):
             # ---- expenses + party enrichment ------------------------------
             cota_rows: list[dict[str, Any]] = []
             cota_uris: list[str | None] = []
-            target_periods = (
-                periodos[:max_expense_months] if max_expense_months else periodos
-            )
 
             for dep in raw_deputies:
                 dep_id = dep.get("id")
@@ -681,7 +713,12 @@ class AlegoPipeline(Pipeline):
                     "legislatura": "",
                     "deputado_id_alego": dep_id,
                 })
-                deputy_uris.append(listing_uri)
+                # URI do listing que viu esse deputado pela primeira vez
+                # (mais preciso do que o `listing_uri` global quando a
+                # janela é multi-mês). Fallback pro global se o mapping
+                # perdeu algo por algum motivo.
+                dep_snap = seen.get(dep_id, (None, None))[1] or listing_uri
+                deputy_uris.append(dep_snap)
 
             # ---- proposicoes ----------------------------------------------
             prop_rows, prop_uris = self._fetch_proposicoes_with_archival(client)
