@@ -485,8 +485,10 @@ class TestFetchImpedidosJsf:
                 headers={"content-type": "text/html"},
             )
         transport = httpx.MockTransport(handler)
-        with httpx.Client(transport=transport) as client:
-            with pytest.raises(RuntimeError, match="sem ViewState"):
-                fetch_impedidos_jsf(
-                    tmp_path, client=client, rate_limit_seconds=0.0,
-                )
+        with (
+            httpx.Client(transport=transport) as client,
+            pytest.raises(RuntimeError, match="sem ViewState"),
+        ):
+            fetch_impedidos_jsf(
+                tmp_path, client=client, rate_limit_seconds=0.0,
+            )

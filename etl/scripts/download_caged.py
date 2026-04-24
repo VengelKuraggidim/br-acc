@@ -93,8 +93,14 @@ def _download_year(
 @click.command()
 @click.option("--billing-project", required=True, help="GCP project for BigQuery billing")
 @click.option("--output-dir", default="./data/caged", help="Output directory for CSV files")
-@click.option("--start-year", type=int, default=2020, help="Start year (default: 2020, first year of new CAGED)")
-@click.option("--end-year", type=int, default=None, help="End year inclusive (default: current year)")
+@click.option(
+    "--start-year", type=int, default=2020,
+    help="Start year (default: 2020, first year of new CAGED)",
+)
+@click.option(
+    "--end-year", type=int, default=None,
+    help="End year inclusive (default: current year)",
+)
 @click.option("--skip-existing", is_flag=True, help="Skip years whose CSV already exists")
 def main(
     billing_project: str,

@@ -185,7 +185,10 @@ def _write_manifest(
 @click.option("--files", type=int, default=10, help="Number of files per type (0-9)")
 @click.option("--types", multiple=True, help="Specific types to download (Empresas, Socios, etc.)")
 @click.option("--reference-only", is_flag=True, help="Download only reference tables")
-@click.option("--skip-existing/--no-skip-existing", default=True, help="Skip already downloaded files")
+@click.option(
+    "--skip-existing/--no-skip-existing", default=True,
+    help="Skip already downloaded files",
+)
 @click.option("--skip-extract", is_flag=True, help="Skip extraction after download")
 @click.option("--timeout", type=int, default=600, help="Download timeout in seconds")
 @click.option("--release", default=None, help="Pin to specific monthly release (YYYY-MM format)")

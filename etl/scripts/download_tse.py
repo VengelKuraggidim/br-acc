@@ -23,7 +23,8 @@ and column names over time:
 
 Usage:
     python etl/scripts/download_tse.py --years 2024
-    python etl/scripts/download_tse.py --years 2002 2004 2006 2008 2010 2012 2014 2016 2018 2020 2022 2024
+    python etl/scripts/download_tse.py --years 2002 2004 2006 2008 \\
+        2010 2012 2014 2016 2018 2020 2022 2024
     python etl/scripts/download_tse.py --output-dir ./data/tse --years 2022
 """
 
@@ -89,7 +90,10 @@ DOACAO_COLS_LEGACY = {
 # Column names vary per year, so we try multiple variants for each field.
 DOACAO_COLS_EARLY_VARIANTS: dict[str, list[str]] = {
     "sq_candidato": ["SEQUENCIAL_CANDIDATO"],
-    "cpf_cnpj_doador": ["CD_CPF_CNPJ_DOADOR", "CD_CPF_CGC", "CD_CPF_CGC_DOA", "NUMERO_CPF_CGC_DOADOR"],
+    "cpf_cnpj_doador": [
+        "CD_CPF_CNPJ_DOADOR", "CD_CPF_CGC",
+        "CD_CPF_CGC_DOA", "NUMERO_CPF_CGC_DOADOR",
+    ],
     "nome_doador": ["NM_DOADOR", "NO_DOADOR", "NOME_DOADOR"],
     "valor": ["VR_RECEITA", "VALOR_RECEITA"],
     "data_doacao": ["DT_RECEITA", "DT_DOACAO", "DATA_RECEITA", "DATA_DOACAO"],
@@ -148,7 +152,10 @@ def _find_receita_files(extracted: list[Path]) -> list[Path]:
         if f.is_dir():
             continue
         # Match 2002-2006 format: ReceitaCandidato.csv
-        if name_lower == "receitacandidato.csv" or name_lower == "receitascandidatos.txt" or name_lower.startswith("receitas_candidatos"):
+        if (
+            name_lower in ("receitacandidato.csv", "receitascandidatos.txt")
+            or name_lower.startswith("receitas_candidatos")
+        ):
             result.append(f)
     return result
 
@@ -180,7 +187,10 @@ def _detect_donation_format(df: pd.DataFrame) -> str:
     if "Sequencial Candidato" in df.columns:
         return "legacy"
     # Early format (2002-2008): uppercase underscored, check for any known variant
-    early_indicators = {"SEQUENCIAL_CANDIDATO", "VR_RECEITA", "VALOR_RECEITA", "CD_CPF_CGC", "CD_CPF_CGC_DOA"}
+    early_indicators = {
+        "SEQUENCIAL_CANDIDATO", "VR_RECEITA", "VALOR_RECEITA",
+        "CD_CPF_CGC", "CD_CPF_CGC_DOA",
+    }
     if early_indicators & set(df.columns):
         return "early"
     logger.warning("Unknown donation format. Columns: %s", list(df.columns)[:10])
@@ -349,17 +359,15 @@ def main(
     logger.info("=== TSE download: years %s ===", year_list)
 
     success_count = 0
-    if not donations_only:
-        if _download_candidates(
-            year_list, raw_dir, out, skip_existing=skip_existing, timeout=timeout,
-        ):
-            success_count += 1
+    if not donations_only and _download_candidates(
+        year_list, raw_dir, out, skip_existing=skip_existing, timeout=timeout,
+    ):
+        success_count += 1
 
-    if not candidates_only:
-        if _download_donations(
-            year_list, raw_dir, out, skip_existing=skip_existing, timeout=timeout,
-        ):
-            success_count += 1
+    if not candidates_only and _download_donations(
+        year_list, raw_dir, out, skip_existing=skip_existing, timeout=timeout,
+    ):
+        success_count += 1
 
     logger.info("=== Done: %d dataset(s) downloaded ===", success_count)
     if success_count == 0:
