@@ -1829,6 +1829,12 @@ function _percentualDoador(valor, total) {
 // "concentração alta". É heurística — não é ilegal, é só "vale olhar".
 const _DOADOR_CONCENTRACAO_ALTA_PCT = 30;
 
+// Minimo de sobrenomes compartilhados (ja filtrando comuns/particulas) pra
+// acender o flag de familia. Um so ja dispara porque a lista de sobrenomes
+// comuns ja elimina o ruido dos SILVA/SANTOS; quando sobra 1 sobrenome
+// incomum compartilhado, a chance de ser parente e alta o bastante.
+const _DOADOR_MIN_SOBRENOMES_FAMILIA = 1;
+
 // Constroi alertas de topo a partir dos doadores PF — mesmos sinais que
 // viram selos no card individual (familia + concentracao), mas promovidos
 // pra secao "Alertas" do perfil pra nao depender do usuario expandir a
@@ -1842,7 +1848,7 @@ function _alertasDoadoresPF(doadoresPF, nomeCandidato) {
   doadoresPF.forEach(p => {
     const sobrenomes = _sobrenomesCompartilhados(nomeCandidato, p.nome);
     const pct = _percentualDoador(p.valor_total || 0, total);
-    const flagFamilia = sobrenomes.length > 0;
+    const flagFamilia = sobrenomes.length >= _DOADOR_MIN_SOBRENOMES_FAMILIA;
     const flagConcentracao = pct >= _DOADOR_CONCENTRACAO_ALTA_PCT;
     if (!flagFamilia && !flagConcentracao) return;
 
@@ -1855,7 +1861,7 @@ function _alertasDoadoresPF(doadoresPF, nomeCandidato) {
       alertas.push({
         tipo: 'atencao',
         icone: 'familia',
-        texto: `<strong>&#128681; Campanha bancada pela familia.</strong> ${nomeEsc} doou <strong>${valorFmt}</strong> &mdash; <strong>${pctTxt}%</strong> de tudo que pessoas fisicas deram &mdash; e compartilha o sobrenome <em>${escaparHTML(sobrenome)}</em> com ${escaparHTML(nomeCandidato || 'o candidato')}. Doacao familiar e legal, mas muda a leitura: a campanha foi bancada por parente, nao por apoio difuso.`,
+        texto: `<strong>&#128681; Campanha bancada possivelmente por parentes.</strong> ${nomeEsc} doou <strong>${valorFmt}</strong> &mdash; <strong>${pctTxt}%</strong> de tudo que pessoas fisicas deram &mdash; e compartilha o sobrenome <em>${escaparHTML(sobrenome)}</em> com ${escaparHTML(nomeCandidato || 'o candidato')}. Doacao familiar e legal, mas muda a leitura: a campanha foi bancada por parente, nao por apoio difuso.`,
       });
       return;
     }
@@ -1983,7 +1989,7 @@ function renderGrupoPessoaFisicaDoador(arr, nomeCandidato) {
     // 2. Concentração: % do total de doações PF da campanha
     const sobrenomesComuns = _sobrenomesCompartilhados(nomeCandidato, p.nome);
     const pctTotal = _percentualDoador(p.valor_total || 0, tot);
-    const flagFamilia = sobrenomesComuns.length > 0;
+    const flagFamilia = sobrenomesComuns.length >= _DOADOR_MIN_SOBRENOMES_FAMILIA;
     const flagConcentracao = pctTotal >= _DOADOR_CONCENTRACAO_ALTA_PCT;
     const temFlag = flagFamilia || flagConcentracao;
 
