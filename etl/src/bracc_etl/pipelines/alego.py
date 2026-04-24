@@ -191,7 +191,13 @@ def _fetch_deputados_listing(
     newest-first do caller, útil pra pegar partido/dados mais recentes).
     """
     seen: dict[int, dict[str, Any]] = {}
-    for ano, mes in periodos:
+    for idx, (ano, mes) in enumerate(periodos):
+        if idx:
+            # ALEGO rate-limita agressivo (~3 req/seg) e devolve 403 pras
+            # requisicoes subsequentes sem espacamento. Sem o sleep, a
+            # agregacao perde periodos intermediarios -> suplentes que so
+            # aparecem num mes especifico ficam fora do roster.
+            time.sleep(_RATE_LIMIT_SECONDS)
         payload = _http_get_json(
             _ENDPOINTS["deputados_listing"],
             params={"ano": ano, "mes": mes},
@@ -627,7 +633,11 @@ class AlegoPipeline(Pipeline):
             deputy_rows: list[dict[str, Any]] = []
             deputy_uris: list[str | None] = []
             seen: dict[int, tuple[dict[str, Any], str | None]] = {}
-            for ano, mes in target_periods:
+            for idx, (ano, mes) in enumerate(target_periods):
+                if idx:
+                    # Espacamento entre listing fetches — sem ele a ALEGO
+                    # retorna 403 a partir do 4o request (WAF/rate-limit).
+                    time.sleep(_RATE_LIMIT_SECONDS)
                 payload, content, ctype = _http_get_json_raw(
                     _ENDPOINTS["deputados_listing"],
                     params={"ano": ano, "mes": mes},
