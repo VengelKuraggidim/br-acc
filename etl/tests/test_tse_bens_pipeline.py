@@ -226,7 +226,6 @@ class TestTseBensTransform:
         for rel in pipeline.person_rels:
             assert rel["target_key"] in asset_ids
             # CPF-keyed rels (real CPF em anos <2024) vs sq-keyed (2024+ masked).
-            key = rel.get("source_cpf") or f"sq:{rel.get('source_sq')}"
             assert rel["source_cpf"] in asset_cpfs or rel["source_sq"] != ""
 
     def test_asset_fields_present(self) -> None:

@@ -1143,7 +1143,7 @@ class TestCanonicalIdPassthrough:
                 return_value=record,
             ) as query_mock,
             ceap_patch, emendas_patch, media_patch,
-            verba_patch, cota_gyn_patch, ceaps_patch as ceaps_mock,
+            verba_patch, cota_gyn_patch, ceaps_patch,
         ):
             perfil = await obter_perfil(driver, "canon_senado_5895")
 

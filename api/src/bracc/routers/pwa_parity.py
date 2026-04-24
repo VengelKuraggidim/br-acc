@@ -119,13 +119,13 @@ def _format_item(result: dict[str, Any]) -> BuscarTudoItem | None:
     # Tipos cuja escopo é nacional no fulltext precisam filtrar por
     # ``uf=='GO'`` pra respeitar o escopo do app. ``Senator`` entra aqui
     # (Caiado é GO, mas o indice cobre todos os 81 senadores).
-    _PARLAMENTAR_BR_TYPES = {
+    parlamentar_br_types = {
         "federal_legislator", "federallegislator",
         "state_legislator", "statelegislator",
         "senator",
     }
 
-    if tipo_raw == "person" or tipo_raw in _PARLAMENTAR_BR_TYPES:
+    if tipo_raw == "person" or tipo_raw in parlamentar_br_types:
         if not _is_person_go(props):
             return None
     elif tipo_raw not in _GO_TYPES:

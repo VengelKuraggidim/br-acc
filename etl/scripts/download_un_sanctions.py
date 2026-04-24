@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import click
-import defusedxml.ElementTree as ET
+import defusedxml.ElementTree as DefusedET
 
 # Allow imports from scripts/ directory
 sys.path.insert(0, str(Path(__file__).parent))
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 UN_XML_URL = "https://scsanctions.un.org/resources/xml/en/consolidated.xml"
 
 
-def _parse_individual(elem: ET.Element) -> dict[str, str | list[str]]:
+def _parse_individual(elem: DefusedET.Element) -> dict[str, str | list[str]]:
     """Parse an INDIVIDUAL element from the UN consolidated XML."""
     ref = elem.findtext("REFERENCE_NUMBER", "").strip()
 
@@ -69,7 +69,7 @@ def _parse_individual(elem: ET.Element) -> dict[str, str | list[str]]:
     }
 
 
-def _parse_entity(elem: ET.Element) -> dict[str, str | list[str]]:
+def _parse_entity(elem: DefusedET.Element) -> dict[str, str | list[str]]:
     """Parse an ENTITY element from the UN consolidated XML."""
     ref = elem.findtext("REFERENCE_NUMBER", "").strip()
 
@@ -100,7 +100,7 @@ def _parse_entity(elem: ET.Element) -> dict[str, str | list[str]]:
 
 def parse_un_xml(xml_path: Path) -> list[dict[str, str | list[str]]]:
     """Parse the UN consolidated XML and extract individuals and entities."""
-    tree = ET.parse(xml_path)
+    tree = DefusedET.parse(xml_path)
     root = tree.getroot()
 
     entries: list[dict[str, str | list[str]]] = []

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import click
-import defusedxml.ElementTree as ET
+import defusedxml.ElementTree as DefusedET
 import httpx
 from download_senado_cpi_archive import fetch_archive_historical
 
@@ -53,7 +53,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     logger.info("Wrote %d rows to %s", len(rows), path)
 
 
-def _text(node: ET.Element | None) -> str:
+def _text(node: DefusedET.Element | None) -> str:
     return (node.text if node is not None and node.text else "").strip()
 
 
@@ -119,7 +119,7 @@ def _fetch_official_active_inquiries(
             xml_start = raw.find(b"<")
             if xml_start > 0:
                 raw = raw[xml_start:]
-            root = ET.fromstring(raw)
+            root = DefusedET.fromstring(raw)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Official Senado endpoint failed for tipo=%s: %s", kind, exc)
             continue
