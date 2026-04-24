@@ -61,6 +61,20 @@ curl -s 'ftp://ftp.mtps.gov.br/pdet/microdados/NOVO%20CAGED/2024/202401/'
 Se houver `.csv.gz` ou `.zip`, vira quick-win: `fetch_to_disk` usa só
 `httpx` + stdlib (`gzip` / `zipfile`), sem dep nova.
 
+### Investigação 2026-04-23
+
+FTP listing `NOVO CAGED/2024/202401/` retorna apenas:
+
+```
+CAGEDEXC202401.7z
+CAGEDFOR202401.7z
+CAGEDMOV202401.7z
+```
+
+Sem `.csv.gz`, `.zip` ou `.parquet`. **Rota A não disponível —
+upstream PDET continua só com `.7z`.** Próxima ação requer decisão da
+dona sobre Rota B (`py7zr` em `pyproject.toml`).
+
 ## Fix proposto (quando desbloquear)
 
 ### Rota A — PDET publicar mirror `.csv.gz`/`.zip` (preferida)
