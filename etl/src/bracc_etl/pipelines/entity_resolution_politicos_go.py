@@ -46,7 +46,20 @@ regras 1-3 não pegam:
   (TSE) onde nome abreviado + CPF mascarado quebram as 3 primeiras
   regras. Conf 0.92. Múltiplos matches → audit + skip.
 
-* **shadow_name_exact** (fase 4) — ``:Person`` sem CPF, sem UF (nós bare
+* **cpf_suffix_cargo** (fase 4) — fallback mais fraco pra quando
+  ``cpf_suffix_name`` falha por divergência ortográfica entre nome de
+  campanha (parlamentar) e nome TSE (candidato). Casa ``:Person`` GO
+  cujo ``cargo_tse_{YYYY}`` corresponde ao label do cargo (``Deputado
+  Federal`` ↔ ``:FederalLegislator``, etc.) **e** cujos 4 últimos dígitos
+  do CPF batem com o sufixo mascarado do cargo. Sem validar nome.
+  Cobre "PROFESSOR ALCIDES" ↔ "ALCIDES RIBEIRO FILHO" (token
+  honorífico não-padrão) e "DR. ZACHARIAS CALIL" ↔ "ZACARIAS CALIL
+  HAMU" (grafia divergente ZH/Z). Conf 0.85. Trava de match único é
+  obrigatória — sufixo de 4 dígitos sozinho tem ~1/10000 colisão e
+  acumulado em ~400-1000 candidatos GO por cargo gera ambiguidade
+  frequente; audit+skip quando >1.
+
+* **shadow_name_exact** (fase 5) — ``:Person`` sem CPF, sem UF (nós bare
   "só name" originados de referências em outros pipelines, ex.: autores
   de inquéritos) com nome normalizado batendo exatamente com UM dos
   nomes já presentes no cluster canônico → REPRESENTS adicional. Conf
@@ -82,8 +95,8 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 ``(:CanonicalPerson)-[:REPRESENTS]->(sourceNode)``. Props:
 
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
-  "name_stripped" | "cpf_suffix_name" | "shadow_name_exact" |
-  "cargo_root"``.
+  "name_stripped" | "cpf_suffix_name" | "cpf_suffix_cargo" |
+  "shadow_name_exact" | "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -169,6 +182,19 @@ _CARGO_ATIVO_LABEL: dict[str, str] = {
     "Senator": "senador",
     "FederalLegislator": "deputado_federal",
     "StateLegislator": "deputado_estadual",
+}
+
+# Label do cargo ↔ string canônica que aparece em ``cargo_tse_{YYYY}`` no
+# ``:Person`` (CSV TSE grava em Title Case; normalizamos pra UPPER sem
+# acento antes de comparar). Usado pela fase 4 ``cpf_suffix_cargo`` pra
+# filtrar candidatos TSE do mesmo nível de cargo. Governador e cargos
+# municipais (prefeito, vereador) ficam de fora — o ER só cobre
+# Senador/Fed/State e o objetivo é Pessoa com mandato federal/estadual
+# ativo hoje.
+_CARGO_LABEL_TO_TSE: dict[str, str] = {
+    "Senator": "SENADOR",
+    "FederalLegislator": "DEPUTADO FEDERAL",
+    "StateLegislator": "DEPUTADO ESTADUAL",
 }
 
 
@@ -307,7 +333,8 @@ CALL {
            n.name AS name,
            n.cpf AS cpf,
            n.partido AS partido,
-           coalesce(n.uf, $target_uf) AS uf
+           coalesce(n.uf, $target_uf) AS uf,
+           [] AS cargo_tse_values
 UNION ALL
     MATCH (n:FederalLegislator)
     WHERE coalesce(n.uf, 'GO') = $target_uf
@@ -321,7 +348,8 @@ UNION ALL
            n.name AS name,
            n.cpf AS cpf,
            n.partido AS partido,
-           coalesce(n.uf, $target_uf) AS uf
+           coalesce(n.uf, $target_uf) AS uf,
+           [] AS cargo_tse_values
 UNION ALL
     MATCH (n:StateLegislator)
     WHERE coalesce(n.uf, 'GO') = $target_uf
@@ -335,7 +363,8 @@ UNION ALL
            n.name AS name,
            n.cpf AS cpf,
            n.partido AS partido,
-           coalesce(n.uf, $target_uf) AS uf
+           coalesce(n.uf, $target_uf) AS uf,
+           [] AS cargo_tse_values
 UNION ALL
     MATCH (n:Person)
     WHERE n.uf = $target_uf
@@ -349,7 +378,8 @@ UNION ALL
            n.name AS name,
            n.cpf AS cpf,
            n.partido AS partido,
-           n.uf AS uf
+           n.uf AS uf,
+           [k IN keys(n) WHERE k STARTS WITH 'cargo_tse_' | n[k]] AS cargo_tse_values
 UNION ALL
     MATCH (n:Person)
     WHERE n.uf IS NULL AND n.cpf IS NULL AND coalesce(n.name, '') <> ''
@@ -363,10 +393,12 @@ UNION ALL
            n.name AS name,
            NULL AS cpf,
            NULL AS partido,
-           NULL AS uf
+           NULL AS uf,
+           [] AS cargo_tse_values
 }
 RETURN labels, element_id, stable_key, id_senado, id_camara,
-       legislator_id, sq_candidato, name, cpf, partido, uf
+       legislator_id, sq_candidato, name, cpf, partido, uf,
+       cargo_tse_values
 """
 
 
@@ -475,6 +507,7 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         for row in rows:
             labels = list(row.get("labels") or [])
             primary = _primary_label(labels)
+            cargo_tse_values = row.get("cargo_tse_values") or []
             node = {
                 "labels": labels,
                 "primary_label": primary,
@@ -489,6 +522,15 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                 "partido": row.get("partido"),
                 "uf": row.get("uf"),
                 "name_normalized": _normalize_name(row.get("name")),
+                # Set de cargos TSE normalizados (upper, sem acento) de
+                # qualquer ano — usado pela fase 4 ``cpf_suffix_cargo`` pra
+                # decidir se um Person é candidato TSE do nível de cargo
+                # do cluster (Senador / Deputado Federal / Deputado
+                # Estadual). Vazio em cargos/shadow (não entram como
+                # "candidatos TSE"; são o próprio alvo do attach).
+                "cargo_tse_set": frozenset(
+                    _normalize_name(v) for v in cargo_tse_values if v
+                ),
             }
             node["name_stripped"] = _strip_honorifics(
                 str(node["name_normalized"] or ""),
@@ -561,7 +603,19 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
             claimed=person_elt_ids_in_cluster,
         )
 
-        # ---- Fase 4: shadow attach ----
+        # ---- Fase 4: cpf_suffix_cargo attach ----
+        # Fallback mais frouxo pra clusters que ainda não pegaram Person
+        # TSE: sufixo CPF + cargo_tse_* do mesmo nível (Senador / Deputado
+        # Federal / Deputado Estadual). Sem validar tokens de nome.
+        # Conf 0.85, múltiplos → audit. Cobre cargo cujo nome de campanha
+        # ("PROFESSOR ALCIDES") difere do registro TSE ("ALCIDES RIBEIRO
+        # FILHO") por token honorífico não-padrão.
+        self._attach_cpf_suffix_cargo_matches(
+            persons_go=persons_go,
+            claimed=person_elt_ids_in_cluster,
+        )
+
+        # ---- Fase 5: shadow attach ----
         # Pra cada shadow, tenta anexar a um cluster existente por nome normalizado.
         cluster_names: dict[str, list[str]] = defaultdict(list)
         for canonical_id, cluster in self._clusters.items():
@@ -810,6 +864,101 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                     "cargo_name": cargo["name"],
                     "cpf_suffix": suffix,
                     "candidates": [p["element_id"] for p in candidates],
+                })
+
+    def _attach_cpf_suffix_cargo_matches(
+        self,
+        persons_go: list[dict[str, Any]],
+        claimed: set[str],
+    ) -> None:
+        """Anexa Person GO ao cluster via CPF-suffix + cargo_tse (sem nome).
+
+        Fallback mais fraco do que ``_attach_cpf_suffix_matches``: em vez
+        de exigir que todos os tokens do nome do cargo apareçam no
+        Person, exige só que o cargo_tse_* do Person bata com o nível
+        do cargo âncora (``Deputado Federal`` ↔ ``:FederalLegislator``,
+        etc.). Cobre nomes de campanha com honoríficos não-padrão
+        ("PROFESSOR") ou grafia divergente (ZH ↔ Z). Match único →
+        attach (conf 0.85); múltiplos → audit.
+
+        Salvaguarda crítica: só roda em clusters que **ainda não têm
+        Person com CPF pleno** anexado pelas regras 1-3 ou fase 3. Se
+        já existe Person CPF-bearing no cluster (via ``cpf_exact`` ou
+        ``cpf_suffix_name``), a pessoa real já foi identificada via
+        evidência forte e qualquer candidato extra com o mesmo sufixo
+        de CPF é provavelmente homônimo que só colide nos 4 dígitos.
+        Regressão real observada 2026-04-23: RUBENS OTONI (suffix 7149)
+        já pegou RUBENS OTONI GOMIDE via ``cpf_suffix_name``; sem esta
+        trava, a fase 4 também anexava GLEICY MARIA BARBOSA DOS SANTOS
+        GUERRA (mesmo suffix, outro nome) como "único candidato
+        não-claimed". Clusters que só têm Person sem CPF (via
+        ``name_exact`` de shadow legítimo, ex.: "PROFESSOR ALCIDES"
+        sem CPF batendo com o nome do cargo) continuam elegíveis — é
+        justamente ali que fase 4 agrega valor.
+        """
+        persons_with_full_cpf: set[str] = set()
+        persons_by_suffix: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for person in persons_go:
+            cpf_digits = _digits_only(person.get("cpf"))
+            if len(cpf_digits) != 11 or cpf_digits == "00000000000":
+                continue
+            persons_with_full_cpf.add(person["element_id"])
+            if person.get("cargo_tse_set"):
+                persons_by_suffix[cpf_digits[-4:]].append(person)
+
+        for cluster in self._clusters.values():
+            cargo = cluster.get("cargo")
+            if not cargo:
+                continue
+            expected_cargo_tse = _CARGO_LABEL_TO_TSE.get(cargo["primary_label"])
+            if not expected_cargo_tse:
+                continue
+            cargo_cpf = cargo.get("cpf")
+            if not _is_masked_cpf(cargo_cpf):
+                continue
+            suffix = _visible_cpf_suffix(cargo_cpf)
+            if not suffix:
+                continue
+            # Trava anti-falso-positivo: se o cluster já tem Person com
+            # CPF pleno anexado (via cpf_exact, cpf_suffix_name ou
+            # name_exact casado com Person que tinha CPF), a pessoa
+            # real já foi identificada — fase 4 não agrega e só
+            # arrisca colisão de sufixo.
+            has_cpf_person_attached = any(
+                e.get("target_element_id") in persons_with_full_cpf
+                for e in cluster["edges"]
+            )
+            if has_cpf_person_attached:
+                continue
+            canonical_id = cluster["canonical"]["canonical_id"]
+            already_in_cluster = {e["target_element_id"] for e in cluster["edges"]}
+
+            candidates = [
+                p for p in persons_by_suffix.get(suffix, [])
+                if p["element_id"] not in claimed
+                and p["element_id"] not in already_in_cluster
+                and expected_cargo_tse in p["cargo_tse_set"]
+            ]
+            if len(candidates) == 1:
+                self._attach_source(
+                    canonical_id=canonical_id,
+                    node=candidates[0],
+                    method="cpf_suffix_cargo",
+                    confidence=0.85,
+                )
+                claimed.add(candidates[0]["element_id"])
+            elif len(candidates) > 1:
+                self._audit_entries.append({
+                    "type": "cpf_suffix_cargo_ambiguous",
+                    "cargo_element_id": cargo["element_id"],
+                    "cargo_label": cargo["primary_label"],
+                    "cargo_name": cargo["name"],
+                    "cpf_suffix": suffix,
+                    "expected_cargo_tse": expected_cargo_tse,
+                    "candidates": [
+                        {"element_id": p["element_id"], "name": p["name"]}
+                        for p in candidates
+                    ],
                 })
 
     def _disambiguate_by_partido(

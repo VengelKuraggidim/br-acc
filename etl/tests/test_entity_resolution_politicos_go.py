@@ -167,6 +167,7 @@ def _person(
     partido: str | None = None,
     sq_candidato: str | None = None,
     uf: str | None = "GO",
+    cargo_tse_values: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "labels": ["Person"],
@@ -180,6 +181,7 @@ def _person(
         "cpf": cpf,
         "partido": partido,
         "uf": uf,
+        "cargo_tse_values": cargo_tse_values or [],
     }
 
 
@@ -488,6 +490,204 @@ class TestHappyPath:
             if e["method"] != "cargo_root"
         )
         assert targets == ["n2", "n3"]
+
+    def test_fed_cpf_suffix_cargo_casa_quando_honorifico_divergente(
+        self, tmp_path: Path,
+    ) -> None:
+        # Caso PROFESSOR ALCIDES: Fed "PROFESSOR ALCIDES" (CPF mascarado)
+        # + Person TSE "ALCIDES RIBEIRO FILHO" com cargo_tse_2022=
+        # "Deputado Federal". cpf_suffix_name falha porque token
+        # "PROFESSOR" não aparece no Person (honorífico não-padrão).
+        # Fase 4 cpf_suffix_cargo pega: suffix + cargo level único.
+        fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
+        fed["cpf"] = "***.***.*31-49"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "ALCIDES RIBEIRO FILHO",
+                cpf="092.426.431-49",
+                uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        methods = sorted(e["method"] for e in edges)
+        assert methods == ["cargo_root", "cpf_suffix_cargo"]
+        suffix_edge = next(e for e in edges if e["method"] == "cpf_suffix_cargo")
+        assert suffix_edge["confidence"] == pytest.approx(0.85)
+        assert suffix_edge["target_element_id"] == "n2"
+
+    def test_fed_cpf_suffix_cargo_roda_mesmo_com_shadow_sem_cpf(
+        self, tmp_path: Path,
+    ) -> None:
+        # Caso PROFESSOR ALCIDES: cluster tem Person "PROFESSOR ALCIDES"
+        # (uf=GO mas sem CPF, oriundo de algum pipeline que gravou só
+        # o nome) matched via name_exact em fase 1. A trava de fase 4
+        # NÃO deve bloquear este caso porque Person sem CPF não é
+        # evidência forte da identidade — fase 4 agrega o Person TSE
+        # com CPF pleno.
+        fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
+        fed["cpf"] = "***.***.*31-49"
+        rows = [
+            fed,
+            # Name-only match em fase 1 (name_exact).
+            _person("n2", "PROFESSOR ALCIDES", cpf=None, uf="GO"),
+            # TSE com CPF: cpf_suffix_name falha (token "PROFESSOR" não
+            # está no Person), mas cpf_suffix_cargo pega.
+            _person(
+                "n3",
+                "ALCIDES RIBEIRO FILHO",
+                cpf="092.426.431-49",
+                uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        methods = sorted(e["method"] for e in edges)
+        assert methods == ["cargo_root", "cpf_suffix_cargo", "name_exact"]
+        targets = {e["target_element_id"] for e in edges if e["method"] != "cargo_root"}
+        assert targets == {"n2", "n3"}
+
+    def test_fed_cpf_suffix_cargo_skipa_cluster_nao_orfao(
+        self, tmp_path: Path,
+    ) -> None:
+        # Regressão real 2026-04-23: RUBENS OTONI (Fed, suffix 7149)
+        # pegou RUBENS OTONI GOMIDE via cpf_suffix_name. Sem a trava de
+        # "só roda em órfão", fase 4 anexava GLEICY MARIA (suffix 7149
+        # + cargo Deputado Federal, outra pessoa) como "único
+        # não-claimed". Agora o cluster não-órfão é pulado inteiro.
+        fed = _fed("n1", "RUBENS OTONI", id_camara="74371", partido="PT")
+        fed["cpf"] = "***.***.*71-49"
+        rows = [
+            fed,
+            # Person TSE correto: casa por cpf_suffix_name (tokens
+            # "RUBENS" + "OTONI" presentes).
+            _person(
+                "n2",
+                "RUBENS OTONI GOMIDE",
+                cpf="133.347.271-49",
+                partido="PT",
+                uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            # Colisão de suffix: outro candidato Deputado Federal GO
+            # com 4 últimos dígitos iguais. Sem a trava, seria
+            # anexado como falso positivo.
+            _person(
+                "n3",
+                "GLEICY MARIA BARBOSA DOS SANTOS GUERRA",
+                cpf="449.778.671-49",
+                uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        methods = sorted(e["method"] for e in edges)
+        # cargo_root + cpf_suffix_name apenas. cpf_suffix_cargo não
+        # pode aparecer — cluster já tem Person anexado e fase 4 pula.
+        assert methods == ["cargo_root", "cpf_suffix_name"]
+        attached = {e["target_element_id"] for e in edges}
+        assert "n3" not in attached
+
+    def test_fed_cpf_suffix_cargo_ambiguidade_vira_audit(
+        self, tmp_path: Path,
+    ) -> None:
+        # 4 Persons TSE Deputado Federal com mesmo sufixo → audit, sem
+        # attach (regra de match único vale pra fase 4 também).
+        fed = _fed("n1", "DR. ZACHARIAS CALIL", id_camara="204412", partido="UNIÃO")
+        fed["cpf"] = "***.***.*01-00"
+        rows = [
+            fed,
+            _person(
+                "n2", "ZACARIAS CALIL HAMU",
+                cpf="118.330.501-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n3", "CARLOS ANTONIO DE SOUSA COSTA",
+                cpf="247.784.001-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n4", "RODNEY ROCHA MIRANDA",
+                cpf="317.252.101-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "cpf_suffix_cargo" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        suffix_cargo_audits = [
+            e for e in entries if e["type"] == "cpf_suffix_cargo_ambiguous"
+        ]
+        assert len(suffix_cargo_audits) == 1
+        assert suffix_cargo_audits[0]["cpf_suffix"] == "0100"
+        assert suffix_cargo_audits[0]["expected_cargo_tse"] == "DEPUTADO FEDERAL"
+        assert len(suffix_cargo_audits[0]["candidates"]) == 3
+
+    def test_fed_cpf_suffix_cargo_ignora_person_de_cargo_diferente(
+        self, tmp_path: Path,
+    ) -> None:
+        # Person GO tem suffix batendo mas cargo_tse_2022 é "Deputado
+        # Estadual" — fase 4 não deve anexar a um :FederalLegislator.
+        fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
+        fed["cpf"] = "***.***.*31-49"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "ALCIDES RIBEIRO FILHO",
+                cpf="092.426.431-49",
+                uf="GO",
+                cargo_tse_values=["Deputado Estadual"],  # nível errado
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert methods == ["cargo_root"]
+
+    def test_fed_cpf_suffix_cargo_ignora_person_sem_cargo_tse(
+        self, tmp_path: Path,
+    ) -> None:
+        # Person GO sem nenhum cargo_tse_* (veio por outra via, ex.:
+        # camara_politicos_go, wikidata) não é candidato da fase 4 mesmo
+        # se suffix bate.
+        fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
+        fed["cpf"] = "***.***.*31-49"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "ALCIDES RIBEIRO FILHO",
+                cpf="092.426.431-49",
+                uf="GO",
+                cargo_tse_values=[],  # não é candidato TSE conhecido
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert methods == ["cargo_root"]
 
     def test_state_matcha_person_por_cpf(self, tmp_path: Path) -> None:
         # StateLegislator tem CPF pleno (pipeline alego não mascara).
