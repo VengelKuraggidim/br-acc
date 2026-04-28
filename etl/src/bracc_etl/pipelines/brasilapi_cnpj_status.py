@@ -212,9 +212,15 @@ class BrasilapiCnpjStatusPipeline(Pipeline):
     def _discover_targets(self) -> list[dict[str, Any]]:
         """Le do grafo CNPJs de :Company que aparecem como doador OU socio.
 
-        Prioriza por ``total_doacoes_recebidas`` quando existe; fallback pra
-        count de DOOU. Filtra pelo TTL: empresas ja verificadas < 7d atras
-        nao voltam pra fila.
+        Prioriza por valor total doado (somatorio das DOOU saindo da
+        empresa); fallback pra count de DOOU. Filtra pelo TTL: empresas
+        ja verificadas < 7d atras nao voltam pra fila.
+
+        ``DOOU`` no grafo BR-ACC vai (Company|Person|CampaignDonor)->Person
+        (candidato), porque PJ doadora apos ADI 4650 (2015) e excecao —
+        a relacao empresa-doadora e o caso comum (TSE 2014, comites PJ
+        residuais). Logo a discovery cobre Company **que doa** + sociedade
+        nas duas direcoes (sendo socia ou tendo socio).
         """
         cutoff = _cache_cutoff_iso()
         query = (
@@ -222,17 +228,18 @@ class BrasilapiCnpjStatusPipeline(Pipeline):
             "WHERE c.cnpj IS NOT NULL AND c.cnpj <> '' "
             "AND (c.situacao_verified_at IS NULL "
             "     OR c.situacao_verified_at < $cutoff) "
-            "AND (EXISTS { ()-[:DOOU]->(c) } "
+            "AND (EXISTS { (c)-[:DOOU]->() } "
+            "     OR EXISTS { ()-[:DOOU]->(c) } "
             "     OR EXISTS { ()-[:SOCIO_DE]->(c) } "
-            "     OR EXISTS { (c)<-[:SOCIO_DE]-() }) "
-            "WITH c, "
-            "     coalesce(c.total_doacoes_recebidas, 0.0) AS prio_doacoes, "
-            "     size([(p)-[:DOOU]->(c) | p]) AS prio_doadores "
+            "     OR EXISTS { (c)-[:SOCIO_DE]->() }) "
+            "OPTIONAL MATCH (c)-[d:DOOU]->() "
+            "WITH c, sum(coalesce(d.valor, 0.0)) AS prio_valor_doado, "
+            "     count(d) AS prio_doacoes_emitidas "
             "RETURN c.cnpj AS cnpj, "
             "       c.razao_social AS razao_social, "
-            "       prio_doacoes, "
-            "       prio_doadores "
-            "ORDER BY prio_doacoes DESC, prio_doadores DESC "
+            "       prio_valor_doado, "
+            "       prio_doacoes_emitidas "
+            "ORDER BY prio_valor_doado DESC, prio_doacoes_emitidas DESC "
             "LIMIT $batch_size"
         )
         targets: list[dict[str, Any]] = []

@@ -38,6 +38,16 @@ bigquery = [
 gcp = [
     "google-cloud-secret-manager>=2.20.0",
 ]
+qlik = [
+    # Headless DOM scraping dos painéis Qlik Sense do TCE-GO (irregulares
+    # + fiscalizações). O endpoint WS engine existe mas openresty exige um
+    # ``qlik-csrf-token`` minted via JS bootstrap (Qlik May 2024+) — não há
+    # endpoint estável pra obtê-lo headless, então usamos Firefox real.
+    # Pré-requisitos de sistema (não pip): firefox + geckodriver instalados
+    # (Ubuntu: ``snap install firefox`` + geckodriver via release oficial).
+    # Path do Firefox pode ser sobrescrito via ``BRACC_FIREFOX_BIN``.
+    "selenium>=4.40.0",
+]
 
 [project.scripts]
 bracc-etl = "bracc_etl.runner:cli"

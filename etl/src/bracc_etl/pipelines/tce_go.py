@@ -183,19 +183,26 @@ def fetch_to_disk(
     page_size: int = _DEFAULT_PAGE_SIZE,
     timeout: float = _HTTP_TIMEOUT,
     client: httpx.Client | None = None,
+    *,
+    include_decisoes: bool = True,
+    include_irregulares: bool = False,
+    include_fiscalizacoes: bool = False,
 ) -> list[Path]:
-    """Download TCE-GO decisoes via iago-search-api and stage as CSV.
+    """Download TCE-GO datasets to disk and stage as CSVs.
 
-    Writes ``decisoes.csv`` under ``output_dir`` com as colunas aliases que
-    :meth:`TceGoPipeline._transform_decisions` já aceita (``numero``,
-    ``tipo``, ``data``, ``orgao``, ``ementa``, ``relator``) mais campos de
-    contexto (``id``, ``processo``, ``assunto``, ``interessados``, ``ano``,
-    ``confidencial``, ``sumula``) pra downstream.
+    By default only ``decisoes.csv`` is written (online via REST in
+    ``iago-search-api.tce.go.gov.br``) — callers que querem os painéis
+    Qlik (``irregulares.csv`` + ``fiscalizacoes.csv``) habilitam via
+    ``include_irregulares=True`` / ``include_fiscalizacoes=True``. Esses
+    dois usam Selenium + Firefox headless (dep opcional ``etl[qlik]``)
+    porque o WS engine do Qlik exige um ``qlik-csrf-token`` minted via
+    JS bootstrap — reverse-engineering headless bate em 403 do openresty.
+    Detalhes em ``bracc_etl.pipelines.tce_go_qlik``.
 
     Args:
         output_dir: diretório destino. Criado se ausente.
-        limit: cap opcional de rows (header sempre preservado). Util pra
-            smoke tests.
+        limit: cap opcional de rows pra ``decisoes`` (smoke tests). Não
+            afeta os painéis Qlik (volume já é pequeno: 8 e ~60 rows).
         url: override do endpoint de busca (default
             ``iago-search-api.tce.go.gov.br/decisions/search``).
         page_size: tamanho da página por request (max efetivo: 2000).
@@ -203,48 +210,59 @@ def fetch_to_disk(
         client: httpx.Client pré-configurado (pra testes mockados). Quando
             ``None``, cria um client próprio com timeout + User-Agent
             padrão.
+        include_decisoes: liga ``decisoes.csv`` (default True; back-compat).
+        include_irregulares: liga ``irregulares.csv`` via Selenium.
+        include_fiscalizacoes: liga ``fiscalizacoes.csv`` via Selenium.
 
     Returns:
         Lista de Path escritos.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = output_dir / "decisoes.csv"
+    written: list[Path] = []
 
-    logger.info(
-        "[tce_go] fetching decisoes from %s (limit=%s, page_size=%d) -> %s",
-        url, limit, page_size, out_csv,
-    )
-
-    owns_client = client is None
-    if owns_client:
-        client = httpx.Client(
-            timeout=timeout,
-            follow_redirects=True,
-            headers={"User-Agent": _USER_AGENT},
+    if include_decisoes:
+        out_csv = output_dir / "decisoes.csv"
+        logger.info(
+            "[tce_go] fetching decisoes from %s (limit=%s, page_size=%d) -> %s",
+            url, limit, page_size, out_csv,
         )
-    assert client is not None  # narrowed by both branches above
-    try:
-        rows_written = 0
-        with out_csv.open("w", encoding="utf-8", newline="") as fh:
-            writer = csv.DictWriter(
-                fh, fieldnames=_DECISION_FIELD_ORDER,
-                delimiter=";", quoting=csv.QUOTE_MINIMAL,
-            )
-            writer.writeheader()
-            for decision in _iter_decisions(
-                client, url=url, page_size=page_size, limit=limit,
-            ):
-                writer.writerow(_decision_to_row(decision))
-                rows_written += 1
-    finally:
+        owns_client = client is None
         if owns_client:
-            client.close()
+            client = httpx.Client(
+                timeout=timeout,
+                follow_redirects=True,
+                headers={"User-Agent": _USER_AGENT},
+            )
+        assert client is not None  # narrowed by both branches above
+        try:
+            rows_written = 0
+            with out_csv.open("w", encoding="utf-8", newline="") as fh:
+                writer = csv.DictWriter(
+                    fh, fieldnames=_DECISION_FIELD_ORDER,
+                    delimiter=";", quoting=csv.QUOTE_MINIMAL,
+                )
+                writer.writeheader()
+                for decision in _iter_decisions(
+                    client, url=url, page_size=page_size, limit=limit,
+                ):
+                    writer.writerow(_decision_to_row(decision))
+                    rows_written += 1
+        finally:
+            if owns_client:
+                client.close()
+        logger.info("[tce_go] wrote %s (%d rows)", out_csv, rows_written)
+        written.append(out_csv)
 
-    logger.info(
-        "[tce_go] wrote %s (%d rows)", out_csv, rows_written,
-    )
-    return [out_csv]
+    # Qlik panels — import lazy pra não puxar selenium a menos que peçam
+    if include_irregulares or include_fiscalizacoes:
+        from bracc_etl.pipelines import tce_go_qlik
+        if include_irregulares:
+            written.append(tce_go_qlik.fetch_irregulares_to_disk(output_dir))
+        if include_fiscalizacoes:
+            written.append(tce_go_qlik.fetch_fiscalizacoes_to_disk(output_dir))
+
+    return written
 
 
 class TceGoPipeline(Pipeline):

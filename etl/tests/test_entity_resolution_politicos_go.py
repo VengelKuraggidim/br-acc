@@ -170,6 +170,7 @@ def _person(
     sq_candidato: str | None = None,
     uf: str | None = "GO",
     cargo_tse_values: list[str] | None = None,
+    camara_municipios: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "labels": ["Person"],
@@ -184,6 +185,7 @@ def _person(
         "partido": partido,
         "uf": uf,
         "cargo_tse_values": cargo_tse_values or [],
+        "camara_municipios": camara_municipios or [],
     }
 
 
@@ -1514,6 +1516,246 @@ class TestIdempotence:
         ids_b = {c["canonical_id"] for c in pipeline_b.canonical_rows}
 
         assert ids_a == ids_b == {"canon_senado_5895"}
+
+
+class TestNameMunicipioVereador:
+    """Fase 4.7 — duplicatas de vereador GO (TSE 2024 sem CPF público)."""
+
+    def test_anexa_rhs_sem_cpf_ao_lhs_com_cpf(self, tmp_path: Path) -> None:
+        # Caso canônico: ROMARIO BARBOSA POLICARPO em GOIANIA — um Person
+        # com CPF (TSE pré-2024) e outro sem CPF (tse_bens 2024). Mesmo
+        # nome + mesmo município → fundir.
+        rows = [
+            _person(
+                "lhs", "ROMARIO BARBOSA POLICARPO",
+                cpf="025.784.541-08", uf="GO",
+                camara_municipios=["GOIANIA"],
+            ),
+            _person(
+                "rhs", "ROMARIO BARBOSA POLICARPO",
+                cpf=None, uf="GO",
+                camara_municipios=["GOIANIA"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        canonicals = [c["canonical_id"] for c in pipeline.canonical_rows]
+        assert canonicals == ["canon_cpf_02578454108"]
+        attach_methods = [
+            e["method"] for e in pipeline.represents_rels
+            if e["target_element_id"] == "rhs"
+        ]
+        assert attach_methods == ["name_municipio_vereador"]
+        rhs_edge = next(
+            e for e in pipeline.represents_rels
+            if e["target_element_id"] == "rhs"
+        )
+        assert rhs_edge["confidence"] == pytest.approx(0.90)
+
+    def test_municipio_diferente_nao_funde(self, tmp_path: Path) -> None:
+        # JOAO BATISTA DA SILVA em Goiânia ≠ JOAO BATISTA DA SILVA em
+        # Anápolis — homônimos cross-município são pessoas distintas.
+        rows = [
+            _person(
+                "g1", "JOAO BATISTA DA SILVA",
+                cpf="111.111.111-11", uf="GO",
+                camara_municipios=["GOIANIA"],
+            ),
+            _person(
+                "a1", "JOAO BATISTA DA SILVA",
+                cpf=None, uf="GO",
+                camara_municipios=["ANAPOLIS"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # rhs nunca foi anexado ao cluster do lhs.
+        attach_methods = [
+            e["method"] for e in pipeline.represents_rels
+            if e["target_element_id"] == "a1"
+        ]
+        assert "name_municipio_vereador" not in attach_methods
+
+    def test_dois_lhs_com_cpf_mesmo_nome_mesmo_muni_audit(
+        self, tmp_path: Path,
+    ) -> None:
+        # 2 Persons com CPF mesmo nome no mesmo município (pai+filho
+        # homônimos sentando juntos na câmara) — audit + skip do RHS.
+        rows = [
+            _person(
+                "p_pai", "ANTONIO LOPES DA SILVA",
+                cpf="111.111.111-11", uf="GO",
+                camara_municipios=["APARECIDA DE GOIANIA"],
+            ),
+            _person(
+                "p_filho", "ANTONIO LOPES DA SILVA",
+                cpf="222.222.222-22", uf="GO",
+                camara_municipios=["APARECIDA DE GOIANIA"],
+            ),
+            _person(
+                "p_shadow", "ANTONIO LOPES DA SILVA",
+                cpf=None, uf="GO",
+                camara_municipios=["APARECIDA DE GOIANIA"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # RHS sem CPF NÃO foi anexado a nenhum cluster (LHS ambíguo).
+        rhs_attached = [
+            e for e in pipeline.represents_rels
+            if e["target_element_id"] == "p_shadow"
+        ]
+        assert rhs_attached == []
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        ambiguous = [
+            e for e in entries if e["type"] == "municipal_lhs_ambiguous"
+        ]
+        assert len(ambiguous) == 1
+        assert ambiguous[0]["municipio"] == "APARECIDA DE GOIANIA"
+        assert sorted(ambiguous[0]["lhs_candidates"]) == ["p_filho", "p_pai"]
+
+    def test_multiplos_rhs_um_lhs_anexa_todos(self, tmp_path: Path) -> None:
+        # 1 Person com CPF + N Persons sem CPF (registros TSE 2024 +
+        # tse_bens 2024 = 2 inscrições da mesma pessoa) → todos vão pro
+        # mesmo cluster.
+        rows = [
+            _person(
+                "lhs", "MARIA APARECIDA SOUZA",
+                cpf="333.333.333-33", uf="GO",
+                camara_municipios=["RIO VERDE"],
+            ),
+            _person(
+                "rhs1", "MARIA APARECIDA SOUZA",
+                cpf=None, uf="GO",
+                camara_municipios=["RIO VERDE"],
+            ),
+            _person(
+                "rhs2", "MARIA APARECIDA SOUZA",
+                cpf=None, uf="GO",
+                camara_municipios=["RIO VERDE"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        municipal_edges = [
+            e for e in pipeline.represents_rels
+            if e["method"] == "name_municipio_vereador"
+        ]
+        assert sorted(e["target_element_id"] for e in municipal_edges) == [
+            "rhs1", "rhs2",
+        ]
+
+    def test_lhs_ja_em_cluster_federal_reusa(self, tmp_path: Path) -> None:
+        # Vereador eleito que também concorreu a deputado federal: o
+        # Person com CPF já está num cluster canon_camara_* via
+        # cpf_exact. A fase nova reusa esse cluster ao invés de criar um
+        # canon_cpf_* paralelo.
+        rows = [
+            _fed(
+                "fed1", "ROMARIO BARBOSA POLICARPO", id_camara="C9",
+                partido="PRD",
+            ),
+            _person(
+                "lhs", "ROMARIO BARBOSA POLICARPO",
+                cpf="025.784.541-08", uf="GO",
+                camara_municipios=["GOIANIA"],
+            ),
+            _person(
+                "rhs", "ROMARIO BARBOSA POLICARPO",
+                cpf=None, uf="GO",
+                camara_municipios=["GOIANIA"],
+            ),
+        ]
+        # Override: fed também precisa de CPF pleno (não mascarado) pra
+        # casar via cpf_exact com lhs. Trocamos pelo CPF pleno do lhs.
+        rows[0]["cpf"] = "025.784.541-08"
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # Só 1 cluster — canon_camara_C9 — contém os 3 nodes.
+        assert [c["canonical_id"] for c in pipeline.canonical_rows] == [
+            "canon_camara_C9",
+        ]
+        targets = sorted(
+            e["target_element_id"] for e in pipeline.represents_rels
+        )
+        assert targets == ["fed1", "lhs", "rhs"]
+        rhs_edge = next(
+            e for e in pipeline.represents_rels
+            if e["target_element_id"] == "rhs"
+        )
+        assert rhs_edge["method"] == "name_municipio_vereador"
+
+    def test_rhs_orfao_sem_lhs_nao_cria_cluster(self, tmp_path: Path) -> None:
+        # RHS sem âncora (nenhum Person com CPF mesmo nome+município) —
+        # fase pula silenciosamente, não cria cluster órfão.
+        rows = [
+            _person(
+                "rhs", "FULANO SEM ANCORA",
+                cpf=None, uf="GO",
+                camara_municipios=["INDAIA DE GOIAS"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        assert pipeline.canonical_rows == []
+        assert pipeline.represents_rels == []
+
+    def test_person_go_sem_camara_nao_entra(self, tmp_path: Path) -> None:
+        # Person GO sem MEMBRO_DE CamaraMunicipal não é vereador — fase
+        # ignora. Garante que doadores TSE etc. não viram âncora vereador.
+        rows = [
+            _person(
+                "lhs", "DOADOR ANONIMO",
+                cpf="999.999.999-99", uf="GO",
+                camara_municipios=[],  # sem câmara
+            ),
+            _person(
+                "rhs", "DOADOR ANONIMO",
+                cpf=None, uf="GO",
+                camara_municipios=[],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # Nenhum cluster gerado (nenhum cargo + LHS sem câmara não
+        # entra na fase nova).
+        assert pipeline.canonical_rows == []
+
+    def test_lhs_com_cpf_mascarado_nao_ancora(
+        self, tmp_path: Path,
+    ) -> None:
+        # CPF mascarado (***.***.*NN-NN) e sentinel sq:* não contam como
+        # CPF pleno — vão pro RHS, não ancoram identidade. Sem nenhum
+        # LHS válido, RHS não é anexado (mesmo cenário do
+        # test_rhs_orfao_sem_lhs_nao_cria_cluster).
+        rows = [
+            _person(
+                "p1", "BELTRANO TESTE",
+                cpf="***.***.*42-00", uf="GO",  # mascarado
+                camara_municipios=["GOIATUBA"],
+            ),
+            _person(
+                "p2", "BELTRANO TESTE",
+                cpf="sq:90001234567", uf="GO",  # sentinel
+                camara_municipios=["GOIATUBA"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # Nenhum LHS pleno → fase nova não roda. Nenhum cluster.
+        assert pipeline.canonical_rows == []
 
 
 class TestMetadata:

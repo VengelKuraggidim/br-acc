@@ -1434,6 +1434,162 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                 )
                 claimed.add(person["element_id"])
 
+    def _attach_municipal_name_matches(
+        self,
+        persons_go: list[dict[str, Any]],
+        claimed: set[str],
+    ) -> None:
+        """Anexa duplicatas de vereador GO via (name + municipio + uf=GO).
+
+        Cenário-alvo: vereadores GO duplicados — o TSE 2024 não publica
+        CPF (memória 2026-04-23), e ``tse_bens`` 2024 cria ``:Person``
+        sem CPF. Quando a mesma pessoa já existia com CPF (criada por
+        TSE pré-2024 ou por outras pipelines), surge N :Person com mesmo
+        ``name_normalized`` e mesma CamaraMunicipal — todos com
+        ``MEMBRO_DE :CamaraMunicipal {uf:'GO', municipio:M}``. Caso
+        canônico real medido em 2026-04-27: "ROMARIO BARBOSA POLICARPO"
+        GOIANIA — id 8071 com CPF (TSE 2020+2022 + enriquecimento 2024)
+        e id 501376 sem CPF (tse_bens 2024).
+
+        Algoritmo:
+
+        1. Indexa Persons GO por ``(name_normalized, municipio)`` separando
+           por CPF pleno (LHS, âncora) vs sem-CPF/mascarado/sentinel
+           (RHS, shadow vereador).
+        2. Pra cada chave com ≥1 RHS:
+           - Se LHS tem 1 elemento: cria/reusa cluster ancorado no LHS
+             (``canon_cpf_{digits}``), anexa cada RHS via REPRESENTS conf
+             0.90 (method ``name_municipio_vereador``). Se LHS já estava
+             num cluster (Federal/Estadual via ``cpf_exact``, ex.: vereador
+             que também concorreu a deputado federal), reusa esse cluster.
+           - Se LHS tem >1 elemento (homônimos com CPF na mesma Câmara):
+             audit ``municipal_lhs_ambiguous`` + skip — pai+filho com
+             mesmo nome sentando juntos é raro mas existe.
+           - Se LHS=0 (RHS órfão sem âncora com CPF): pula silenciosamente
+             (já é coberto pelos audits agregados ``shadow_*`` ou fica
+             como duplicata visível — fora do escopo desta fase).
+        3. RHS já em ``claimed`` é skipped (idempotência inter-fase).
+
+        Único path do pipeline que cria cluster ancorado em :Person fora
+        de cargos Senator/Fed/State, porque vereador não tem label de
+        cargo no grafo (sem ``:Vereador``; só ``:MEMBRO_DE :CamaraMunicipal``).
+        Conf 0.90 — entre cpf_suffix_name (0.92) e cpf_suffix_token_overlap
+        (0.88). Justificativa: nome exato + município é evidência forte
+        (município é discriminador local), mas RHS sem CPF impede
+        confirmação por documento.
+        """
+        # Indexa por (name_normalized, municipio) — restrito a Persons
+        # com pelo menos 1 CamaraMunicipal GO. Persons GO sem MEMBRO_DE
+        # CamaraMunicipal não entram (não são vereadores).
+        lhs_index: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        rhs_index: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for person in persons_go:
+            name_norm = person.get("name_normalized")
+            munis = person.get("camara_municipios") or ()
+            if not name_norm or not munis:
+                continue
+            cpf_raw = person.get("cpf")
+            # Sentinel ``sq:{...}`` e mascarado ``***.***.*NN-NN`` não
+            # contam como CPF pleno pra ancorar identidade — vão pro RHS.
+            if _is_sq_sentinel_cpf(cpf_raw) or _is_masked_cpf(cpf_raw):
+                cpf_digits = ""
+            else:
+                cpf_digits = _digits_only(cpf_raw)
+            has_full_cpf = (
+                len(cpf_digits) == 11 and cpf_digits != "00000000000"
+            )
+            for muni in munis:
+                key = (name_norm, muni)
+                if has_full_cpf:
+                    lhs_index[key].append(person)
+                else:
+                    rhs_index[key].append(person)
+
+        for key, rhs_list in rhs_index.items():
+            name_norm, muni = key
+            lhs_list = lhs_index.get(key, [])
+            if not lhs_list:
+                # RHS órfão sem âncora — fora do escopo: nem todos os
+                # vereadores 2024 têm contraparte com CPF. Sem audit
+                # próprio (ruidoso e a contagem agregada já indica via
+                # rows_in vs num_sources).
+                continue
+            if len(lhs_list) > 1:
+                self._audit_entries.append({
+                    "type": "municipal_lhs_ambiguous",
+                    "name_normalized": name_norm,
+                    "municipio": muni,
+                    "lhs_candidates": [p["element_id"] for p in lhs_list],
+                    "rhs_count": len(rhs_list),
+                })
+                continue
+            lhs = lhs_list[0]
+            # Se LHS já está em algum cluster, reusa. Caso contrário,
+            # cria cluster ancorado no LHS via canon_cpf_{digits}.
+            existing_cid = self._find_canonical_for_element(lhs["element_id"])
+            if existing_cid is not None:
+                canonical_id = existing_cid
+            else:
+                try:
+                    canonical_id = _canonical_id_for(
+                        lhs["primary_label"], lhs,
+                    )
+                except ValueError:
+                    # Sem CPF pleno → não dá pra derivar canon_cpf_*.
+                    # Defensivo: a checagem ``has_full_cpf`` acima já
+                    # filtra esse caso.
+                    continue
+                if canonical_id not in self._clusters:
+                    canonical = self._build_canonical_row(canonical_id, lhs)
+                    self._clusters[canonical_id] = {
+                        "canonical": canonical,
+                        "edges": [],
+                        # Sem cargo âncora — fases cpf_suffix_* iteram
+                        # ``cluster["cargo"]`` e devem pular este cluster.
+                        "cargo": None,
+                    }
+                    self._attach_source(
+                        canonical_id=canonical_id,
+                        node=lhs,
+                        method="cargo_root",
+                        confidence=1.00,
+                    )
+                    claimed.add(lhs["element_id"])
+
+            already_in_cluster = {
+                e["target_element_id"]
+                for e in self._clusters[canonical_id]["edges"]
+            }
+            for rhs in rhs_list:
+                if rhs["element_id"] in claimed:
+                    continue
+                if rhs["element_id"] in already_in_cluster:
+                    continue
+                self._attach_source(
+                    canonical_id=canonical_id,
+                    node=rhs,
+                    method="name_municipio_vereador",
+                    confidence=0.90,
+                )
+                claimed.add(rhs["element_id"])
+
+    def _find_canonical_for_element(self, element_id: str) -> str | None:
+        """Retorna ``canonical_id`` que contém ``element_id`` ou None.
+
+        Lookup linear nos clusters — usado pela fase
+        ``name_municipio_vereador`` pra reusar cluster federal/estadual
+        existente quando o LHS-Person-com-CPF já foi anexado por
+        ``cpf_exact``. Custo O(N_clusters * avg_edges); N_clusters em GO
+        é dezenas/centenas, ok pro single-shot do pipeline.
+        """
+        for cid, cluster in self._clusters.items():
+            if any(
+                e.get("target_element_id") == element_id
+                for e in cluster["edges"]
+            ):
+                return cid
+        return None
+
     def _disambiguate_by_partido(
         self,
         cargo: dict[str, Any],
