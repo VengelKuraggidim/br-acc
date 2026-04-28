@@ -46,18 +46,36 @@ regras 1-3 não pegam:
   (TSE) onde nome abreviado + CPF mascarado quebram as 3 primeiras
   regras. Conf 0.92. Múltiplos matches → audit + skip.
 
+* **cpf_suffix_token_overlap** (fase 3.5) — relaxa fase 3 substituindo
+  "todos os tokens contentfuls do cargo no Person" por "≥1 token em
+  comum" **mais** o filtro adicional de ``cargo_tse_{YYYY}`` no mesmo
+  nível do cargo (``Deputado Federal`` ↔ ``:FederalLegislator``, etc.).
+  Cobre nomes de campanha radicalmente reescritos onde o sufixo CPF
+  sozinho gera ambiguidade entre 2-4 candidatos do mesmo cargo TSE,
+  mas só um compartilha um token contentful com o nome do parlamentar:
+  "ADRIANO DO BALDY" ↔ "ADRIANO ANTONIO AVELAR" (3 candidatos
+  Deputado Federal sufixo 3153, só um com token "ADRIANO"); "DANIEL
+  AGROBOM" ↔ "DANIEL VIEIRA RAMOS"; "DR. ZACHARIAS CALIL" ↔ "ZACARIAS
+  CALIL HAMU" (4 candidatos sufixo 0100, só um com token "CALIL").
+  Conf 0.88 — entre cpf_suffix_name (0.92) e cpf_suffix_cargo (0.85),
+  porque a evidência de identidade é mais fraca que tokens-subset mas
+  mais forte que sufixo+cargo sem nome. Match único → attach;
+  múltiplos → audit. Tokens curtos (<3 chars) já caem no filtro de
+  ``_contentful_tokens``; tokens stopwords/honoríficos também.
+
 * **cpf_suffix_cargo** (fase 4) — fallback mais fraco pra quando
-  ``cpf_suffix_name`` falha por divergência ortográfica entre nome de
-  campanha (parlamentar) e nome TSE (candidato). Casa ``:Person`` GO
+  ``cpf_suffix_name`` E ``cpf_suffix_token_overlap`` falham (zero
+  tokens em comum entre nome cargo e nome Person). Casa ``:Person`` GO
   cujo ``cargo_tse_{YYYY}`` corresponde ao label do cargo (``Deputado
   Federal`` ↔ ``:FederalLegislator``, etc.) **e** cujos 4 últimos dígitos
   do CPF batem com o sufixo mascarado do cargo. Sem validar nome.
-  Cobre "PROFESSOR ALCIDES" ↔ "ALCIDES RIBEIRO FILHO" (token
-  honorífico não-padrão) e "DR. ZACHARIAS CALIL" ↔ "ZACARIAS CALIL
-  HAMU" (grafia divergente ZH/Z). Conf 0.85. Trava de match único é
-  obrigatória — sufixo de 4 dígitos sozinho tem ~1/10000 colisão e
-  acumulado em ~400-1000 candidatos GO por cargo gera ambiguidade
-  frequente; audit+skip quando >1.
+  Cobre "PROFESSOR ALCIDES" ↔ "ALCIDES RIBEIRO FILHO" (resolvido pela
+  3.5 quando há token "ALCIDES" comum) e nomes completamente
+  reescritos como "GLAUSTIN DA FOKUS" ↔ "GLAUSKSTON BATISTA RIOS"
+  (sem token comum, só sufixo + cargo). Conf 0.85. Trava de match
+  único é obrigatória — sufixo de 4 dígitos sozinho tem ~1/10000
+  colisão e acumulado em ~400-1000 candidatos GO por cargo gera
+  ambiguidade frequente; audit+skip quando >1.
 
 * **name_partido_multi** (fase 4.5) — pra cargos SEM CPF publicado
   (Senadores do pipeline ``senado_senadores_foto``; ``:StateLegislator``
@@ -109,8 +127,9 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 ``(:CanonicalPerson)-[:REPRESENTS]->(sourceNode)``. Props:
 
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
-  "name_stripped" | "cpf_suffix_name" | "cpf_suffix_cargo" |
-  "name_partido_multi" | "shadow_name_exact" | "cargo_root"``.
+  "name_stripped" | "cpf_suffix_name" | "cpf_suffix_token_overlap" |
+  "cpf_suffix_cargo" | "name_partido_multi" | "shadow_name_exact" |
+  "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -341,6 +360,29 @@ def _cargo_tokens_subset_of_person(
         return False
     person_tokens = set(_contentful_tokens(person_name_normalized))
     return all(tok in person_tokens for tok in cargo_tokens)
+
+
+def _cargo_person_share_token(
+    cargo_name_normalized: str,
+    person_name_normalized: str,
+) -> bool:
+    """True sse cargo e Person compartilham ≥1 token contentful.
+
+    Mais frouxa que ``_cargo_tokens_subset_of_person`` — basta um token
+    em comum (>= 3 chars, não-stopword, não-honorífico) pra retornar
+    True. Usada pela fase 3.5 ``cpf_suffix_token_overlap`` quando o
+    nome de campanha do parlamentar diverge muito do registro TSE
+    ("ADRIANO DO BALDY" vs "ADRIANO ANTONIO AVELAR" — só "ADRIANO"
+    em comum). Retorna False se um dos dois lados não tem nenhum
+    token contentful.
+    """
+    cargo_tokens = set(_contentful_tokens(cargo_name_normalized))
+    if not cargo_tokens:
+        return False
+    person_tokens = set(_contentful_tokens(person_name_normalized))
+    if not person_tokens:
+        return False
+    return bool(cargo_tokens & person_tokens)
 
 
 # Cypher: puxa todos os nós candidatos pro ER — os 3 cargos GO +
@@ -638,6 +680,20 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
             claimed=person_elt_ids_in_cluster,
         )
 
+        # ---- Fase 3.5: cpf_suffix_token_overlap attach ----
+        # Pra clusters em que fase 3 falha porque o nome de campanha do
+        # parlamentar diverge muito do registro TSE ("ADRIANO DO BALDY"
+        # ↔ "ADRIANO ANTONIO AVELAR"; "DR. ZACHARIAS CALIL" ↔ "ZACARIAS
+        # CALIL HAMU"). Relaxa o subset estrito pra "≥1 token contentful
+        # comum" e adiciona filtro ``cargo_tse_*`` no mesmo nível pra
+        # restringir candidatos. Resolve casos onde o sufixo CPF sozinho
+        # ambigua entre 2-4 candidatos, mas só um compartilha um token
+        # com o nome do parlamentar. Conf 0.88. Múltiplos → audit.
+        self._attach_cpf_suffix_token_overlap_matches(
+            persons_go=persons_go,
+            claimed=person_elt_ids_in_cluster,
+        )
+
         # ---- Fase 4: cpf_suffix_cargo attach ----
         # Fallback mais frouxo pra clusters que ainda não pegaram Person
         # TSE: sufixo CPF + cargo_tse_* do mesmo nível (Senador / Deputado
@@ -921,6 +977,91 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                     "cargo_name": cargo["name"],
                     "cpf_suffix": suffix,
                     "candidates": [p["element_id"] for p in candidates],
+                })
+
+    def _attach_cpf_suffix_token_overlap_matches(
+        self,
+        persons_go: list[dict[str, Any]],
+        claimed: set[str],
+    ) -> None:
+        """Anexa Person GO via CPF-suffix + ≥1 token comum + cargo_tse.
+
+        Fase intermediária entre fase 3 (``cpf_suffix_name``, requer
+        todos os tokens do cargo no Person) e fase 4 (``cpf_suffix_cargo``,
+        sem nome). Casa quando os 4 últimos dígitos do CPF batem, o
+        ``cargo_tse_{YYYY}`` do Person está no mesmo nível do label do
+        cargo (Senador/Deputado Federal/Estadual) e cargo+Person
+        compartilham ≥1 token contentful.
+
+        Cobre casos onde o nome de campanha foi reescrito (e.g.
+        "ADRIANO DO BALDY" ↔ "ADRIANO ANTONIO AVELAR", "DANIEL AGROBOM"
+        ↔ "DANIEL VIEIRA RAMOS", "DR. ZACHARIAS CALIL" ↔ "ZACARIAS
+        CALIL HAMU") onde o sufixo CPF sozinho casa com 2-4 candidatos
+        do mesmo cargo TSE, mas só um deles compartilha um token com o
+        parlamentar. Match único → attach (conf 0.88); múltiplos →
+        audit ``cpf_suffix_token_overlap_ambiguous`` + skip.
+        """
+        persons_by_suffix: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for person in persons_go:
+            cpf_raw = person.get("cpf")
+            if _is_sq_sentinel_cpf(cpf_raw) or _is_masked_cpf(cpf_raw):
+                continue
+            cpf_digits = _digits_only(cpf_raw)
+            if len(cpf_digits) != 11 or cpf_digits == "00000000000":
+                continue
+            if not person.get("cargo_tse_set"):
+                continue
+            persons_by_suffix[cpf_digits[-4:]].append(person)
+
+        for cluster in self._clusters.values():
+            cargo = cluster.get("cargo")
+            if not cargo:
+                continue
+            expected_cargo_tse = _CARGO_LABEL_TO_TSE.get(cargo["primary_label"])
+            if not expected_cargo_tse:
+                continue
+            cargo_cpf = cargo.get("cpf")
+            if not _is_masked_cpf(cargo_cpf):
+                continue
+            suffix = _visible_cpf_suffix(cargo_cpf)
+            if not suffix:
+                continue
+            cargo_name_norm = cargo.get("name_normalized") or ""
+            if not _contentful_tokens(cargo_name_norm):
+                continue
+            canonical_id = cluster["canonical"]["canonical_id"]
+            already_in_cluster = {e["target_element_id"] for e in cluster["edges"]}
+
+            candidates = [
+                p for p in persons_by_suffix.get(suffix, [])
+                if p["element_id"] not in claimed
+                and p["element_id"] not in already_in_cluster
+                and expected_cargo_tse in p["cargo_tse_set"]
+                and _cargo_person_share_token(
+                    cargo_name_norm,
+                    p["name_normalized"] or "",
+                )
+            ]
+            if len(candidates) == 1:
+                self._attach_source(
+                    canonical_id=canonical_id,
+                    node=candidates[0],
+                    method="cpf_suffix_token_overlap",
+                    confidence=0.88,
+                )
+                claimed.add(candidates[0]["element_id"])
+            elif len(candidates) > 1:
+                self._audit_entries.append({
+                    "type": "cpf_suffix_token_overlap_ambiguous",
+                    "cargo_element_id": cargo["element_id"],
+                    "cargo_label": cargo["primary_label"],
+                    "cargo_name": cargo["name"],
+                    "cpf_suffix": suffix,
+                    "expected_cargo_tse": expected_cargo_tse,
+                    "candidates": [
+                        {"element_id": p["element_id"], "name": p["name"]}
+                        for p in candidates
+                    ],
                 })
 
     def _attach_cpf_suffix_cargo_matches(

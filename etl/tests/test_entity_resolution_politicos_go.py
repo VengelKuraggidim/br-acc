@@ -28,6 +28,7 @@ from bracc_etl.pipelines.entity_resolution_politicos_go import (
     _SOURCE_ID,
     EntityResolutionPoliticosGoPipeline,
     _canonical_id_for,
+    _cargo_person_share_token,
     _cargo_tokens_subset_of_person,
     _contentful_tokens,
     _normalize_name,
@@ -288,6 +289,34 @@ class TestCargoTokensSubset:
         assert not _cargo_tokens_subset_of_person("DE DA", "DE DA JOAO")
 
 
+class TestCargoPersonShareToken:
+    def test_um_token_em_comum_passa(self) -> None:
+        # Caso ADRIANO DO BALDY ↔ ADRIANO ANTONIO AVELAR — nome de
+        # campanha reescrito mas "ADRIANO" sobrevive nos dois.
+        assert _cargo_person_share_token(
+            "ADRIANO DO BALDY", "ADRIANO ANTONIO AVELAR",
+        )
+
+    def test_zero_tokens_em_comum_falha(self) -> None:
+        # Caso GLAUSTIN DA FOKUS ↔ GLAUSKSTON BATISTA RIOS — nada
+        # bate exato (apesar do CPF + cargo serem o mesmo).
+        assert not _cargo_person_share_token(
+            "GLAUSTIN DA FOKUS", "GLAUSKSTON BATISTA RIOS",
+        )
+
+    def test_so_stopwords_em_comum_falha(self) -> None:
+        # "DE" / "DA" não contam — _contentful_tokens descarta.
+        assert not _cargo_person_share_token(
+            "JOAO DE SOUZA", "MARIA DA SILVA",
+        )
+
+    def test_cargo_vazio_falha(self) -> None:
+        assert not _cargo_person_share_token("", "ALCIDES RIBEIRO")
+
+    def test_person_vazio_falha(self) -> None:
+        assert not _cargo_person_share_token("ALCIDES RIBEIRO", "")
+
+
 class TestCanonicalId:
     def test_senado(self) -> None:
         node = {"id_senado": "5895"}
@@ -491,14 +520,15 @@ class TestHappyPath:
         )
         assert targets == ["n2", "n3"]
 
-    def test_fed_cpf_suffix_cargo_casa_quando_honorifico_divergente(
+    def test_fed_cpf_suffix_token_overlap_casa_alcides(
         self, tmp_path: Path,
     ) -> None:
         # Caso PROFESSOR ALCIDES: Fed "PROFESSOR ALCIDES" (CPF mascarado)
         # + Person TSE "ALCIDES RIBEIRO FILHO" com cargo_tse_2022=
-        # "Deputado Federal". cpf_suffix_name falha porque token
-        # "PROFESSOR" não aparece no Person (honorífico não-padrão).
-        # Fase 4 cpf_suffix_cargo pega: suffix + cargo level único.
+        # "Deputado Federal". cpf_suffix_name falha porque "PROFESSOR"
+        # não está no Person (honorífico não-padrão), mas o token
+        # "ALCIDES" é comum aos dois. Fase 3.5 pega: suffix +
+        # cargo_tse + ≥1 token comum + match único.
         fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
         fed["cpf"] = "***.***.*31-49"
         rows = [
@@ -516,28 +546,212 @@ class TestHappyPath:
 
         edges = pipeline.represents_rels
         methods = sorted(e["method"] for e in edges)
-        assert methods == ["cargo_root", "cpf_suffix_cargo"]
-        suffix_edge = next(e for e in edges if e["method"] == "cpf_suffix_cargo")
-        assert suffix_edge["confidence"] == pytest.approx(0.85)
+        assert methods == ["cargo_root", "cpf_suffix_token_overlap"]
+        suffix_edge = next(e for e in edges if e["method"] == "cpf_suffix_token_overlap")
+        assert suffix_edge["confidence"] == pytest.approx(0.88)
         assert suffix_edge["target_element_id"] == "n2"
 
-    def test_fed_cpf_suffix_cargo_roda_mesmo_com_shadow_sem_cpf(
+    def test_fed_cpf_suffix_token_overlap_resolve_adriano_do_baldy(
         self, tmp_path: Path,
     ) -> None:
-        # Caso PROFESSOR ALCIDES: cluster tem Person "PROFESSOR ALCIDES"
-        # (uf=GO mas sem CPF, oriundo de algum pipeline que gravou só
-        # o nome) matched via name_exact em fase 1. A trava de fase 4
-        # NÃO deve bloquear este caso porque Person sem CPF não é
-        # evidência forte da identidade — fase 4 agrega o Person TSE
-        # com CPF pleno.
+        # Caso real ADRIANO DO BALDY: 3 candidatos Deputado Federal GO
+        # com sufixo 3153, mas só ADRIANO ANTONIO AVELAR compartilha o
+        # token "ADRIANO" com o cargo. Fase 3 strict falha (token
+        # "BALDY" não aparece em nenhum), fase 4 ambígua (3 candidatos
+        # com cargo_tse=Federal). Fase 3.5 desambigua via overlap único.
+        fed = _fed("n1", "ADRIANO DO BALDY", id_camara="121948", partido="PP")
+        fed["cpf"] = "***.***.*31-53"
+        rows = [
+            fed,
+            _person(
+                "n2", "ADRIANO ANTONIO AVELAR",
+                cpf="507.465.531-53", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n3", "DANNILLO DA CUNHA PEREIRA",
+                cpf="597.308.031-53", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n4", "ELAINE RODRIGUES DE SOUZA",
+                cpf="924.155.631-53", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        methods = sorted(e["method"] for e in edges)
+        assert methods == ["cargo_root", "cpf_suffix_token_overlap"]
+        suffix_edge = next(e for e in edges if e["method"] == "cpf_suffix_token_overlap")
+        assert suffix_edge["target_element_id"] == "n2"
+
+    def test_fed_cpf_suffix_token_overlap_resolve_zacharias(
+        self, tmp_path: Path,
+    ) -> None:
+        # Caso real DR. ZACHARIAS CALIL ↔ ZACARIAS CALIL HAMU: grafia
+        # divergente ZH↔Z derruba "ZACHARIAS" do match exato, mas
+        # "CALIL" é token comum. 4 candidatos Deputado Federal sufixo
+        # 0100 — só ZACARIAS HAMU compartilha um token.
+        fed = _fed("n1", "DR. ZACHARIAS CALIL", id_camara="204412", partido="UNIÃO")
+        fed["cpf"] = "***.***.*01-00"
+        rows = [
+            fed,
+            _person(
+                "n2", "ZACARIAS CALIL HAMU",
+                cpf="118.330.501-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n3", "CARLOS ANTONIO DE SOUSA COSTA",
+                cpf="247.784.001-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n4", "RODNEY ROCHA MIRANDA",
+                cpf="317.252.101-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n5", "EDILSON CHAVES DE ARAUJO",
+                cpf="850.449.201-00", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        methods = sorted(e["method"] for e in edges)
+        assert methods == ["cargo_root", "cpf_suffix_token_overlap"]
+        suffix_edge = next(e for e in edges if e["method"] == "cpf_suffix_token_overlap")
+        assert suffix_edge["target_element_id"] == "n2"
+
+    def test_fed_cpf_suffix_token_overlap_ambiguidade_vira_audit(
+        self, tmp_path: Path,
+    ) -> None:
+        # 2 Persons Deputado Federal sufixo igual e ambos compartilham
+        # ≥1 token contentful com o cargo → audit, sem attach.
+        fed = _fed("n1", "JOAO SILVA", id_camara="42", partido="PT")
+        fed["cpf"] = "***.***.*11-11"
+        rows = [
+            fed,
+            _person(
+                "n2", "JOAO PEREIRA SANTOS",
+                cpf="111.222.311-11", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+            _person(
+                "n3", "SILVA ALMEIDA RIBEIRO",
+                cpf="999.888.711-11", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "cpf_suffix_token_overlap" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        overlap_audits = [
+            e for e in entries
+            if e["type"] == "cpf_suffix_token_overlap_ambiguous"
+        ]
+        assert len(overlap_audits) == 1
+        assert overlap_audits[0]["cpf_suffix"] == "1111"
+        assert len(overlap_audits[0]["candidates"]) == 2
+
+    def test_fed_cpf_suffix_token_overlap_skipa_quando_strict_resolve(
+        self, tmp_path: Path,
+    ) -> None:
+        # Regressão zero: quando fase 3 strict (cpf_suffix_name) já
+        # casa, fase 3.5 não deve roubar o Person nem disparar pra
+        # outro candidato. Person fica claimed pela fase 3.
+        fed = _fed("n1", "FLAVIA MORAIS", id_camara="160598", partido="PDT")
+        fed["cpf"] = "***.***.*71-34"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "FLAVIA CARREIRO ALBUQUERQUE MORAIS",
+                cpf="547.795.371-34", partido="PDT", uf="GO",
+                cargo_tse_values=["Deputado Federal"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = sorted(e["method"] for e in pipeline.represents_rels)
+        assert methods == ["cargo_root", "cpf_suffix_name"]
+        assert "cpf_suffix_token_overlap" not in methods
+
+    def test_fed_cpf_suffix_token_overlap_ignora_person_de_cargo_diferente(
+        self, tmp_path: Path,
+    ) -> None:
+        # Person GO Deputado Estadual com sufixo igual + token comum
+        # "ALCIDES" não deve anexar a um :FederalLegislator pela fase
+        # 3.5. Filtro cargo_tse_set bloqueia.
         fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
         fed["cpf"] = "***.***.*31-49"
         rows = [
             fed,
-            # Name-only match em fase 1 (name_exact).
+            _person(
+                "n2",
+                "ALCIDES RIBEIRO FILHO",
+                cpf="092.426.431-49",
+                uf="GO",
+                cargo_tse_values=["Deputado Estadual"],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "cpf_suffix_token_overlap" not in methods
+        assert methods == ["cargo_root"]
+
+    def test_fed_cpf_suffix_token_overlap_ignora_person_sem_cargo_tse(
+        self, tmp_path: Path,
+    ) -> None:
+        # Person GO sem cargo_tse_* (veio por outra via — receitas, bens
+        # genéricos, etc.) com sufixo + token comum não basta. Fase 3.5
+        # exige cargo_tse pra filtrar candidatos do mesmo nível.
+        fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
+        fed["cpf"] = "***.***.*31-49"
+        rows = [
+            fed,
+            _person(
+                "n2",
+                "ALCIDES RIBEIRO FILHO",
+                cpf="092.426.431-49",
+                uf="GO",
+                cargo_tse_values=[],
+            ),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "cpf_suffix_token_overlap" not in methods
+
+    def test_fed_cpf_suffix_token_overlap_roda_mesmo_com_shadow_sem_cpf(
+        self, tmp_path: Path,
+    ) -> None:
+        # Caso PROFESSOR ALCIDES com Person shadow uf=GO sem CPF
+        # matched via name_exact em fase 1: o cluster ainda é elegível
+        # pra fase 3.5 (Person sem CPF não conta como "evidência forte
+        # de identidade"). Anexa o Person TSE com CPF pleno.
+        fed = _fed("n1", "PROFESSOR ALCIDES", id_camara="204390", partido="PSDB")
+        fed["cpf"] = "***.***.*31-49"
+        rows = [
+            fed,
             _person("n2", "PROFESSOR ALCIDES", cpf=None, uf="GO"),
-            # TSE com CPF: cpf_suffix_name falha (token "PROFESSOR" não
-            # está no Person), mas cpf_suffix_cargo pega.
             _person(
                 "n3",
                 "ALCIDES RIBEIRO FILHO",
@@ -551,7 +765,7 @@ class TestHappyPath:
 
         edges = pipeline.represents_rels
         methods = sorted(e["method"] for e in edges)
-        assert methods == ["cargo_root", "cpf_suffix_cargo", "name_exact"]
+        assert methods == ["cargo_root", "cpf_suffix_token_overlap", "name_exact"]
         targets = {e["target_element_id"] for e in edges if e["method"] != "cargo_root"}
         assert targets == {"n2", "n3"}
 
@@ -602,25 +816,28 @@ class TestHappyPath:
     def test_fed_cpf_suffix_cargo_ambiguidade_vira_audit(
         self, tmp_path: Path,
     ) -> None:
-        # 4 Persons TSE Deputado Federal com mesmo sufixo → audit, sem
-        # attach (regra de match único vale pra fase 4 também).
-        fed = _fed("n1", "DR. ZACHARIAS CALIL", id_camara="204412", partido="UNIÃO")
-        fed["cpf"] = "***.***.*01-00"
+        # Múltiplos Persons TSE Deputado Federal com mesmo sufixo e
+        # nenhum token contentful compartilhado com o cargo (caso
+        # "GLAUSTIN DA FOKUS"-like onde nem fase 3 nem 3.5 resolvem) →
+        # cai na fase 4, que vê 3 candidatos com cargo igual e manda
+        # audit.
+        fed = _fed("n1", "GLAUSTIN DA FOKUS", id_camara="204419", partido="PSC")
+        fed["cpf"] = "***.***.*61-91"
         rows = [
             fed,
             _person(
-                "n2", "ZACARIAS CALIL HAMU",
-                cpf="118.330.501-00", uf="GO",
+                "n2", "CARLOS ANTONIO DE SOUSA COSTA",
+                cpf="247.784.061-91", uf="GO",
                 cargo_tse_values=["Deputado Federal"],
             ),
             _person(
-                "n3", "CARLOS ANTONIO DE SOUSA COSTA",
-                cpf="247.784.001-00", uf="GO",
+                "n3", "RODNEY ROCHA MIRANDA",
+                cpf="317.252.161-91", uf="GO",
                 cargo_tse_values=["Deputado Federal"],
             ),
             _person(
-                "n4", "RODNEY ROCHA MIRANDA",
-                cpf="317.252.101-00", uf="GO",
+                "n4", "EDILSON CHAVES DE ARAUJO",
+                cpf="850.449.261-91", uf="GO",
                 cargo_tse_values=["Deputado Federal"],
             ),
         ]
@@ -629,6 +846,7 @@ class TestHappyPath:
 
         methods = [e["method"] for e in pipeline.represents_rels]
         assert "cpf_suffix_cargo" not in methods
+        assert "cpf_suffix_token_overlap" not in methods
         audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
         entries = [
             json.loads(line)
@@ -638,7 +856,7 @@ class TestHappyPath:
             e for e in entries if e["type"] == "cpf_suffix_cargo_ambiguous"
         ]
         assert len(suffix_cargo_audits) == 1
-        assert suffix_cargo_audits[0]["cpf_suffix"] == "0100"
+        assert suffix_cargo_audits[0]["cpf_suffix"] == "6191"
         assert suffix_cargo_audits[0]["expected_cargo_tse"] == "DEPUTADO FEDERAL"
         assert len(suffix_cargo_audits[0]["candidates"]) == 3
 
