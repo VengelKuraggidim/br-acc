@@ -15,6 +15,7 @@ Cobre:
 
 from __future__ import annotations
 
+import csv
 import json
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
@@ -1196,6 +1197,273 @@ class TestShadowPrefixMatch:
         ]
         assert len(prefix_edges) == 1
         assert prefix_edges[0]["target_element_id"] == "n3"
+
+
+class TestManualOverrides:
+    def _write_overrides_csv(
+        self, tmp_path: Path, rows: list[dict[str, str]],
+    ) -> Path:
+        path = tmp_path / "overrides.csv"
+        fieldnames = [
+            "canonical_id", "target_kind", "target_key", "confidence",
+            "notes", "added_by", "added_at",
+        ]
+        with path.open("w", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({k: row.get(k, "") for k in fieldnames})
+        return path
+
+    def test_override_aplica_quando_cluster_existe(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Cluster Senator + Person sem nada bater pelas regras
+        # automáticas; override anexa o Person via sq_candidato.
+        rows = [
+            _senator("n1", "JORGE KAJURU", id_senado="5895"),
+            _person(
+                "n2", "PESSOA TOTALMENTE DIFERENTE",
+                cpf="999.888.777-66", uf="GO", sq_candidato="901234",
+            ),
+        ]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_senado_5895",
+            "target_kind": "sq_candidato",
+            "target_key": "901234",
+            "confidence": "1.0",
+            "added_by": "fernando",
+            "added_at": "2026-04-27",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges_by_method: dict[str, list[str]] = {}
+        for e in pipeline.represents_rels:
+            edges_by_method.setdefault(e["method"], []).append(
+                e["target_element_id"],
+            )
+        assert edges_by_method.get("manual_override") == ["n2"]
+
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        applied = [e for e in entries if e["type"] == "override_applied"]
+        assert len(applied) == 1
+        assert applied[0]["canonical_id"] == "canon_senado_5895"
+        assert applied[0]["added_by"] == "fernando"
+
+    def test_override_skip_quando_canonical_nao_existe(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        rows = [_senator("n1", "JORGE KAJURU", id_senado="5895")]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_senado_99999",  # cluster inexistente
+            "target_kind": "id_senado",
+            "target_key": "5895",
+            "confidence": "1.0",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "manual_override" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        skipped = [e for e in entries if e["type"] == "override_skipped"]
+        assert len(skipped) == 1
+        assert skipped[0]["reason"] == "no_cluster"
+
+    def test_override_skip_quando_target_em_outro_cluster(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Person n2 já anexado a canon_senado_5895 via name_exact.
+        # Override tenta movê-lo pra canon_camara_999 (outro cluster) →
+        # conflict, skip.
+        rows = [
+            _senator("n1", "JORGE KAJURU", id_senado="5895"),
+            _person(
+                "n2", "JORGE KAJURU",
+                cpf="218.405.711-87", uf="GO", sq_candidato="111222",
+            ),
+            _fed("n3", "OUTRO POLITICO", id_camara="999", partido="PT"),
+        ]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_camara_999",
+            "target_kind": "sq_candidato",
+            "target_key": "111222",
+            "confidence": "1.0",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # n2 continua só no cluster Senator.
+        attached_to_camara = [
+            e for e in pipeline.represents_rels
+            if e["method"] == "manual_override"
+            and e["target_element_id"] == "n2"
+        ]
+        assert attached_to_camara == []
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        conflicts = [
+            e for e in entries
+            if e["type"] == "override_skipped"
+            and e["reason"] == "conflict_other_cluster"
+        ]
+        assert len(conflicts) == 1
+        assert conflicts[0]["other_canonical_id"] == "canon_senado_5895"
+
+    def test_override_idempotente_quando_target_ja_no_mesmo_cluster(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # n2 já casa por name_exact; override afirmando o mesmo é no-op
+        # (sem manual_override duplicado, sem audit).
+        rows = [
+            _senator("n1", "JORGE KAJURU", id_senado="5895"),
+            _person(
+                "n2", "JORGE KAJURU",
+                cpf="218.405.711-87", uf="GO", sq_candidato="111222",
+            ),
+        ]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_senado_5895",
+            "target_kind": "sq_candidato",
+            "target_key": "111222",
+            "confidence": "1.0",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "manual_override" not in methods  # n2 já estava
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        # Sem override_applied (idempotente) e sem override_skipped.
+        override_entries = [
+            e for e in entries if e["type"].startswith("override_")
+        ]
+        assert override_entries == []
+
+    def test_override_csv_inexistente_nao_quebra(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv(
+            "BRACC_ER_OVERRIDES_PATH",
+            str(tmp_path / "no-such-file.csv"),
+        )
+        rows = [_senator("n1", "JORGE KAJURU", id_senado="5895")]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+        # Pipeline rodou normalmente; nenhuma audit de override
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        assert not any(e["type"].startswith("override_") for e in entries)
+
+    def test_override_target_kind_invalido_skip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        rows = [_senator("n1", "JORGE KAJURU", id_senado="5895")]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_senado_5895",
+            "target_kind": "element_id",  # não está no whitelist
+            "target_key": "anything",
+            "confidence": "1.0",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        skipped = [
+            e for e in entries
+            if e["type"] == "override_skipped"
+            and e["reason"] == "invalid_target_kind"
+        ]
+        assert len(skipped) == 1
+
+    def test_override_target_inexistente_skip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        rows = [_senator("n1", "JORGE KAJURU", id_senado="5895")]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_senado_5895",
+            "target_kind": "sq_candidato",
+            "target_key": "999999",  # nenhum nó tem isso
+            "confidence": "1.0",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        skipped = [
+            e for e in entries
+            if e["type"] == "override_skipped" and e["reason"] == "no_target"
+        ]
+        assert len(skipped) == 1
+
+    def test_override_cpf_normaliza_digitos(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # CSV com CPF em formato pleno; node tem CPF com pontos. O
+        # target_kind=cpf normaliza dígitos antes de comparar.
+        rows = [
+            _senator("n1", "JORGE KAJURU", id_senado="5895"),
+            _person(
+                "n2", "PESSOA SEM MATCH",
+                cpf="218.405.711-87", uf="GO",
+            ),
+        ]
+        overrides = self._write_overrides_csv(tmp_path, [{
+            "canonical_id": "canon_senado_5895",
+            "target_kind": "cpf",
+            "target_key": "21840571187",  # cru
+            "confidence": "1.0",
+        }])
+        monkeypatch.setenv("BRACC_ER_OVERRIDES_PATH", str(overrides))
+
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        manual_edges = [
+            e for e in pipeline.represents_rels
+            if e["method"] == "manual_override"
+        ]
+        assert len(manual_edges) == 1
+        assert manual_edges[0]["target_element_id"] == "n2"
 
 
 class TestProvenance:

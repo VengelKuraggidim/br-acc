@@ -109,6 +109,19 @@ regras 1-3 não pegam:
   baixa que ``shadow_name_exact`` porque a evidência de identidade é
   mais fraca).
 
+* **manual_override** (fase 6, opcional) — última camada, lê CSV
+  versionado em ``docs/entity_resolution_overrides.csv`` (path
+  configurável via env ``BRACC_ER_OVERRIDES_PATH``) com linhas
+  ``canonical_id,target_kind,target_key,confidence,notes,added_by,
+  added_at``. Cada linha é uma afirmação humana: "anexe este nó
+  (identificado por chave estável: ``sq_candidato``/``id_senado``/
+  ``id_camara``/``legislator_id``/``cpf``) ao cluster ``canonical_id``
+  com método ``manual_override``". Conf default 1.0. Skippar (audit)
+  quando: (a) cluster não existe; (b) target não bate nenhum nó; (c)
+  target já anexado a OUTRO cluster (conflito, requer review humana).
+  Idempotente quando target já está no mesmo cluster (no-op). CSV
+  ausente é OK — fase desativa silenciosamente.
+
 Stop on ambiguidade é política do projeto (CLAUDE.md §3). Audit log em
 ``data/entity_resolution_politicos_go/audit_{run_id}.jsonl`` lista todos
 os casos puláveis pra revisão humana.
@@ -141,7 +154,7 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
   "name_stripped" | "cpf_suffix_name" | "cpf_suffix_token_overlap" |
   "cpf_suffix_cargo" | "name_partido_multi" | "shadow_name_exact" |
-  "shadow_prefix_match" | "cargo_root"``.
+  "shadow_prefix_match" | "manual_override" | "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -160,8 +173,10 @@ desta derivação *é* a lógica de resolução versionada em git.
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
+import os
 import re
 import unicodedata
 from collections import Counter, defaultdict
@@ -241,6 +256,49 @@ _CARGO_LABEL_TO_TSE: dict[str, str] = {
     "FederalLegislator": "DEPUTADO FEDERAL",
     "StateLegislator": "DEPUTADO ESTADUAL",
 }
+
+# Chaves estáveis aceitas em ``docs/entity_resolution_overrides.csv``.
+# ``cpf`` é normalizado pra dígitos antes de comparar; os outros são
+# comparados como string crua. Não inclui ``element_id`` propositalmente
+# — esses IDs são do Neo4j local e não sobrevivem re-ingestão.
+_OVERRIDE_TARGET_KINDS = frozenset({
+    "sq_candidato", "id_senado", "id_camara", "legislator_id", "cpf",
+})
+
+_OVERRIDES_ENV_VAR = "BRACC_ER_OVERRIDES_PATH"
+_DEFAULT_OVERRIDES_PATH = Path("docs/entity_resolution_overrides.csv")
+
+
+def _resolve_overrides_path() -> Path:
+    """Resolve o path do CSV de overrides — env var sobrepõe o default."""
+    override = os.environ.get(_OVERRIDES_ENV_VAR)
+    if override:
+        return Path(override)
+    return _DEFAULT_OVERRIDES_PATH
+
+
+def _load_overrides_csv(path: Path) -> list[dict[str, str]]:
+    """Lê o CSV de overrides; retorna lista de dicts ou [] se não existe.
+
+    Schema: ``canonical_id,target_kind,target_key,confidence,notes,added_by,
+    added_at``. Apenas ``canonical_id``, ``target_kind`` e ``target_key``
+    são obrigatórios; o resto é opcional (``confidence`` default 1.0).
+    """
+    if not path.exists():
+        return []
+    rows: list[dict[str, str]] = []
+    with path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            cleaned = {k: (v.strip() if v else "") for k, v in row.items()}
+            if not cleaned.get("canonical_id"):
+                continue
+            if not cleaned.get("target_kind"):
+                continue
+            if not cleaned.get("target_key"):
+                continue
+            rows.append(cleaned)
+    return rows
 
 
 def _strip_accents(text: str) -> str:
@@ -831,6 +889,14 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                 "shadow_name": shadow["name"],
             })
 
+        # ---- Fase 6: manual_override (CSV) ----
+        # Última camada — afirmações humanas via CSV versionado. Roda
+        # depois de todas as regras automáticas pra que o operador
+        # possa: (a) agregar match novo a cluster órfão; (b) ver no
+        # audit se a override colide com regra automática (mesmo
+        # cluster = no-op; outro cluster = audit conflict).
+        self._apply_manual_overrides(claimed=person_elt_ids_in_cluster)
+
         # ---- Finaliza: materializa rows pra Neo4jBatchLoader ----
         for cluster in self._clusters.values():
             self.canonical_rows.append(cluster["canonical"])
@@ -1359,6 +1425,159 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
             record_id=canonical_id,
             record_url=record_url,
         )
+
+    def _find_node_by_kind(
+        self,
+        target_kind: str,
+        target_key: str,
+    ) -> dict[str, Any] | None:
+        """Procura nó-fonte por chave estável (sq_candidato, id_camara, etc.).
+
+        ``cpf`` é normalizado pra dígitos (aceita formato pleno
+        ``"547.795.371-34"`` ou cru ``"54779537134"``); os outros são
+        comparados como string crua. Retorna o primeiro match — assume
+        que chaves estáveis são únicas no escopo do pipeline. Se houver
+        ambiguidade, o caller fica com o primeiro e o operador deve
+        usar uma chave mais específica.
+        """
+        target_key_normalized = target_key.strip()
+        if target_kind == "cpf":
+            target_key_normalized = _digits_only(target_key)
+            if not target_key_normalized:
+                return None
+        for nodes in self._nodes_by_label.values():
+            for node in nodes:
+                value = node.get(target_kind)
+                if value is None:
+                    continue
+                value_str = str(value)
+                if target_kind == "cpf":
+                    value_str = _digits_only(value_str)
+                if value_str == target_key_normalized:
+                    return node
+        return None
+
+    def _apply_manual_overrides(self, *, claimed: set[str]) -> None:
+        """Aplica overrides do CSV humano em ``docs/entity_resolution_overrides.csv``.
+
+        CSV ausente → no-op. Cada linha vira um attach manual_override
+        ou um audit (motivo: no_cluster, no_target, conflict_other_cluster,
+        invalid_target_kind, invalid_confidence). Idempotente quando o
+        target já está no cluster apontado (skip silencioso).
+        """
+        path = _resolve_overrides_path()
+        try:
+            overrides = _load_overrides_csv(path)
+        except OSError as exc:
+            self._audit_entries.append({
+                "type": "override_load_failed",
+                "path": str(path),
+                "error": str(exc),
+            })
+            return
+        if not overrides:
+            return
+
+        for row in overrides:
+            canonical_id = row["canonical_id"]
+            target_kind = row["target_kind"]
+            target_key = row["target_key"]
+
+            if target_kind not in _OVERRIDE_TARGET_KINDS:
+                self._audit_entries.append({
+                    "type": "override_skipped",
+                    "reason": "invalid_target_kind",
+                    "canonical_id": canonical_id,
+                    "target_kind": target_kind,
+                    "target_key": target_key,
+                })
+                continue
+
+            cluster = self._clusters.get(canonical_id)
+            if cluster is None:
+                self._audit_entries.append({
+                    "type": "override_skipped",
+                    "reason": "no_cluster",
+                    "canonical_id": canonical_id,
+                    "target_kind": target_kind,
+                    "target_key": target_key,
+                })
+                continue
+
+            target_node = self._find_node_by_kind(target_kind, target_key)
+            if target_node is None:
+                self._audit_entries.append({
+                    "type": "override_skipped",
+                    "reason": "no_target",
+                    "canonical_id": canonical_id,
+                    "target_kind": target_kind,
+                    "target_key": target_key,
+                })
+                continue
+
+            target_eid = target_node["element_id"]
+            already_in_cluster = any(
+                e.get("target_element_id") == target_eid
+                for e in cluster["edges"]
+            )
+            if already_in_cluster:
+                # Idempotente — afirmação humana confirma o que regra
+                # automática já fez. Nada pra fazer.
+                continue
+
+            if target_eid in claimed:
+                # Em outro cluster — conflito requer review humana.
+                other_canonical = next(
+                    (
+                        cid for cid, cl in self._clusters.items()
+                        if any(
+                            e.get("target_element_id") == target_eid
+                            for e in cl["edges"]
+                        )
+                    ),
+                    None,
+                )
+                self._audit_entries.append({
+                    "type": "override_skipped",
+                    "reason": "conflict_other_cluster",
+                    "canonical_id": canonical_id,
+                    "other_canonical_id": other_canonical,
+                    "target_kind": target_kind,
+                    "target_key": target_key,
+                })
+                continue
+
+            confidence_raw = row.get("confidence") or "1.0"
+            try:
+                confidence = float(confidence_raw)
+            except ValueError:
+                self._audit_entries.append({
+                    "type": "override_skipped",
+                    "reason": "invalid_confidence",
+                    "canonical_id": canonical_id,
+                    "target_kind": target_kind,
+                    "target_key": target_key,
+                    "confidence": confidence_raw,
+                })
+                continue
+
+            self._attach_source(
+                canonical_id=canonical_id,
+                node=target_node,
+                method="manual_override",
+                confidence=confidence,
+            )
+            claimed.add(target_eid)
+            self._audit_entries.append({
+                "type": "override_applied",
+                "canonical_id": canonical_id,
+                "target_kind": target_kind,
+                "target_key": target_key,
+                "target_element_id": target_eid,
+                "confidence": confidence,
+                "added_by": row.get("added_by") or "",
+                "added_at": row.get("added_at") or "",
+            })
 
     def _attach_source(
         self,
