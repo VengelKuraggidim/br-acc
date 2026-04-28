@@ -1,14 +1,23 @@
-# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22)
+# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22, recheck 2026-04-27)
 
 > Commit `0f1b3c6` entrega o scraper completo (detalhes abaixo).
 >
-> **Produção barrada**: verificado em 2026-04-22, `https://tcmgo.tc.br/robots.txt`
-> termina com `User-agent: *\nDisallow: /`. Sob a interpretação conservadora
+> **Produção barrada**: verificado em 2026-04-22, recheck em 2026-04-27 —
+> tanto `https://tcmgo.tc.br/robots.txt` quanto `https://www.tcmgo.tc.br/robots.txt`
+> terminam com `User-agent: *\nDisallow: /`. Sob a interpretação conservadora
 > de combinar grupos com mesmo User-agent (Google/RFC 9309 em caso de
 > conflito), isso proíbe crawling de qualquer path do subdomínio — inclusive
 > o widget `/portalwidgets/xhtml/impedimento/impedimento.jsf`. O scraper
 > não deve ser executado contra este host enquanto o robots.txt estiver
 > nesse estado.
+>
+> **Smoke-test 2026-04-27**: 25/25 tests do pipeline passam contra a fixture
+> `etl/tests/fixtures/tcmgo_sancoes/impedidos_licitar.csv` (extract +
+> transform + load), confirmando que o caminho de ingestão está pronto pra
+> receber o CSV real assim que a LAI retornar — basta soltar o arquivo em
+> `data/tcmgo_sancoes/impedidos_licitar.csv` no shape
+> `nome;cpf_cnpj;data_inicio;data_fim;orgao;processo;situacao` (mesmo
+> separador `;` e header).
 >
 > **Fallback indicado pela própria TODO**: pedido LAI / e-SIC ao TCM-GO
 > (`ouvidoria@tcmgo.tc.br`) requisitando export da lista em CSV. Quando

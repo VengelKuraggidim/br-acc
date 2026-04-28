@@ -1,4 +1,21 @@
-# Cargo-prefix match: nome parlamentar curto → :Person legal completo — ⏳ PENDENTE (2026-04-18)
+# Cargo-prefix match: nome parlamentar curto → :Person legal completo — 🟡 CASOS CANÔNICOS RESOLVIDOS (2026-04-27)
+
+> Audit 2026-04-27 no Neo4j local pós-rerun ER:
+> - GUSTAVO GAYER (220568) → GUSTAVO GAYER MACHADO DE ARAUJO (CPF
+>   934.054.561-34) já match via `cpf_suffix_name` (token "GUSTAVO" +
+>   "GAYER" presentes no Person + sufixo CPF bate).
+> - DR. ISMAEL ALEXANDRINO (220570) → ISMAEL ALEXANDRINO JUNIOR (CPF
+>   702.251.501-82) já match via `name_stripped` (honoríficos
+>   normalizados nos dois lados).
+>
+> Os casos canônicos que motivaram o débito caem hoje pela combinação
+> `cpf_suffix_name` (fase 3) + `cpf_suffix_token_overlap` (fase 3.5,
+> commit `3b82204`). Infra de "cargo_prefix_of_person" + CPF
+> check-digit fica como reserva pra eventuais casos futuros onde
+> nenhum caminho `cpf_suffix_*` aplique (parlamentar sem CPF
+> mascarado e Person sem cargo_tse_*) — improvável dado os pipelines
+> atuais.
+
 
 > Estende o `entity_resolution_politicos_go` pra anexar ``:Person``
 > completo (com CPF + sq_candidato + UF) quando o nó-fonte de cargo
