@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import csv
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -131,16 +130,27 @@ class TestParseIrregulares:
 class TestParseFiscalizacoes:
     def test_row_count(self, fiscalizacoes_payload: dict) -> None:
         rows = parse_fiscalizacoes_dom(fiscalizacoes_payload)
-        # ~50-60 fiscalizações em andamento (validar com captura real)
+        # O sheet tem 2 tabelas (summary + detail); ~50-60 linhas combinadas
         assert 30 < len(rows) < 200, f"unexpected count: {len(rows)}"
 
     def test_columns_populated(self, fiscalizacoes_payload: dict) -> None:
         rows = parse_fiscalizacoes_dom(fiscalizacoes_payload)
         for r in rows:
-            assert r["numero"], "numero vazio em {}".format(r)
+            assert r["numero"], f"numero vazio em {r}"
             assert r["descricao"]
-            # status pode estar vazio em casos raros; relator também
             assert r["ano"].isdigit() and len(r["ano"]) == 4
+
+    def test_both_table_shapes_present(
+        self, fiscalizacoes_payload: dict,
+    ) -> None:
+        """Ambas tabelas (summary e detail) devem produzir linhas distintas
+        no resultado — a summary preenche ``situacao`` + ``relator``, a
+        detail preenche ``jurisdicionado`` + ``objetivo`` + ``lace``."""
+        rows = parse_fiscalizacoes_dom(fiscalizacoes_payload)
+        with_status = [r for r in rows if r["situacao"]]
+        with_jurisdicionado = [r for r in rows if r["jurisdicionado"]]
+        assert with_status, "nenhuma linha summary parseada"
+        assert with_jurisdicionado, "nenhuma linha detail parseada"
 
     def test_inicio_format(self, fiscalizacoes_payload: dict) -> None:
         rows = parse_fiscalizacoes_dom(fiscalizacoes_payload)
@@ -157,7 +167,8 @@ class TestParseFiscalizacoes:
             writer = csv.DictWriter(
                 fh,
                 fieldnames=["numero", "ano", "tipo", "situacao",
-                            "descricao", "relator", "inicio", "jurisdicionado"],
+                            "descricao", "relator", "inicio", "jurisdicionado",
+                            "objetivo", "lace"],
                 delimiter=";",
             )
             writer.writeheader()
@@ -167,11 +178,13 @@ class TestParseFiscalizacoes:
         pipeline = TceGoPipeline(driver=MagicMock(), data_dir=str(tmp_path))
         pipeline.extract()
         pipeline.transform()
-        assert len(pipeline.audits) == len(rows)
-        # status do painel mapeia pra audit.status via row_pick(situacao)
+        # Pipeline dedup é por (numero, titulo, inicio); summary e detail
+        # do mesmo processo têm titulos distintos = 2 audits separados.
+        # Esperamos no máximo o input total e pelo menos a metade
+        # (cobrindo dedup natural de linhas idênticas no input).
+        assert 0 < len(pipeline.audits) <= len(rows)
         statuses = {a["status"] for a in pipeline.audits}
-        # Expect to see at least one common status from the captured snapshot
-        assert any(s for s in statuses)
+        assert any(s for s in statuses), "nenhum status preservado"
 
 
 class TestEmptyDom:

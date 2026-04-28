@@ -73,6 +73,14 @@ async def search_entities(
     hide_person_entities = should_hide_person_entities()
     lucene_query = _to_lucene_query(q)
 
+    # Buffer extra pra dedup por canonical_id pós-paginação. Quando 2+
+    # nós no fulltext (Person com CPF + Person sem CPF do TSE 2024 +
+    # FederalLegislator etc.) compartilham um :CanonicalPerson, o
+    # router colapsa pra 1 row — sem buffer, a página voltaria curta.
+    # Fator 4x cobre o pior caso comum (Senator + Fed + 2 Persons na
+    # mesma pessoa) sem inflar custo do fulltext.
+    fetch_limit = size * 4
+
     records = await execute_query(
         session,
         "search",
@@ -80,7 +88,7 @@ async def search_entities(
             "query": lucene_query,
             "entity_type": type_filter,
             "skip": skip,
-            "limit": size,
+            "limit": fetch_limit,
             "hide_person_entities": hide_person_entities,
         },
     )
@@ -96,12 +104,27 @@ async def search_entities(
     total = int(total_record["total"]) if total_record and total_record["total"] is not None else 0
 
     results: list[SearchResult] = []
+    # Dedup por canonical_id: o primeiro nó (maior score) de cada cluster
+    # representa a pessoa; nós seguintes do mesmo cluster são suprimidos.
+    # Nós sem canonical_id (não-pessoa, ou Person GO sem CamaraMunicipal)
+    # nunca colidem porque a chave fica nula. O ranking por label oficial
+    # é responsabilidade do display_name do CanonicalPerson, não do search.
+    seen_canonicals: set[str] = set()
     for record in records:
         node = record["node"]
         props = dict(node)
         labels = record["node_labels"]
         if hide_person_entities and has_person_labels(labels):
             continue
+        canonical_id = (
+            record["canonical_id"]
+            if "canonical_id" in record.keys()
+            else None
+        )
+        if canonical_id:
+            if canonical_id in seen_canonicals:
+                continue
+            seen_canonicals.add(canonical_id)
         source_val = props.pop("source", None)
         sources: list[SourceAttribution] = []
         if isinstance(source_val, str):
@@ -122,7 +145,10 @@ async def search_entities(
             properties=sanitize_public_properties(sanitize_props(props)),
             sources=sources,
             exposure_tier=infer_exposure_tier(labels),
+            canonical_id=canonical_id,
         ))
+        if len(results) >= size:
+            break
 
     return SearchResponse(
         results=results,

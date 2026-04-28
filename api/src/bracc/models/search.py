@@ -12,6 +12,7 @@ class SearchResult(BaseModel):
     properties: dict[str, str | float | int | bool | None]
     sources: list[SourceAttribution]
     exposure_tier: str = "public_safe"
+    canonical_id: str | None = None
 
 
 class SearchResponse(BaseModel):

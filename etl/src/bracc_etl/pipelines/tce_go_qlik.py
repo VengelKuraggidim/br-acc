@@ -43,7 +43,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -122,48 +122,91 @@ def parse_irregulares_dom(payload: dict[str, Any]) -> list[dict[str, str]]:
 def parse_fiscalizacoes_dom(payload: dict[str, Any]) -> list[dict[str, str]]:
     """Convert captured DOM payload into rows for ``fiscalizacoes.csv``.
 
-    Logical columns observed (dedupe-aplicado): ``[numero, ano, tipo,
-    status, descricao, relator, (vazia trailing)]``.
+    O sheet renderiza DOIS straight-tables com schemas diferentes — o
+    Selenium scrape pega ambos e cada linha retorna com 7 ou 9 colunas
+    após dedupe:
 
-    Output columns match aliases que ``_transform_audits`` aceita:
+    - **summary** (7 cols): ``[numero, ano, tipo, status, descricao, relator, ""]``
+    - **detail**  (9 cols): ``[numero, numero_pai, ano, tipo, jurisdicionado,
+      descricao, objetivo, lace, ""]``
 
-    - ``numero``     ← número do processo (e.g., ``125457``)
-    - ``descricao``  ← descrição da fiscalização (alias de ``titulo``)
-    - ``situacao``   ← status (alias de ``status``)
-    - ``inicio``     ← ano (DD/MM/YYYY com 01/01 do ano)
-    - ``jurisdicionado`` ← vazio (não vem direto no painel — descrição
-      contém o nome da unidade fiscalizada misturado ao texto)
-    - ``relator``    ← coluna extra preservada
-    - ``tipo``       ← coluna extra preservada (Inspeção, Prestação de Contas, ...)
-    - ``ano``        ← coluna extra preservada
+    Tabelas distintas → linhas distintas (mesmo ``numero`` aparece em
+    ambas com ``descricao`` diferente, então o dedup downstream em
+    ``_transform_audits`` pelo composto ``(numero, titulo, inicio)`` mantém
+    ambas como :TceGoAudit nodes separados, o que é o comportamento desejado
+    (dois pontos de vista do mesmo processo).
+
+    Output columns match aliases que ``_transform_audits`` aceita
+    (``numero``, ``descricao``, ``situacao``, ``inicio``, ``jurisdicionado``)
+    + colunas extras preservadas (``ano``, ``tipo``, ``relator``, ``objetivo``,
+    ``lace``) pra investigação posterior.
     """
     rows: list[dict[str, str]] = []
     for raw_cells in payload.get("rows", []):
         cells = _dedupe_consecutive(raw_cells)
-        if len(cells) < 6:
+        # Schema discriminado pelo número de colunas após dedup
+        if len(cells) >= 8:
+            row = _parse_fiscalizacao_detail(cells)
+        elif len(cells) >= 6:
+            row = _parse_fiscalizacao_summary(cells)
+        else:
             logger.warning(
                 "[tce_go_qlik] fiscalizacoes row com %d cols; skip", len(cells),
             )
             continue
-        numero = cells[0]["text"].strip()
-        ano = cells[1]["text"].strip()
-        tipo = cells[2]["text"].strip()
-        status = cells[3]["text"].strip()
-        descricao = cells[4]["text"].strip()
-        relator = cells[5]["text"].strip()
-        if not numero and not descricao:
+        if row is None:
             continue
-        rows.append({
-            "numero": numero,
-            "ano": ano,
-            "tipo": tipo,
-            "situacao": status,
-            "descricao": descricao,
-            "relator": relator,
-            "inicio": f"01/01/{ano}" if ano.isdigit() else "",
-            "jurisdicionado": "",
-        })
+        rows.append(row)
     return rows
+
+
+def _parse_fiscalizacao_summary(cells: list[dict[str, Any]]) -> dict[str, str] | None:
+    numero = cells[0]["text"].strip()
+    ano = cells[1]["text"].strip()
+    tipo = cells[2]["text"].strip()
+    status = cells[3]["text"].strip()
+    descricao = cells[4]["text"].strip()
+    relator = cells[5]["text"].strip()
+    if not numero and not descricao:
+        return None
+    return {
+        "numero": numero,
+        "ano": ano,
+        "tipo": tipo,
+        "situacao": status,
+        "descricao": descricao,
+        "relator": relator,
+        "inicio": f"01/01/{ano}" if ano.isdigit() else "",
+        "jurisdicionado": "",
+        "objetivo": "",
+        "lace": "",
+    }
+
+
+def _parse_fiscalizacao_detail(cells: list[dict[str, Any]]) -> dict[str, str] | None:
+    numero = cells[0]["text"].strip()
+    # cells[1] é o numero_pai (referência ao processo principal); preservado
+    # implicitamente em ``descricao`` via prefixo "Inspeção - Contrato..."
+    ano = cells[2]["text"].strip()
+    tipo = cells[3]["text"].strip()
+    jurisdicionado = cells[4]["text"].strip()
+    descricao = cells[5]["text"].strip()
+    objetivo = cells[6]["text"].strip()
+    lace = cells[7]["text"].strip()
+    if not numero and not descricao:
+        return None
+    return {
+        "numero": numero,
+        "ano": ano,
+        "tipo": tipo,
+        "situacao": "",  # detail table não tem coluna status
+        "descricao": descricao,
+        "relator": "",
+        "inicio": f"01/01/{ano}" if ano.isdigit() else "",
+        "jurisdicionado": jurisdicionado,
+        "objetivo": objetivo,
+        "lace": lace,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +299,7 @@ def fetch_panel_dom(
             late-arriving rows from paginated hypercubes finish rendering.
     """
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support import expected_conditions as EC  # noqa: N812
     from selenium.webdriver.support.ui import WebDriverWait
 
     url = _PANEL_URL_TMPL.format(app_id=app_id, sheet_id=sheet_id)
@@ -275,7 +318,7 @@ def fetch_panel_dom(
         driver.quit()
 
     return {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "appid": app_id,
         "sheet_id": sheet_id,
         "url": url,
@@ -318,7 +361,8 @@ def fetch_fiscalizacoes_to_disk(output_dir: Path | str) -> Path:
     csv_path = output_dir / "fiscalizacoes.csv"
     _write_csv(csv_path, rows,
                fieldnames=["numero", "ano", "tipo", "situacao", "descricao",
-                           "relator", "inicio", "jurisdicionado"])
+                           "relator", "inicio", "jurisdicionado",
+                           "objetivo", "lace"])
     logger.info("[tce_go_qlik] wrote %s (%d rows) + %s",
                 csv_path, len(rows), snap_path)
     return csv_path
