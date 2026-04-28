@@ -36,6 +36,7 @@ from bracc_etl.pipelines.tse_prestacao_contas_go import (
     TsePrestacaoContasGoPipeline,
     _classify_origem,
 )
+from bracc_etl.transforms import format_cnpj
 from tests._mock_helpers import mock_driver, mock_session
 
 if TYPE_CHECKING:
@@ -823,16 +824,23 @@ class TestTransform:
         pipeline.extract()
         pipeline.transform()
 
-        cnpjs_go = {_C1["cnpj_prestador"], _C2["cnpj_prestador"], _C3["cnpj_prestador"]}
+        # Pipeline normaliza CNPJ pro formato XX.XXX.XXX/XXXX-XX (mesmo
+        # padrao do resto do grafo) — comparacao tem que aplicar format_cnpj
+        # nos digitos crus do TSE.
+        cnpjs_go = {
+            format_cnpj(_C1["cnpj_prestador"]),
+            format_cnpj(_C2["cnpj_prestador"]),
+            format_cnpj(_C3["cnpj_prestador"]),
+        }
         cnpjs_produced = {c["cnpj"] for c in pipeline.committees}
 
         assert cnpjs_produced == cnpjs_go
-        assert _SP["cnpj_prestador"] not in cnpjs_produced  # filtro UF aplica
+        assert format_cnpj(_SP["cnpj_prestador"]) not in cnpjs_produced  # filtro UF aplica
 
         # Campos estruturais presentes em todo committee + provenance.
         by_cnpj = {c["cnpj"]: c for c in pipeline.committees}
         for cand in (_C1, _C2, _C3):
-            c = by_cnpj[cand["cnpj_prestador"]]
+            c = by_cnpj[format_cnpj(cand["cnpj_prestador"])]
             assert c["cargo_candidatura"] == cand["cargo"]
             assert c["ano_eleicao"] == 2022
             assert c["nome_candidato"] == cand["nome"]

@@ -1,10 +1,17 @@
 # Backfillar CNAE + Situação Cadastral nos 52k+ CNPJs do grafo — ⏳ PARCIAL (2026-04-21)
 
-> **Fase 1 ✅ CONCLUÍDA 2026-04-21** — comitês de campanha GO 2022 (1180
-> CNPJs) carimbados via `tse_prestacao_contas_go`. Pipeline/API/modelo/PWA
-> plumbados pra usar `tipo_entidade='comite_campanha'` + `cnae_principal='9492-8/00'`
-> como source of truth (regex fica de fallback). **Fase 2 (dump RFB) segue
-> pendente** — ver seção "Fase completa" abaixo.
+> **Fase 1 ✅ CONCLUÍDA 2026-04-21 (Aura) + REPLAY LOCAL 2026-04-27** —
+> comitês de campanha GO 2022 (1180 CNPJs) carimbados via
+> `tse_prestacao_contas_go`. Pipeline/API/modelo/PWA plumbados pra usar
+> `tipo_entidade='comite_campanha'` + `cnae_principal='9492-8/00'` como
+> source of truth (regex fica de fallback). No replay-local achamos um bug:
+> o pipeline gravava CNPJ em dígitos puros enquanto o resto do grafo usa
+> formato `XX.XXX.XXX/XXXX-XX` — gerava 1.180 :Company órfãos paralelos
+> em vez de mergir. Fix em `tse_prestacao_contas_go.py:525` (passa por
+> `format_cnpj`); órfãos do primeiro run foram apagados antes do re-run.
+> Pós-fix: 1.180 carimbados, 108 mergiram em :Company já existentes
+> (com razao_social), 1.072 são novos (comitês sem doador externo). **Fase
+> 2 (dump RFB) segue pendente** — ver seção "Fase completa" abaixo.
 
 > Trabalho de multi-semanas (RFB bulk dump). Situação cadastral parcial já
 > coberta on-demand por `brasilapi_cnpj_status` (prompt 08 ✅), mas backfill

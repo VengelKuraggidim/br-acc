@@ -6,6 +6,10 @@
 // ``vereadores_goiania`` is intentionally scoped to the capital
 // (``municipio = 'GOIANIA'``) to match the field name consumers
 // expect; otherwise the count would aggregate all 246 GO camaras.
+// O filtro ``year = 2024`` mantém o número alinhado ao tooltip da
+// home ("último pleito, 2024"). Sem ele, a contagem somava 2020 +
+// 2024 (memo: federal/estadual/senador só têm 2022 ingerido, então
+// o problema é exclusivo do vereador, que tem dois ciclos no grafo).
 CALL () { MATCH (n) RETURN count(n) AS total_nos }
 CALL () { MATCH ()-[r]->() RETURN count(r) AS total_relacionamentos }
 CALL () {
@@ -21,7 +25,7 @@ CALL () {
   RETURN count(DISTINCT p) AS senadores
 }
 CALL () {
-  MATCH (p:Person)-[:CANDIDATO_EM]->(e:Election {uf: $uf, cargo: 'VEREADOR', municipio: 'GOIANIA'})
+  MATCH (p:Person)-[:CANDIDATO_EM]->(e:Election {uf: $uf, cargo: 'VEREADOR', municipio: 'GOIANIA', year: 2024})
   RETURN count(DISTINCT p) AS vereadores_goiania
 }
 CALL () { MATCH (n:StateEmployee) RETURN count(n) AS servidores_estaduais }

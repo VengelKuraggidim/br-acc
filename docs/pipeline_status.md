@@ -84,6 +84,7 @@ Status buckets:
 | siga_brasil | siga_brasil | not_built | not_loaded | file_batch | data/siga_brasil/* | Federal budget traces |
 | siop | siop | implemented_partial | partial | api_json | API payload from https://www.siop.planejamento.gov.br/ | Author linkage limited |
 | ssp_go | ssp_go | implemented_partial | not_loaded | web_portal | Portal export/scrape output under data/ssp_go/ | Aggregate crime statistics scaffolded pending machine-readable export |
+| mjsp_municipios | mjsp_municipios | implemented | not_loaded | file_batch | XLSX from https://dados.mj.gov.br/dataset/sistema-nacional-de-estatisticas-de-seguranca-publica | MJSP/SINESP municipal homicide-doloso series (UF=GO slice); coexists with ssp_go state-level via cod_ibge in stat_id |
 | state_portal_ba | state_portal_ba | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_ba/ | State expenses and contracts |
 | state_portal_ce | state_portal_ce | not_built | not_loaded | web_portal | Portal export/scrape output under data/state_portal_ce/ | State expenses and contracts |
 | state_portal_go | state_portal_go | implemented_partial | not_loaded | api_json | API payload from https://dadosabertos.go.gov.br/ | State contracts suppliers and administrative sanctions via CKAN API |

@@ -91,6 +91,26 @@ regras 1-3 não pegam:
   ≥1 ``:Person`` GO PSD/GO com o mesmo nome e o perfil perde o
   cluster canônico.
 
+* **name_municipio_vereador** (fase 4.7) — pra duplicatas de vereador GO
+  onde o TSE 2024 não publica CPF. ``:Person`` GO **sem CPF** que é
+  ``MEMBRO_DE :CamaraMunicipal {uf:'GO', municipio:M}`` é anexado ao
+  cluster ancorado num ``:Person`` GO **com CPF** que tem o mesmo
+  ``name_normalized`` E também é membro da mesma Câmara M. Caso
+  canônico: "ROMARIO BARBOSA POLICARPO" GOIANIA — id 8071 com CPF
+  (criado por TSE 2020+2022, recebeu enriquecimento 2024) e id 501376
+  sem CPF (criado por tse_bens 2024). Único path do pipeline que cria
+  ``:CanonicalPerson`` ancorado em Person fora de cargo Senador/Fed/State,
+  porque vereador não tem label de cargo no grafo (sem ``:Vereador``;
+  só ``:MEMBRO_DE :CamaraMunicipal``). Travas: LHS único (>1 Person
+  com CPF mesmo nome no mesmo município = audit ``municipal_lhs_ambiguous``
+  + skip — pai+filho homônimos sentando juntos é raro mas possível);
+  filtro estrito de município (``JOAO BATISTA DA SILVA`` em 8 cidades
+  diferentes nunca colide); só :Person, não cruza com Senator/Fed/State
+  (esses já passaram). Conf 0.90 — entre cpf_suffix_name (0.92) e
+  cpf_suffix_token_overlap (0.88). Justificativa: nome exato + município
+  é evidência forte (município é discriminador local), mas RHS sem
+  CPF impede confirmação por documento.
+
 * **shadow_name_exact** (fase 5) — ``:Person`` sem CPF, sem UF (nós bare
   "só name" originados de referências em outros pipelines, ex.: autores
   de inquéritos) com nome normalizado batendo exatamente com UM dos
@@ -153,8 +173,9 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
   "name_stripped" | "cpf_suffix_name" | "cpf_suffix_token_overlap" |
-  "cpf_suffix_cargo" | "name_partido_multi" | "shadow_name_exact" |
-  "shadow_prefix_match" | "manual_override" | "cargo_root"``.
+  "cpf_suffix_cargo" | "name_partido_multi" | "name_municipio_vereador" |
+  "shadow_name_exact" | "shadow_prefix_match" | "manual_override" |
+  "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -473,7 +494,8 @@ CALL {
            n.cpf AS cpf,
            n.partido AS partido,
            coalesce(n.uf, $target_uf) AS uf,
-           [] AS cargo_tse_values
+           [] AS cargo_tse_values,
+           [] AS camara_municipios
 UNION ALL
     MATCH (n:FederalLegislator)
     WHERE coalesce(n.uf, 'GO') = $target_uf
@@ -488,7 +510,8 @@ UNION ALL
            n.cpf AS cpf,
            n.partido AS partido,
            coalesce(n.uf, $target_uf) AS uf,
-           [] AS cargo_tse_values
+           [] AS cargo_tse_values,
+           [] AS camara_municipios
 UNION ALL
     MATCH (n:StateLegislator)
     WHERE coalesce(n.uf, 'GO') = $target_uf
@@ -503,10 +526,14 @@ UNION ALL
            n.cpf AS cpf,
            n.partido AS partido,
            coalesce(n.uf, $target_uf) AS uf,
-           [] AS cargo_tse_values
+           [] AS cargo_tse_values,
+           [] AS camara_municipios
 UNION ALL
     MATCH (n:Person)
     WHERE n.uf = $target_uf
+    OPTIONAL MATCH (n)-[:MEMBRO_DE]->(cam:CamaraMunicipal)
+    WHERE coalesce(cam.uf, $target_uf) = $target_uf
+    WITH n, collect(DISTINCT cam.municipio) AS munis
     RETURN labels(n) AS labels,
            elementId(n) AS element_id,
            coalesce(n.cpf, n.name) AS stable_key,
@@ -518,7 +545,8 @@ UNION ALL
            n.cpf AS cpf,
            n.partido AS partido,
            n.uf AS uf,
-           [k IN keys(n) WHERE k STARTS WITH 'cargo_tse_' | n[k]] AS cargo_tse_values
+           [k IN keys(n) WHERE k STARTS WITH 'cargo_tse_' | n[k]] AS cargo_tse_values,
+           [m IN munis WHERE m IS NOT NULL AND m <> ''] AS camara_municipios
 UNION ALL
     MATCH (n:Person)
     WHERE n.uf IS NULL AND n.cpf IS NULL AND coalesce(n.name, '') <> ''
@@ -533,11 +561,12 @@ UNION ALL
            NULL AS cpf,
            NULL AS partido,
            NULL AS uf,
-           [] AS cargo_tse_values
+           [] AS cargo_tse_values,
+           [] AS camara_municipios
 }
 RETURN labels, element_id, stable_key, id_senado, id_camara,
        legislator_id, sq_candidato, name, cpf, partido, uf,
-       cargo_tse_values
+       cargo_tse_values, camara_municipios
 """
 
 
@@ -647,6 +676,7 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
             labels = list(row.get("labels") or [])
             primary = _primary_label(labels)
             cargo_tse_values = row.get("cargo_tse_values") or []
+            camara_munis_raw = row.get("camara_municipios") or []
             node = {
                 "labels": labels,
                 "primary_label": primary,
@@ -669,6 +699,14 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                 # "candidatos TSE"; são o próprio alvo do attach).
                 "cargo_tse_set": frozenset(
                     _normalize_name(v) for v in cargo_tse_values if v
+                ),
+                # Municípios das CamaraMunicipal GO em que o Person é
+                # MEMBRO_DE. Normalizados (upper + sem acento) pra casar
+                # com a fase ``name_municipio_vereador``. Vazio fora do
+                # branch :Person UF=GO do discovery (cargos federais/
+                # estaduais não são membros de Câmara municipal).
+                "camara_municipios": tuple(
+                    _normalize_name(m) for m in camara_munis_raw if m
                 ),
             }
             node["name_stripped"] = _strip_honorifics(
@@ -791,6 +829,18 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         # de ambiguidade é mais fraco — ``confidence_min`` no cluster
         # sinaliza pro PWA que o match foi mais permissivo).
         self._attach_name_partido_matches(
+            persons_go=persons_go,
+            claimed=person_elt_ids_in_cluster,
+        )
+
+        # ---- Fase 4.7: name_municipio_vereador ----
+        # Resolve duplicatas de vereador GO criadas pelo TSE 2024 (que
+        # não publica CPF) ou tse_bens 2024: o mesmo político vira N
+        # :Person com mesmo nome e mesma CamaraMunicipal, um com CPF
+        # (TSE pré-2024) e outros sem. Esta fase é o único path que cria
+        # cluster ancorado em :Person fora de cargo Senator/Fed/State —
+        # vereador não tem label de cargo no grafo.
+        self._attach_municipal_name_matches(
             persons_go=persons_go,
             claimed=person_elt_ids_in_cluster,
         )

@@ -76,6 +76,7 @@ from bracc_etl.base import Pipeline
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
     deduplicate_rows,
+    format_cnpj,
     format_cpf,
     mask_cpf,
     normalize_name,
@@ -519,21 +520,25 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 }
 
             # Committee CNPJ (CNAE 9492-8/00). NR_CNPJ_PRESTADOR_CONTA vem
-            # com 14 digitos (sem pontuacao) direto do TSE. Primeira ocorrencia
-            # vence — dentro do mesmo ano/eleicao o CNPJ mapeia 1:1 pro
-            # candidato.
-            cnpj_prestador = strip_document(
+            # com 14 digitos (sem pontuacao) direto do TSE. Formatamos pra
+            # XX.XXX.XXX/XXXX-XX porque o resto do grafo usa esse formato —
+            # gravar os digitos puros gera :Company orfao paralelo ao
+            # existente em vez de mergir. Primeira ocorrencia vence —
+            # dentro do mesmo ano/eleicao o CNPJ mapeia 1:1 pro candidato.
+            cnpj_digits = strip_document(
                 row.get("NR_CNPJ_PRESTADOR_CONTA") or "",
             )
-            if len(cnpj_prestador) == 14 and cnpj_prestador not in by_committee_cnpj:
-                by_committee_cnpj[cnpj_prestador] = {
-                    "cnpj": cnpj_prestador,
-                    "cargo_candidatura": cargo_raw,
-                    "ano_eleicao": year,
-                    "cpf_candidato": cpf_formatted,
-                    "nome_candidato": nome,
-                    "sq_candidato": sq,
-                }
+            if len(cnpj_digits) == 14:
+                cnpj_formatted = format_cnpj(cnpj_digits)
+                if cnpj_formatted not in by_committee_cnpj:
+                    by_committee_cnpj[cnpj_formatted] = {
+                        "cnpj": cnpj_formatted,
+                        "cargo_candidatura": cargo_raw,
+                        "ano_eleicao": year,
+                        "cpf_candidato": cpf_formatted,
+                        "nome_candidato": nome,
+                        "sq_candidato": sq,
+                    }
 
             # Node :CampaignDonation (opcional — mantido pra phase-2 tie-in).
             cpf_cnpj_doador_raw = (

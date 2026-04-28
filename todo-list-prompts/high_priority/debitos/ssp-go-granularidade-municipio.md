@@ -1,5 +1,36 @@
 # SSP-GO — granularidade municipal das estatísticas criminais
 
+## Estado atual (2026-04-27)
+
+**Parcialmente resolvido**: pipeline `mjsp_municipios` (commit em curso)
+ingere a série municipal de **Homicídio Doloso** publicada pelo MJSP em
+`dados.mj.gov.br/dataset/sistema-nacional-de-estatisticas-de-seguranca-publica`.
+Schema: `Cód_IBGE | Município | Sigla UF | Região | Mês/Ano | Vítimas`,
+filtrado pra UF=GO. Goiânia, Anápolis e Aparecida de Goiânia cobertos
+com séries mensais (2018-01 a 2022-12 quando do levantamento). Coexiste
+com o `ssp_go` state-level porque `stat_id` inclui `cod_ibge`.
+
+**Restam abertas as 14 naturezas no nível município** (estupro,
+feminicídio, latrocínio, lesão seguida de morte, roubo a transeunte,
+roubo de veículos, roubo em comércio, roubo em residência, roubo de
+carga, roubo a instituição financeira, furto de veículos, furto em
+comércio, furto em residência, furto a transeunte). Nenhuma fonte
+pública federal ou estadual machine-readable cobre essas naturezas em
+nível município pra GO. Único caminho restante: **LAI à SSP-GO**
+(observatorio.ssp@goias.gov.br) — pendência manual da usuária. Quando o
+CSV chegar, dropar em `data/ssp_go/ocorrencias.csv` (path de override
+já implementado no pipeline `ssp_go`).
+
+**Opções rejeitadas em 2026-04-27:**
+- **FBSP Anuário (XLSX 2024/2025)** — só capitais (Goiânia única
+  cidade GO em T06) + rankings top-N (sem cidades GO no top 10 MVI
+  2024). Não passa o critério de aceite.
+- **SINESP/MJSP por UF** — 8 indicadores publicados em nível UF, mas
+  só 1 (Homicídio Doloso) com granularidade municipal. As outras 7
+  naturezas do feed UF (estupro, furto/roubo de veículo, roubo de
+  carga, etc.) duplicariam a cobertura estadual já feita por `ssp_go`
+  com menos naturezas — não vale o pipeline.
+
 ## Contexto
 
 O pipeline `ssp_go` carrega, desde 2026-04-22, ~1.440 rows de

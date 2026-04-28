@@ -48,6 +48,7 @@ from bracc_etl.pipelines.icij import ICIJPipeline
 from bracc_etl.pipelines.inep import InepPipeline
 from bracc_etl.pipelines.leniency import LeniencyPipeline
 from bracc_etl.pipelines.mides import MidesPipeline
+from bracc_etl.pipelines.mjsp_municipios import MjspMunicipiosPipeline
 from bracc_etl.pipelines.ofac import OfacPipeline
 from bracc_etl.pipelines.opensanctions import OpenSanctionsPipeline
 from bracc_etl.pipelines.pep_cgu import PepCguPipeline
@@ -150,6 +151,7 @@ PIPELINES: dict[str, type] = {
     "alego_deputados_foto": AlegoDeputadosFotoPipeline,
     "tcmgo_sancoes": TcmgoSancoesPipeline,
     "ssp_go": SspGoPipeline,
+    "mjsp_municipios": MjspMunicipiosPipeline,
     "camara_politicos_go": CamaraPoliticosGoPipeline,
     "senado_senadores_foto": SenadoSenadoresFotoPipeline,
     "tse_prestacao_contas_go": TsePrestacaoContasGoPipeline,

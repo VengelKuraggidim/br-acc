@@ -72,6 +72,8 @@ _CONTENT_TYPE_EXTENSIONS: dict[str, str] = {
     "text/xml": ".xml",
     "text/csv": ".csv",
     "text/plain": ".txt",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.ms-excel": ".xls",
 }
 
 _DEFAULT_ROOT = "./archival/"
