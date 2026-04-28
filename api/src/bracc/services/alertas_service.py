@@ -27,6 +27,7 @@ from bracc.services.traducao_service import (
 
 if TYPE_CHECKING:
     from bracc.models.perfil import (
+        BensDeclarados,
         DoadorEmpresa,
         Emenda,
         RedFlagsSummary,
@@ -453,6 +454,66 @@ def analisar_teto_gastos(
             ),
         }]
     return []
+
+
+def analisar_variacao_patrimonial(
+    bens: BensDeclarados,
+) -> list[dict[str, str]]:
+    """Alerta de salto patrimonial entre eleicoes consecutivas.
+
+    Compara cada par (ano N, ano N+1) na serie ``bens.por_ano`` e levanta
+    alerta quando a variacao positiva e expressiva. So variacoes positivas
+    (cresceu) viram alerta — patrimonio que cai e raro e tipicamente tem
+    explicacao (divisao judicial, divida liquidada).
+
+    Severidade:
+
+    * variacao > 300% → ``grave``
+    * variacao > 100% → ``atencao``
+    * variacao > 50%  → ``info``
+    * caso contrario  → nao gera
+
+    Casos de borda:
+    * Lista com <2 anos: nao tem comparacao, retorna [].
+    * Ano anterior com total 0 (raro, pessoa entrou no TSE sem patrimonio):
+      ``variacao_pct`` ja vem None do ``bens_service`` — pula.
+    * Cargo diferente entre anos (vereador 2020 -> prefeito 2024) NAO e
+      diferenciado aqui — alei TSE muda o detalhamento exigido por cargo,
+      entao crescimento aparente pode ser so mais transparencia. O alerta
+      sempre fica no maximo 'atencao' por isso (nunca 'grave') a partir da
+      heuristica conservadora — ate termos cruzamento com cargo, vale
+      flagar ate 'atencao' (nao 'grave').
+    """
+    alertas: list[dict[str, str]] = []
+    if not bens or len(bens.por_ano) < 2:
+        return alertas
+
+    for i in range(1, len(bens.por_ano)):
+        anterior = bens.por_ano[i - 1]
+        atual = bens.por_ano[i]
+        variacao = atual.variacao_pct
+        if variacao is None or variacao <= 50:
+            continue
+        if variacao > 300:
+            tipo = "atencao"  # ver docstring — nunca grave sem cruzar cargo.
+            label = "saltou"
+        elif variacao > 100:
+            tipo = "atencao"
+            label = "mais que dobrou"
+        else:
+            tipo = "info"
+            label = "cresceu"
+        alertas.append({
+            "tipo": tipo,
+            "icone": "patrimonio",
+            "texto": (
+                f"Patrimonio declarado {label} {round(variacao, 1)}% entre "
+                f"{anterior.ano} e {atual.ano} (de {anterior.total_fmt} "
+                f"para {atual.total_fmt}). Vale conferir origem dos novos "
+                f"bens na declaracao oficial do TSE."
+            ),
+        })
+    return alertas
 
 
 def analisar_cnpj_baixados(

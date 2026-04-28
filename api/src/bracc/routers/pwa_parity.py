@@ -142,11 +142,41 @@ def _format_item(result: dict[str, Any]) -> BuscarTudoItem | None:
     )
 
     if tipo_raw == "person":
-        item.icone = "pessoa"
-        patrimonio = props.get("patrimonio_declarado")
-        item.detalhe = (
-            f"Patrimonio: {_fmt_brl(patrimonio)}" if patrimonio else "Pessoa publica"
-        )
+        # Promove a icone/detalhe de cargo eletivo TSE quando o Person
+        # carrega ``cargo_tse_<ano>`` mais recente — sem isso, vereador
+        # 2024 aparece como "Pessoa publica" generica e o usuario nao
+        # entende o que clica. Olha do mais recente pro mais antigo.
+        cargo_tse_recente = ""
+        partido_tse_recente = ""
+        municipio_tse_recente = ""
+        for ano in (2026, 2024, 2022, 2020, 2018):
+            valor = props.get(f"cargo_tse_{ano}")
+            if valor:
+                cargo_tse_recente = str(valor).strip()
+                partido_tse_recente = str(props.get(f"partido_tse_{ano}") or "").strip()
+                municipio_tse_recente = str(props.get(f"municipio_tse_{ano}") or "").strip()
+                break
+
+        if cargo_tse_recente.upper() == "VEREADOR":
+            item.icone = "vereador"
+            partes = ["Vereador(a)"]
+            if municipio_tse_recente:
+                partes.append(municipio_tse_recente.title())
+            if partido_tse_recente:
+                partes.append(partido_tse_recente)
+            item.detalhe = " - ".join(partes)
+        elif cargo_tse_recente:
+            item.icone = "pessoa"
+            partes = [cargo_tse_recente.title()]
+            if partido_tse_recente:
+                partes.append(partido_tse_recente)
+            item.detalhe = " - ".join(partes)
+        else:
+            item.icone = "pessoa"
+            patrimonio = props.get("patrimonio_declarado")
+            item.detalhe = (
+                f"Patrimonio: {_fmt_brl(patrimonio)}" if patrimonio else "Pessoa publica"
+            )
         item.is_pep = bool(props.get("is_pep", False))
         foto_raw = props.get("foto_url") or props.get("url_foto")
         if foto_raw:

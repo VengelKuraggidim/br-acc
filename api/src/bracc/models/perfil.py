@@ -415,6 +415,64 @@ class RedFlagsSummary(BaseModel):
     texto: str
 
 
+class BemDeclarado(BaseModel):
+    """Um bem declarado ao TSE numa eleicao especifica.
+
+    Vem de ``(:Person)-[:DECLAROU_BEM]->(:DeclaredAsset)`` carimbado pelo
+    pipeline ``tse_bens_go``. ``provenance`` carrega o link pro CSV oficial
+    da TSE (sempre presente — pipeline novo grava todos os campos).
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    ano: int
+    tipo: str
+    descricao: str
+    valor: float
+    valor_fmt: str
+    provenance: ProvenanceBlock | None = None
+
+
+class PatrimonioAno(BaseModel):
+    """Total declarado num ano eleitoral + variacao % vs ano anterior.
+
+    ``variacao_pct`` e ``None`` no ano mais antigo (sem comparacao). Para
+    os demais, e a variacao percentual em relacao ao ano anterior listado
+    (positiva = patrimonio cresceu; negativa = encolheu). Pode ser >1000%
+    quando o candidato comeca quase sem patrimonio e declara muito numa
+    eleicao posterior — o PWA precisa formatar de forma defensiva.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    ano: int
+    total: float
+    total_fmt: str
+    variacao_pct: float | None = None
+    num_bens: int
+
+
+class BensDeclarados(BaseModel):
+    """Agregado de bens TSE pro perfil — bens individuais + serie por ano.
+
+    ``por_ano`` ordenado cronologicamente crescente (2018, 2020, 2022,
+    2024) pra o PWA desenhar timeline da esquerda pra direita. ``bens``
+    ordenado por ano DESC + valor DESC (mais recente e mais alto primeiro)
+    pra a lista colapsavel.
+    ``resumo`` e uma frase pronta pro PWA quando ha >=2 anos com dados:
+    ``"Patrimonio cresceu N% entre {ano1} e {ano2}"`` ou variante de queda.
+    Vazio quando so tem 1 eleicao ou nenhum bem.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    por_ano: list[PatrimonioAno]
+    bens: list[BemDeclarado]
+    total_geral_ultimo_ano: float
+    total_geral_ultimo_ano_fmt: str
+    resumo: str = ""
+
+
 class PerfilPolitico(BaseModel):
     """Response principal do endpoint /politico/{entity_id} (22 campos top-level).
 
@@ -452,3 +510,4 @@ class PerfilPolitico(BaseModel):
     contas_campanha: ComparacaoContas | None = None
     teto_gastos: TetoGastos | None = None
     red_flags_summary: RedFlagsSummary | None = None
+    bens_declarados: BensDeclarados | None = None

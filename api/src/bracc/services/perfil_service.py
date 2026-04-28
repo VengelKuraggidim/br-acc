@@ -59,9 +59,11 @@ from bracc.services.alertas_service import (
     analisar_despesas_vs_media,
     analisar_picos_mensais,
     analisar_teto_gastos,
+    analisar_variacao_patrimonial,
     calcular_red_flags_summary,
     gerar_alertas_completos,
 )
+from bracc.services.bens_service import obter_bens_declarados
 from bracc.services.analise_service import (
     analisar_despesas_vs_cidadao,
     gerar_resumo_politico,
@@ -115,6 +117,29 @@ _PROVENANCE_FIELDS = (
 
 # Severidade pra ordenar alertas (espelha o Flask).
 _SEVERIDADE = {"grave": 0, "atencao": 1, "info": 2, "ok": 3}
+
+# Anos eleitorais carimbados pelo pipeline TSE em ``cargo_tse_<ano>``.
+# Ordem reversa: detector de "ano eleitoral mais recente" pega o primeiro
+# que tem cargo setado. 2026 entra preventivamente — quando o pipeline
+# TSE 2026 rodar, o detector já passa a usar.
+_ANOS_TSE_RECENTES: tuple[int, ...] = (2026, 2024, 2022, 2020, 2018)
+
+
+def _detectar_ano_eleitoral_recente(props: dict[str, Any]) -> int:
+    """Devolve o ano TSE mais recente com ``cargo_tse_<ano>`` carimbado.
+
+    Default ``2022`` quando o nó não tem nenhum cargo TSE — preserva o
+    comportamento pré-existente pra deputado federal/estadual/senador
+    cujos dados vêm dos pipelines de casa (Câmara/ALEGO/Senado), não do
+    TSE direto. O ano resultante é usado como ``ano_doacao`` no
+    ``classificar`` — sem isso, vereadores 2024 (que tem cargo_tse_2024
+    setado mas nenhum 2022) ficam com lista de doadores vazia porque o
+    filtro ano=2022 hardcoded descartava as rels TSE 2024.
+    """
+    for ano in _ANOS_TSE_RECENTES:
+        if props.get(f"cargo_tse_{ano}"):
+            return ano
+    return 2022
 
 # Timeout explícito da query principal (override do default 15s do
 # ``neo4j_service.execute_query_single``). 30s combina com grafos densos
@@ -197,13 +222,30 @@ def _build_politico_resumo(
     except (TypeError, ValueError):
         patrimonio = None
 
+    # Cargo + partido: prioriza ``role``/``cargo`` (Câmara/ALEGO/Senado);
+    # cai pra ``cargo_tse_<ano>``/``partido_tse_<ano>`` quando o nó é
+    # vereador TSE puro (Person sem cargo carimbado pelo pipeline da
+    # casa). Sem esse fallback, o header do perfil de vereador 2024
+    # aparece sem cargo nem partido mesmo com a info disponível.
     cargo_raw = props.get("role") or props.get("cargo")
+    if not cargo_raw:
+        for ano in _ANOS_TSE_RECENTES:
+            valor = props.get(f"cargo_tse_{ano}")
+            if valor:
+                cargo_raw = valor
+                break
     cargo_txt: str | None = None
     if isinstance(cargo_raw, str) and cargo_raw:
         cargo_txt = traduzir_cargo(cargo_raw)
 
     cpf_raw = props.get("cpf")
     partido_raw = props.get("partido")
+    if not partido_raw:
+        for ano in _ANOS_TSE_RECENTES:
+            valor = props.get(f"partido_tse_{ano}")
+            if valor:
+                partido_raw = valor
+                break
     uf_raw = props.get("uf")
     foto_raw = props.get("foto_url") or props.get("url_foto")
 
@@ -398,6 +440,8 @@ def _build_aviso_despesas(
     is_estadual_go: bool,
     is_vereador_goiania: bool,
     is_senador_federal: bool,
+    is_vereador_tse_outro_municipio: bool = False,
+    municipio_vereador: str = "",
 ) -> str:
     """Aviso explicativo da fonte de despesas de gabinete.
 
@@ -444,6 +488,19 @@ def _build_aviso_despesas(
             "Cota parlamentar da Camara Municipal de Goiania (CMG) — "
             "despesas de gabinete publicadas no portal de transparencia "
             "municipal (goiania.go.leg.br)."
+        )
+    elif is_vereador_tse_outro_municipio:
+        # Vereador TSE 2024 fora de Goiania: nao temos pipeline de cota
+        # municipal pras outras 245 cidades de GO. Mensagem explica em
+        # vez de devolver tela vazia.
+        municipio_txt = (
+            f" de {municipio_vereador.title()}" if municipio_vereador else ""
+        )
+        return (
+            f"Cota parlamentar da Camara Municipal{municipio_txt} ainda "
+            "nao integrada — hoje so a Camara Municipal de Goiania publica "
+            "no formato que conseguimos ler. As demais 245 cidades de GO "
+            "ficam sem dados de despesa de gabinete por enquanto."
         )
 
     if descricao_fonte and not despesas_gabinete:
@@ -545,19 +602,20 @@ async def obter_perfil(
     conexoes_norm, entidades_conectadas = _adapt_connections(
         raw_conexoes, politico_element_id,
     )
-    # ``ano_doacao=2022`` alinha a agregação de doadores com
-    # ``total_tse_2022`` (único ano que ``validacao_tse`` compara hoje).
-    # Sem esse filtro, ``total_doacoes`` soma 2014/2018/2022 num mesmo
-    # ``valor_total`` e diverge por múltiplos de eleições ingeridas —
-    # sintoma registrado em
-    # ``todo-list-prompts/high_priority/debitos/investigar-duplicacao-doacoes-tse.md``
-    # (divergência observada de 201,6% pra um candidato com 3 eleições).
+    # Ano da eleição usado pra filtrar doações: pega o cargo_tse_<ano>
+    # mais recente do nó. Pra deputado federal/estadual/senador (cujos
+    # dados vêm de pipeline de casa, não do TSE), o detector cai no
+    # default 2022 — preserva exatamente o comportamento anterior.
+    # Pra vereador TSE 2024 (Person sem cargo_tse_2022), o detector
+    # promove pra 2024 e destrava as 200+ doações que ficavam invisíveis
+    # com o filtro hardcoded.
+    ano_eleicao_doacao = _detectar_ano_eleitoral_recente(props)
     resultado = classificar(
         conexoes_norm,
         entidades_conectadas,
         politico_element_id,
         limit_por_categoria=limit_conexoes,
-        ano_doacao=2022,
+        ano_doacao=ano_eleicao_doacao,
     )
 
     # --- 3. Paralelo: despesas_gabinete + emendas ----------------------------
@@ -603,6 +661,19 @@ async def obter_perfil(
         labels_raw
         and "GoVereador" in labels_raw
         and municipality.lower() == "goiania",
+    )
+    # Vereador TSE puro (Person + cargo_tse_<ano>='Vereador', sem label
+    # de cargo). Cai aqui o vereador 2024/2020 de qualquer municipio GO
+    # ingerido pelo pipeline TSE. Sem esse branch, o roteamento de despesa
+    # silenciosamente devolve [] sem aviso, e o usuario nao entende por
+    # que o perfil esta vazio. _build_aviso_despesas usa o flag pra
+    # explicar que so Goiania tem feed integrado de cota municipal.
+    cargo_tse_recente = (
+        str(props.get(f"cargo_tse_{ano_eleicao_doacao}") or "").upper()
+    )
+    is_vereador_tse_outro_municipio = bool(
+        not is_vereador_goiania
+        and "VEREADOR" in cargo_tse_recente,
     )
 
     despesas_gabinete: list[DespesaGabinete] = []
@@ -650,6 +721,15 @@ async def obter_perfil(
                 )
             except Exception as exc:  # noqa: BLE001
                 raise DriverError(str(exc)) from exc
+
+    # Bens declarados (TSE) — query separada com cluster-walk pra cobrir
+    # deputado federal/senador cujo Person sibling carrega DECLAROU_BEM.
+    # Roda em paralelo logico com tudo acima — chama em try/except pra
+    # nao bloquear o perfil quando a query falha (ex: timeout).
+    try:
+        bens_declarados = await obter_bens_declarados(driver, entity_id)
+    except Exception:  # noqa: BLE001 — degradacao silenciosa
+        bens_declarados = None
 
     # Fonte de emendas: mescla as duas fontes disponíveis por id. A query
     # dedicada ``perfil_emendas_deputado`` enriquece com
@@ -760,6 +840,13 @@ async def obter_perfil(
     # nos buckets inferiores). Sem ``teto_gastos`` → lista vazia.
     alertas.extend(analisar_teto_gastos(teto_gastos))
 
+    # Alerta de variacao patrimonial >100% entre eleicoes consecutivas.
+    # Vereador que vai de R$50k em 2020 para R$5M em 2024 levanta
+    # bandeira (atencao); >300% vira grave. Sem bens_declarados ou com
+    # 1 ano so, nao gera nada.
+    if bens_declarados is not None:
+        alertas.extend(analisar_variacao_patrimonial(bens_declarados))
+
     uf_deputado = politico.uf
     if despesas_raw:
         alertas.extend(analisar_despesas_gabinete(despesas_raw, uf_deputado))
@@ -803,12 +890,17 @@ async def obter_perfil(
 
     # --- 7. Descrição de conexões + aviso de despesas ------------------------
     descricao_conexoes = _build_descricao_conexoes(resultado)
+    municipio_vereador_props = (
+        str(props.get(f"municipio_tse_{ano_eleicao_doacao}") or "").strip()
+    )
     aviso_despesas = _build_aviso_despesas(
         despesas_gabinete,
         is_deputado_federal=is_deputado_federal,
         is_estadual_go=is_estadual_go,
         is_vereador_goiania=is_vereador_goiania,
         is_senador_federal=is_senador_federal,
+        is_vereador_tse_outro_municipio=is_vereador_tse_outro_municipio,
+        municipio_vereador=municipio_vereador_props,
     )
 
     # Score consolidado de red flags (pedagógico pro PWA — agrega os
@@ -844,4 +936,5 @@ async def obter_perfil(
         contas_campanha=contas_campanha,
         teto_gastos=teto_gastos,
         red_flags_summary=red_flags_summary,
+        bens_declarados=bens_declarados,
     )

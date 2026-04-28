@@ -2634,6 +2634,83 @@ function renderPerfil(d) {
     html += '</div>';
   }
 
+  // Bens declarados (TSE) — patrimônio por eleição com timeline visual.
+  // ``d.bens_declarados`` é null quando o cluster canônico do político não
+  // tem nenhum :Person sibling com DECLAROU_BEM (deputado federal sem ER
+  // bem-resolvido cai aqui). Omitimos a seção inteira nesse caso pra não
+  // poluir o perfil com "Sem dados".
+  if (d.bens_declarados && d.bens_declarados.bens.length) {
+    const bd = d.bens_declarados;
+    // Total mais recente vai no badge — é o número que o leitor "leva" da seção.
+    const tituloDataResumo = bd.resumo
+      ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">${bd.resumo}</div>`
+      : '';
+    // Mini-timeline: barra horizontal por ano, largura proporcional ao maior.
+    const maiorTotal = bd.por_ano.reduce((m, p) => p.total > m ? p.total : m, 0) || 1;
+    let timelineHtml = '';
+    if (bd.por_ano.length >= 1) {
+      timelineHtml = bd.por_ano.map(p => {
+        const pct = Math.max(2, (p.total / maiorTotal) * 100);
+        let varTxt = '';
+        if (p.variacao_pct !== null && p.variacao_pct !== undefined) {
+          const sinal = p.variacao_pct > 0 ? '+' : '';
+          const cor = p.variacao_pct > 100 ? '#ef4444' : p.variacao_pct > 50 ? '#f59e0b' : 'var(--text-muted)';
+          varTxt = `<span style="font-size:11px;color:${cor};margin-left:6px;font-weight:600;">${sinal}${p.variacao_pct}%</span>`;
+        }
+        return `
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:3px;">
+              <span><strong>${p.ano}</strong> &middot; ${p.num_bens} bem(ns)${varTxt}</span>
+              <span style="font-weight:600;">${p.total_fmt}</span>
+            </div>
+            <div style="height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden;">
+              <div style="width:${pct.toFixed(1)}%;height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);"></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(16,185,129,0.15);">&#127960;</span>
+          Bens declarados ao TSE
+        </div>
+        <span class="badge badge-accent">${bd.total_geral_ultimo_ano_fmt}</span>
+      </div>
+      ${tituloDataResumo}
+      ${timelineHtml}
+      <details class="collapsible" style="margin-top:8px;">
+        <summary>Ver ${bd.bens.length} bem(ns) detalhado(s)</summary>
+        <div class="collapsible-body">`;
+    // Agrupa bens por ano pra leitura mais fácil.
+    const porAno = {};
+    bd.bens.forEach(b => {
+      (porAno[b.ano] = porAno[b.ano] || []).push(b);
+    });
+    // Anos do mais recente pro mais antigo.
+    Object.keys(porAno).sort((a, b) => b - a).forEach(ano => {
+      html += `<div style="margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--text-secondary);">Eleição ${ano}</div>`;
+      porAno[ano].forEach(b => {
+        const chip = renderChipFonte(b.provenance, "sub");
+        const inner = `<div class="conexao-info">
+          <div class="conexao-nome">${b.descricao || b.tipo}</div>
+          <div class="conexao-rel">${b.tipo}</div>
+        </div>
+        <div class="conexao-valor">${b.valor_fmt}</div>
+        ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}`;
+        if (b.provenance) {
+          html += `<details class="conexao-card card-expandable">
+            <summary>${inner}</summary>
+            ${renderDetalhesProveniencia(b.provenance)}
+          </details>`;
+        } else {
+          html += `<div class="conexao-card" style="flex-wrap:wrap;">${inner}</div>`;
+        }
+      });
+    });
+    html += '</div></details></div>';
+  }
+
   // Emendas
   if (d.emendas.length) {
     const fonteLabel = d.fonte_emendas === 'transparencia'
