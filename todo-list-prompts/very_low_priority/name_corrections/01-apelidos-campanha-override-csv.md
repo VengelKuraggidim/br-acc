@@ -1,4 +1,29 @@
-# Override manual para apelidos de campanha sem honorífico — 🟡 CASO CANÔNICO RESOLVIDO (2026-04-24)
+# Override manual para apelidos de campanha sem honorífico — ✅ INFRA ENTREGUE 2026-04-27
+
+> Commit `737f07e` adiciona fase 6 `manual_override` em
+> `entity_resolution_politicos_go.py`. CSV versionado em
+> `docs/entity_resolution_overrides.csv` (path configurável via env
+> `BRACC_ER_OVERRIDES_PATH`):
+>
+> ```csv
+> canonical_id,target_kind,target_key,confidence,notes,added_by,added_at
+> ```
+>
+> `target_kind` aceito: `sq_candidato` | `id_senado` | `id_camara` |
+> `legislator_id` | `cpf` (CPF normaliza pra dígitos antes de
+> comparar). Conf default 1.0.
+>
+> Comportamentos cobertos: CSV ausente = no-op; target em outro
+> cluster = audit `conflict_other_cluster`; target no mesmo cluster
+> = idempotente; canonical inexistente = audit `no_cluster`. 8
+> testes novos.
+>
+> Caso canônico que motivou a TODO (GLAUSTIN DA FOKUS) já caía pela
+> fase 4 desde 2026-04-23, então `docs/entity_resolution_overrides.csv`
+> NÃO foi criado nesta entrega — fica como reserva pra apelidos
+> futuros. Quando aparecer um cluster órfão que nenhuma regra
+> automática (1-5.5) cobrir, basta adicionar a linha CSV +
+> commitar + re-rodar o ER pra anexar.
 
 > Audit 2026-04-24 no Neo4j local: canon_camara_204419 (GLAUSTIN DA FOKUS)
 > **já está matched** via fase 4 `cpf_suffix_cargo` (Person "GLAUSKSTON
