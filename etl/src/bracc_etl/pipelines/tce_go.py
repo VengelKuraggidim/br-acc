@@ -54,6 +54,7 @@ from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
     deduplicate_rows,
     format_cnpj,
+    format_cpf,
     normalize_name,
     parse_date,
     row_pick,
@@ -294,7 +295,13 @@ class TceGoPipeline(Pipeline):
         self.decisions: list[dict[str, Any]] = []
         self.irregular_accounts: list[dict[str, Any]] = []
         self.audits: list[dict[str, Any]] = []
+        # IMPEDIDO_TCE_GO rels separados por tipo de sujeito —
+        # ``impedido_rels`` mantido pra back-compat (aresta a partir de
+        # :Company), ``impedido_rels_person`` é o caminho novo (aresta
+        # a partir de :Person, alimentado pelos PDFs de servidores).
         self.impedido_rels: list[dict[str, Any]] = []
+        self.impedido_rels_person: list[dict[str, Any]] = []
+        self.persons: list[dict[str, Any]] = []
 
         # Archival dos CSVs locais. TCE-GO não tem endpoint público, então
         # o único "fetch" é o operador-drop em ``data/tce_go/*.csv``.
@@ -443,6 +450,10 @@ class TceGoPipeline(Pipeline):
         self.impedido_rels = deduplicate_rows(
             self.impedido_rels, ["source_key", "target_key"],
         )
+        self.impedido_rels_person = deduplicate_rows(
+            self.impedido_rels_person, ["source_key", "target_key"],
+        )
+        self.persons = deduplicate_rows(self.persons, ["cpf"])
         self.rows_loaded = (
             len(self.decisions)
             + len(self.irregular_accounts)
@@ -479,34 +490,48 @@ class TceGoPipeline(Pipeline):
 
     def _transform_irregular(self) -> None:
         for _, row in self._raw_irregular.iterrows():
-            cnpj_raw = row_pick(row, "cnpj", "cpf_cnpj", "documento")
-            cnpj_digits = strip_document(cnpj_raw)
+            # ``cpf`` é a coluna padrão dos novos PDFs de servidores;
+            # ``cnpj`` permanece pro caso (futuro) de empresas. Aceita
+            # ambos via aliases — classify_document discrimina por
+            # contagem de dígitos.
+            doc_raw = row_pick(row, "cpf", "cnpj", "cpf_cnpj", "documento")
+            doc_digits = strip_document(doc_raw)
             name = normalize_name(
                 row_pick(row, "nome", "razao_social", "responsavel"),
             )
             processo = row_pick(row, "processo", "nr_processo")
             julgamento = row_pick(row, "julgamento", "data_julgamento", "data")
             motivo = normalize_name(row_pick(row, "motivo", "fundamento", "decisao"))
-            if not cnpj_digits and not name:
+            cargo = normalize_name(row_pick(row, "cargo", "funcao"))
+            ano = row_pick(row, "ano", "exercicio")
+            cpf_masked = str(row_pick(row, "cpf_masked")).lower() == "true"
+            pdf_url = row_pick(row, "pdf_url", "url")
+
+            if not doc_digits and not name:
                 continue
-            account_id = _hash_id(cnpj_digits, name, processo, julgamento)
-            cnpj_fmt = format_cnpj(cnpj_raw) if len(cnpj_digits) == 14 else ""
-            # Use the TCE-GO processo number as the natural record_id when
-            # present; fall back to the composite of source fields when
-            # the row lacks a numbered process (rare).
+            # Discrimina CPF (11 dígitos) vs CNPJ (14) vs vazio/mascarado.
+            cnpj_fmt = format_cnpj(doc_raw) if len(doc_digits) == 14 else ""
+            cpf_fmt = format_cpf(doc_raw) if len(doc_digits) == 11 else ""
+
+            account_id = _hash_id(doc_digits, name, processo, julgamento)
             account_record_id = (
                 str(processo)
                 if processo
-                else f"{cnpj_digits}|{name}|{julgamento}"
+                else f"{doc_digits}|{name}|{julgamento}"
             )
             self.irregular_accounts.append(self.attach_provenance(
                 {
                     "account_id": account_id,
                     "cnpj": cnpj_fmt,
+                    "cpf": cpf_fmt,
+                    "cpf_masked": cpf_masked,
                     "name": name,
+                    "cargo": cargo,
                     "processo": processo,
                     "motivo": motivo,
                     "julgamento": parse_date(julgamento) if julgamento else "",
+                    "ano": ano,
+                    "pdf_url": pdf_url,
                     "uf": "GO",
                     "source": "tce_go",
                 },
@@ -517,6 +542,27 @@ class TceGoPipeline(Pipeline):
                 self.impedido_rels.append(self.attach_provenance(
                     {
                         "source_key": cnpj_fmt,
+                        "target_key": account_id,
+                    },
+                    record_id=account_record_id,
+                    snapshot_uri=self._irregular_snapshot_uri,
+                ))
+            elif cpf_fmt:
+                # Person stub — entity resolution com :CanonicalPerson
+                # (link com perfil político) é tarefa de outro pipeline.
+                # Aqui só criamos o nó com o CPF como chave natural.
+                self.persons.append(self.attach_provenance(
+                    {
+                        "cpf": cpf_fmt,
+                        "name": name,
+                        "source": "tce_go_irregulares",
+                    },
+                    record_id=cpf_fmt,
+                    snapshot_uri=self._irregular_snapshot_uri,
+                ))
+                self.impedido_rels_person.append(self.attach_provenance(
+                    {
+                        "source_key": cpf_fmt,
                         "target_key": account_id,
                     },
                     record_id=account_record_id,
@@ -602,6 +648,19 @@ class TceGoPipeline(Pipeline):
                 rows=self.impedido_rels,
                 source_label="Company",
                 source_key="cnpj",
+                target_label="TceGoIrregularAccount",
+                target_key="account_id",
+            )
+
+        if self.persons:
+            loader.load_nodes("Person", self.persons, key_field="cpf")
+
+        if self.impedido_rels_person:
+            loader.load_relationships(
+                rel_type="IMPEDIDO_TCE_GO",
+                rows=self.impedido_rels_person,
+                source_label="Person",
+                source_key="cpf",
                 target_label="TceGoIrregularAccount",
                 target_key="account_id",
             )

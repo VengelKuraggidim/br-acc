@@ -326,12 +326,29 @@ def fetch_panel_dom(
     }
 
 
-def fetch_irregulares_to_disk(output_dir: Path | str) -> Path:
+def fetch_irregulares_to_disk(
+    output_dir: Path | str,
+    *,
+    parse_pdfs: bool = True,
+) -> Path:
     """Render the Contas Irregulares panel and write irregulares.csv.
 
+    Default flow (``parse_pdfs=True``):
+
+    1. Render Qlik panel via Selenium → 8 linhas-índice (1 por ano par).
+    2. Download cada PDF pra ``<output_dir>/irregulares_pdfs/`` (cache
+       por UUID — só re-baixa se o portal mudar).
+    3. Parser dos PDFs extrai ~163 servidores (nome + CPF + processo +
+       cargo + julgamento) — Phase 2 do TODO ``tce-go-qlik-scraper``.
+    4. ``irregulares.csv`` recebe **uma linha por servidor**, com
+       ``pdf_url`` preservado pra rastrear a fonte e ``ano`` pra agrupar.
+
+    ``parse_pdfs=False`` mantém o comportamento da Phase 1 (CSV com 8
+    linhas-índice apenas, sem download de PDFs) — útil pra smoke test
+    rápido ou quando pypdf não está disponível.
+
     Persists ``qlik_dom_irregulares.json`` alongside the CSV pra debug e
-    pra o archival layer ter o snapshot raw — segue o mesmo padrão que o
-    pipeline já tem pros CSVs operator-fed.
+    pra o archival layer ter o snapshot raw.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -339,14 +356,63 @@ def fetch_irregulares_to_disk(output_dir: Path | str) -> Path:
     snap_path = output_dir / "qlik_dom_irregulares.json"
     snap_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                          encoding="utf-8")
-    rows = parse_irregulares_dom(payload)
+    index_rows = parse_irregulares_dom(payload)
     csv_path = output_dir / "irregulares.csv"
-    _write_csv(csv_path, rows,
-               fieldnames=["processo", "nome", "julgamento", "cnpj",
-                           "motivo", "pdf_url"])
-    logger.info("[tce_go_qlik] wrote %s (%d rows) + %s",
-                csv_path, len(rows), snap_path)
+
+    if not parse_pdfs:
+        _write_csv(csv_path, index_rows,
+                   fieldnames=["processo", "nome", "julgamento", "cnpj",
+                               "motivo", "pdf_url"])
+        logger.info("[tce_go_qlik] wrote %s (%d index rows, sem PDFs) + %s",
+                    csv_path, len(index_rows), snap_path)
+        return csv_path
+
+    # Phase 2: baixar PDFs e expandir cada índice em N linhas (servidores)
+    pdf_dir = output_dir / "irregulares_pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    servidor_rows = _expand_to_servidor_rows(index_rows, pdf_dir)
+    _write_csv(csv_path, servidor_rows,
+               fieldnames=["nome", "cpf", "cpf_masked", "processo",
+                           "cargo", "julgamento", "ano", "pdf_url"])
+    logger.info("[tce_go_qlik] wrote %s (%d servidores de %d PDFs) + %s",
+                csv_path, len(servidor_rows), len(index_rows), snap_path)
     return csv_path
+
+
+def _expand_to_servidor_rows(
+    index_rows: list[dict[str, str]],
+    pdf_dir: Path,
+) -> list[dict[str, Any]]:
+    """Para cada índice (1 por ano), baixa o PDF (cache) + parse.
+
+    Retorna lista achatada com 1 linha por servidor encontrado em
+    qualquer dos 8 PDFs. Cada linha carrega ``pdf_url`` pra rastrear
+    a origem.
+    """
+    import httpx
+
+    from bracc_etl.pipelines.tce_go_irregulares_pdf import parse_pdf_file
+
+    out: list[dict[str, Any]] = []
+    with httpx.Client(timeout=60.0, follow_redirects=True,
+                      headers={"User-Agent": "br-acc-etl/1.0"}) as client:
+        for idx in index_rows:
+            url = idx.get("pdf_url") or ""
+            ano = (idx.get("julgamento") or "").split("/")[-1]
+            if not url or not ano:
+                continue
+            uuid = url.rstrip("/").rsplit("/", 1)[-1][:8]
+            pdf_path = pdf_dir / f"ano_{ano}_{uuid}.pdf"
+            if not pdf_path.exists():
+                logger.info("[tce_go_qlik] downloading %s", pdf_path.name)
+                resp = client.get(url)
+                resp.raise_for_status()
+                pdf_path.write_bytes(resp.content)
+            servidor_rows = parse_pdf_file(pdf_path, ano)
+            for srow in servidor_rows:
+                srow["pdf_url"] = url
+                out.append(srow)
+    return out
 
 
 def fetch_fiscalizacoes_to_disk(output_dir: Path | str) -> Path:

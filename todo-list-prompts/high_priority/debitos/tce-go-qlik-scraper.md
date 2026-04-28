@@ -1,17 +1,20 @@
 # TCE-GO "Contas irregulares" + "Fiscalizações" via scraper Qlik Sense — ✅ DONE (2026-04-27)
 
-> Concluído em 2026-04-27 com **Selenium + Firefox headless** (não via WS
-> Engine API como o plano original previa). Detalhes do pivot abaixo.
+> Phase 1 (scrape Qlik) concluída em 2026-04-27 com **Selenium + Firefox
+> headless** (não via WS Engine API como o plano original previa).
+> Phase 2 (parsing dos PDFs de servidores) concluída no mesmo dia.
+> Detalhes do pivot abaixo.
 
 ## Resumo
 
 - **Decisões** (~10k acórdãos/despachos/resoluções): REST oficial em
   `iago-search-api.tce.go.gov.br/decisions/search` (já estava ingerido).
 - **Contas Irregulares** (8 PDFs anuais): Selenium scrape do painel
-  `appid=67f0715a-…&sheet=5caeae7c-…`. Grava
-  `data/tce_go/irregulares.csv` com URL do PDF preservada por linha.
-  PDF parsing fica como fase 2 (extrair CNPJs/nomes individuais de dentro
-  dos PDFs).
+  `appid=67f0715a-…&sheet=5caeae7c-…` + parser dos PDFs em
+  `tce_go_irregulares_pdf.py` (pypdf). `irregulares.csv` agora carrega
+  **uma linha por servidor** (~163 servidores em 8 PDFs), com CPF
+  (completo ou mascarado por LGPD), nome, cargo, processo, julgamento,
+  ano e `pdf_url` preservada pra rastrear a fonte.
 - **Fiscalizações em Andamento** (~50 processos): Selenium scrape do
   painel `appid=16a63cbf-…&sheet=6f2407d5-…`. Sheet tem 2 tabelas
   (summary + detail) com schemas diferentes — parser detecta por número
@@ -85,19 +88,30 @@ uv run --project etl python scripts/download_tce_go.py \
 - [x] Nós `TceGoIrregularAccount` e `TceGoAudit` criados pelo pipeline
       legado (transform inalterado — schemas dos CSVs continuam
       compatíveis com `_transform_irregular` / `_transform_audits`).
-- [ ] Rels `IMPEDIDO_TCE_GO` entre Company e IrregularAccount — só
-      acontece quando o CSV trouxer CNPJ. Como o índice TCE-GO não
-      expõe CNPJ direto, fica para a **fase 2 (parsing dos PDFs)**.
+- [x] Rels `IMPEDIDO_TCE_GO` agora emitidos a partir de :Person (CPF
+      como chave natural), via parser dos PDFs. Phase 2 entregue
+      junto — schema do CSV expandiu pra ``cpf/cpf_masked/cargo/ano`` e
+      o `_transform_irregular` aceita CPF (11) ou CNPJ (14).
 - [x] Dependência nova (`selenium`) em group opcional `qlik` do
       pyproject — não em core.
 - [x] Testes offline com payload DOM mockado em
-      `etl/tests/fixtures/tce_go/qlik_dom_*.json`.
+      `etl/tests/fixtures/tce_go/qlik_dom_*.json` + 15 testes
+      ponta-a-ponta do PDF parser em `test_tce_go_irregulares_pdf.py`
+      cobrindo os 3 sub-formatos do acervo (2010 sem CPF, 2014 CPF
+      completo, 2022 CPF mascarado por LGPD).
 
-## Próxima fase (fora deste PR)
+## Phase 2 — PDF parsing (concluída 2026-04-27)
 
-**PDF parsing dos arquivos de irregulares** — cada um dos 8 PDFs lista
-internamente os servidores responsabilizados (CPF, nome, processo,
-motivo). Extrair via `pypdf` (já em deps core) + heurística de tabela.
-Quando feito, o pipeline ganha relacionamentos `IMPEDIDO_TCE_GO` reais.
-Prioridade: média — o índice atual já dá visibilidade às listas e o
-clique no PDF é UX trivial pra usuário curador.
+`tce_go_irregulares_pdf.py` faz parsing dos 8 PDFs anuais via
+`pypdf` + heurísticas tolerantes pros 3 sub-formatos:
+
+- **2010-2013**: sem CPF (LGPD ainda não aplicada de modo retroativo);
+  só ``Acórdão | Nome | Cargo``.
+- **2014-2019**: CPF completo (``XXX.XXX.XXX-XX``) + Processo + Cargo.
+- **2020+**: CPF mascarado (``836.XXX.XXX-34`` — só 1º bloco de 3
+  dígitos + dígitos verificadores), com flag `cpf_masked=True` no CSV.
+
+`fetch_irregulares_to_disk(parse_pdfs=True)` (default) baixa os PDFs
+pra ``data/tce_go/irregulares_pdfs/`` (cache por UUID) e expande cada
+índice anual em N linhas-servidor. ``parse_pdfs=False`` mantém o
+comportamento Phase 1 (8 linhas-índice apenas) pra smoke test rápido.
