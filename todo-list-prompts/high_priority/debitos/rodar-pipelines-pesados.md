@@ -1,6 +1,34 @@
 # Rodar pipelines pesados — `pgfn` + `comprasnet`
 
-## Estado 2026-04-24 20:25 — download em andamento, ETL runs adiados
+## Estado 2026-04-28 12:00 — pgfn ✅ ingerido, comprasnet download pausado a 42%
+
+**pgfn ETL concluído** (run `pgfn_20260428002822`, 2026-04-27 21:28 → 2026-04-28 00:19, ~1h51):
+- `rows_in=10.197.373`, `rows_loaded=1.007.085` Finance nodes + 1.007.085 DEVE rels
+- Skipped: 3.7M pessoas (CPF mascarado pela PGFN) + 101k co-responsáveis (esperado)
+
+**Comprasnet download pausado** (PID 43351 morto às 12:00):
+- 2025_pages/: **1.685 arquivos** em disco (de 4.049 esperados, ~42%)
+- 2025: 28 gaps (páginas que falharam 4 retries — re-run pega)
+- 2026: nem começou
+- Cadência variou ~10–90 s/pág (latência da PNCP oscilante)
+
+### Para retomar
+
+```bash
+cd /home/vengel-kuraggidim-sitagi/PycharmProjects/fiscal-cidadao
+nohup python3 scripts/download_comprasnet.py 2025 2026 \
+  --output-dir data/comprasnet --skip-existing \
+  > /tmp/comprasnet_dl.log 2>&1 &
+```
+
+`--skip-existing` pula 2021-2024 (já consolidados); ele percorre páginas
+já em `2025_pages/` e re-tenta as faltantes. ETA: ~50–60h pra completar
+2025+2026 nessa cadência (gargalo é API PNCP, não local).
+
+Quando download terminar, rodar comprasnet ETL conforme seção "Quando
+download terminar" abaixo.
+
+## Estado 2026-04-24 20:25 — download em andamento, ETL runs adiados (HISTÓRICO)
 
 `data/pgfn/`: **54 CSVs GO-scoped já em disco** (mar/2024 → mar/2026,
 SIDA_1 a SIDA_6, ~1.9 GB). Pronto pra ingestão.
