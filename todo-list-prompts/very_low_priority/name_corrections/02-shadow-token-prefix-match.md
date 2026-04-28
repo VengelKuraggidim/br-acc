@@ -1,4 +1,24 @@
-# Shadow Person attach via token-prefix conservador — ⏳ PENDENTE (2026-04-18)
+# Shadow Person attach via token-prefix conservador — ✅ ENTREGUE 2026-04-27
+
+> Commit `6066ed2` adiciona fase 5.5 `shadow_prefix_match` em
+> `entity_resolution_politicos_go.py` (linhas 728-815). Conf 0.70.
+> Gating: shadow >=2 tokens, prefix único bate cluster, ordem de
+> tokens estrita.
+>
+> Re-run local em 2026-04-27 21:59 anexou 2 shadows:
+> - "JORGE KAJURU" → canon_senado_5895 (Senator "JORGE KAJURU REIS
+>   DA COSTA NASSER")
+> - "ISMAEL ALEXANDRINO" → canon_camara_220570 (Fed "DR. ISMAEL
+>   ALEXANDRINO")
+>
+> Volume reflete que a maioria dos 686 shadows são pessoas
+> não-políticas (autores de inquéritos, servidores em DOU) sem
+> cluster canônico GO pra bater — `shadow_no_match` continua sendo
+> destino comum, esperado pela própria estimativa do prompt original.
+>
+> 6 testes novos cobrem fase 5.5 (TestShadowPrefixMatch). 68/68
+> testes ER passam, ruff/mypy clean.
+
 
 > Estende a Phase 2 do `entity_resolution_politicos_go` pra anexar
 > shadow Persons cujo nome é prefix exato de um nome de cluster já
