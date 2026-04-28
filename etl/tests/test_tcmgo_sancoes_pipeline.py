@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import httpx
+import pandas as pd
 import pytest
 
 from bracc_etl.archival import restore_snapshot
@@ -14,9 +15,12 @@ from bracc_etl.pipelines.tcmgo_sancoes import (
     TcmgoSancoesPipeline,
     _build_ajax_payload,
     _extract_viewstate,
+    _normalize_csv_header,
+    _normalize_lai_impedidos_headers,
     _parse_jsf_table,
     _parse_partial_response,
     fetch_impedidos_jsf,
+    fetch_to_disk,
 )
 from tests._mock_helpers import mock_session
 
@@ -492,3 +496,189 @@ class TestFetchImpedidosJsf:
             fetch_impedidos_jsf(
                 tmp_path, client=client, rate_limit_seconds=0.0,
             )
+
+
+# ---------------------------------------------------------------------------
+# LAI hardening — extract tolera variacoes do CSV exportado pelo TCM-GO via
+# pedido LAI/e-SIC. O scraper JSF emite shape canonico, mas o portal do TCM-GO
+# pode devolver export com headers PT-BR, separadores variados, accented
+# columns. Os testes abaixo garantem que o pipeline ingere sem mexer em codigo
+# pra cada variante esperada.
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeCsvHeader:
+    def test_lowercase_strips_accents(self) -> None:
+        assert _normalize_csv_header("Órgão Sancionador") == "orgao_sancionador"
+
+    def test_collapses_punct_runs(self) -> None:
+        assert _normalize_csv_header("CPF / CNPJ") == "cpf_cnpj"
+        # ``Nº`` decompoe pra ``No`` no NFKD strip — ambos no_processo e
+        # n_processo estao mapeados em _LAI_IMPEDIDOS_HEADER_ALIASES.
+        assert _normalize_csv_header("Nº-Processo") == "no_processo"
+        assert _normalize_csv_header("  início  ") == "inicio"
+
+    def test_idempotent_on_canonical(self) -> None:
+        for canon in (
+            "nome", "cpf_cnpj", "data_inicio", "data_fim",
+            "orgao", "processo", "situacao",
+        ):
+            assert _normalize_csv_header(canon) == canon
+
+
+class TestNormalizeLaiImpedidosHeaders:
+    def test_renames_ptbr_export_columns(self) -> None:
+        df = pd.DataFrame([{
+            "Nome": "X", "CPF/CNPJ": "1", "Início": "01/01/2025",
+            "Término": "02/01/2025", "Órgão Sancionador": "Y",
+            "Nº Processo": "P", "Situação": "I",
+        }])
+        out = _normalize_lai_impedidos_headers(df)
+        assert set(out.columns) == {
+            "nome", "cpf_cnpj", "data_inicio", "data_fim",
+            "orgao", "processo", "situacao",
+        }
+
+    def test_preserves_unknown_columns_normalized(self) -> None:
+        df = pd.DataFrame([{"Nome": "X", "Coluna Bizarra Nova": "v"}])
+        out = _normalize_lai_impedidos_headers(df)
+        assert "nome" in out.columns
+        assert "coluna_bizarra_nova" in out.columns
+
+    def test_empty_df_passes_through(self) -> None:
+        assert _normalize_lai_impedidos_headers(pd.DataFrame()).empty
+
+
+class TestLaiCsvVariantsIngest:
+    """Pipeline ingere CSVs no shape que pode chegar via LAI/e-SIC.
+
+    Cada fixture testa uma variacao real esperada: headers PT-BR full
+    (com acento), separador `,`, separador `\\t`. Apos o normalizer +
+    _read_csv_optional, os impedidos caem em ``list_kind='impedidos_licitar'``
+    com document_kind correto.
+    """
+
+    def _run_with_fixture_dir(self, fixture_dir: str) -> TcmgoSancoesPipeline:
+        pipeline = TcmgoSancoesPipeline(
+            driver=MagicMock(),
+            data_dir=str(FIXTURES / fixture_dir),
+            archive_online=False,
+        )
+        pipeline.extract()
+        pipeline.transform()
+        return pipeline
+
+    def test_ptbr_full_headers_semicolon(self) -> None:
+        pipeline = self._run_with_fixture_dir("tcmgo_sancoes_lai")
+        impedidos = [
+            r for r in pipeline.impedidos
+            if r["list_kind"] == "impedidos_licitar"
+        ]
+        assert len(impedidos) == 3
+        cnpjs = {r["document"] for r in impedidos if r["document_kind"] == "CNPJ"}
+        assert "11.222.333/0001-81" in cnpjs
+        assert "99.888.777/0001-66" in cnpjs
+        # Datas convertidas pra ISO independente do header PT-BR.
+        assert all(r["data_inicio"].startswith("2025-") for r in impedidos)
+        # Orgao foi mapeado de "Órgão Sancionador".
+        assert any("GOIANIA" in r["orgao"] for r in impedidos)
+
+    def test_comma_separator(self) -> None:
+        pipeline = self._run_with_fixture_dir("tcmgo_sancoes_lai_comma")
+        impedidos = [
+            r for r in pipeline.impedidos
+            if r["list_kind"] == "impedidos_licitar"
+        ]
+        assert len(impedidos) == 2
+        # "Documento" → cpf_cnpj; "Nome do Sancionado" → nome.
+        names = {r["name"] for r in impedidos}
+        assert "EMPRESA LAI COMMA LTDA" in names
+
+    def test_tab_separator(self) -> None:
+        pipeline = self._run_with_fixture_dir("tcmgo_sancoes_lai_tab")
+        impedidos = [
+            r for r in pipeline.impedidos
+            if r["list_kind"] == "impedidos_licitar"
+        ]
+        assert len(impedidos) == 2
+        # "Razão Social" → nome; "Entidade" → orgao; "Tipo de Sanção" → situacao.
+        names = {r["name"] for r in impedidos}
+        assert "EMPRESA LAI TAB LTDA" in names
+        assert all(r["orgao"] for r in impedidos)
+
+
+class TestContasIrregularesRename:
+    """Rename 2026-04: ``impedidos.csv`` → ``contas_irregulares.csv``.
+
+    Extract prefere o nome canonico novo; cai no legacy se o canonico nao
+    existir, pra nao quebrar deploys que ainda nao re-fetcharam.
+    """
+
+    def test_le_arquivo_canonico_quando_presente(self) -> None:
+        pipeline = TcmgoSancoesPipeline(
+            driver=MagicMock(),
+            data_dir=str(FIXTURES / "tcmgo_sancoes_renamed"),
+            archive_online=False,
+        )
+        pipeline.extract()
+        pipeline.transform()
+        # Mesma fixture do legacy — 3 rows de contas-irregulares.
+        contas = [
+            r for r in pipeline.impedidos
+            if r["list_kind"] == "contas_irregulares"
+        ]
+        assert len(contas) == 3
+
+    def test_le_legacy_impedidos_csv_quando_canonico_ausente(self) -> None:
+        # Diretorio padrao tem so ``impedidos.csv`` (legacy) — fallback ativa.
+        pipeline = TcmgoSancoesPipeline(
+            driver=MagicMock(),
+            data_dir=str(FIXTURES),
+            archive_online=False,
+        )
+        pipeline.extract()
+        pipeline.transform()
+        contas = [
+            r for r in pipeline.impedidos
+            if r["list_kind"] == "contas_irregulares"
+        ]
+        assert len(contas) == 3
+
+
+class TestFetchToDiskWritesCanonicalName:
+    """``fetch_to_disk`` grava ``contas_irregulares.csv`` (nome novo)."""
+
+    def test_grava_arquivo_com_nome_canonico(self, tmp_path: Path) -> None:
+        fake_csv = (
+            "CPF;Nome;Assunto;Processo/Fase\n"
+            "12345678000199;EMPRESA MOCK LTDA;Irreg fake;2024.MOCK.001\n"
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                content=fake_csv.encode("utf-8"),
+                headers={"content-type": "text/csv; charset=utf-8"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        original_client = httpx.Client
+
+        def _client_factory(*args: Any, **kwargs: Any) -> httpx.Client:
+            kwargs["transport"] = transport
+            return original_client(*args, **kwargs)
+
+        # fetch_to_disk usa httpx.Client diretamente; monkeypatchamos pelo
+        # contexto local sem MonkeyPatch fixture pra manter o teste autonomo.
+        import bracc_etl.pipelines.tcmgo_sancoes as module
+        saved = module.httpx.Client
+        module.httpx.Client = _client_factory  # type: ignore[assignment]
+        try:
+            paths = fetch_to_disk(tmp_path)
+        finally:
+            module.httpx.Client = saved  # type: ignore[assignment]
+
+        assert len(paths) == 1
+        assert paths[0].name == "contas_irregulares.csv"
+        assert paths[0].exists()
+        assert "EMPRESA MOCK LTDA" in paths[0].read_text(encoding="utf-8")

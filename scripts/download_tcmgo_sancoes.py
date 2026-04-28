@@ -6,7 +6,8 @@ which calls the TCM-GO Web Services open-data endpoint for "contas com
 parecer previo pela rejeicao ou julgadas irregulares". The endpoint returns
 a CSV with pre-masked CPFs; the wrapper normalises headers into the
 aliases the ``tcmgo_sancoes`` pipeline already accepts and writes
-``impedidos.csv`` under the target directory.
+``contas_irregulares.csv`` under the target directory (legacy
+``impedidos.csv`` is still read on extract for backward compat).
 
 Source (service #31 in the TCM-GO Web Services catalog):
   https://ws.tcm.go.gov.br/api/rest/dados/contas-irregulares
@@ -14,11 +15,11 @@ Source (service #31 in the TCM-GO Web Services catalog):
 Scope: UF=GO (all 246 municipalities handled by TCM-GO).
 No authentication required.
 
-Note: the "impedidos de licitar" list on the TCM-GO portal is currently
-rendered only via an embedded Power BI report, with no public CSV/JSON.
-This wrapper ships the one automated artifact available today; operators
-may continue to drop a manually exported ``impedidos.csv`` (for example,
-from a LAI request) alongside the produced file and re-run the pipeline.
+Note: the "impedidos de licitar" list lives behind a PrimeFaces JSF
+widget at tcmgo.tc.br; ``--include-impedidos-jsf`` enables that scraper
+(when robots.txt allows). Operators may also drop a LAI-derived export
+as ``impedidos_licitar.csv`` under the same output dir; the pipeline
+tolerates several PT-BR header variants and separators on read.
 
 Usage:
     # Full public dataset (~1.4k rows as of 2026-04):
@@ -49,7 +50,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "Download TCM-GO contas-irregulares CSV (sanction-flavored "
             "list of agents with accounts judged irregular or rejected "
-            "by TCM-GO). Writes data/tcmgo_sancoes/impedidos.csv by default."
+            "by TCM-GO). Writes data/tcmgo_sancoes/contas_irregulares.csv "
+            "by default."
         ),
     )
     parser.add_argument(

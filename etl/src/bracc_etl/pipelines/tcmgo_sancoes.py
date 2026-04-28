@@ -2,10 +2,14 @@
 
 TCM-GO publishes two public sanction-flavored lists at https://www.tcmgo.tc.br/:
 
-* "Impedidos de licitar, contratar ou exercer cargo publico" — rendered only
-  as an embedded Power BI report; no machine-readable export is available at
-  time of writing. Operators may still drop a manually exported
-  ``impedidos.csv`` under ``data/tcmgo_sancoes/`` if they obtain one via LAI.
+* "Impedidos de licitar, contratar ou exercer cargo publico" — rendered as a
+  PrimeFaces JSF widget at ``tcmgo.tc.br/portalwidgets/.../impedimento.jsf``.
+  ``fetch_impedidos_jsf`` scrapes it (when robots.txt allows). LAI-derived
+  exports may also be dropped as ``impedidos_licitar.csv``; the extract step
+  tolerates several header variants (``Nome``/``Nome do Sancionado``,
+  ``CPF/CNPJ``/``Documento``, ``Início``/``Data de Início``...) plus
+  separators ``;``, ``,``, ``\t`` and ``|`` so most LAI-CSV shapes ingest
+  without manual rework.
 * "Contas com Parecer Previo pela Rejeicao ou julgadas Irregulares" — exposed
   as an unauthenticated CSV via the TCM-GO Web Services catalog (service #31,
   https://ws.tcm.go.gov.br/api/rest/dados/contas-irregulares). CPFs arrive
@@ -13,16 +17,19 @@ TCM-GO publishes two public sanction-flavored lists at https://www.tcmgo.tc.br/:
   (proceedings type) and a TipoLista category.
 
 ``fetch_to_disk`` hits that public CSV endpoint, normalises headers to the
-aliases this pipeline already accepts, and writes ``impedidos.csv`` under the
-target directory — so the same ingest code path used for LAI-derived exports
-also handles the automated pull. Operators may still drop their own
-``rejeitados.csv`` alongside it (expected layout is municipality x exercise
-x parecer).
+aliases this pipeline already accepts, and writes ``contas_irregulares.csv``
+under the target directory. The legacy filename ``impedidos.csv`` is still
+accepted on read for backward compat (deployments that fetched before the
+2026-04 rename keep working without re-running the fetch).
 
 Pipeline outputs:
 
-- ``impedidos.csv``  -> TcmGoImpedido nodes + IMPEDIDO_TCMGO rels (only when
-  a row carries a CNPJ, which is uncommon for this source).
+- ``contas_irregulares.csv`` (legacy ``impedidos.csv``)
+  -> TcmGoImpedido nodes (``list_kind='contas_irregulares'``) + IMPEDIDO_TCMGO
+  rels (only when a row carries a CNPJ, which is uncommon for this source).
+- ``impedidos_licitar.csv`` (JSF scraper or LAI export)
+  -> TcmGoImpedido nodes (``list_kind='impedidos_licitar'``) + IMPEDIDO_TCMGO
+  rels for CNPJs.
 - ``rejeitados.csv`` -> TcmGoRejectedAccount nodes (optional, operator-fed).
 
 Notes:
@@ -43,6 +50,7 @@ import hashlib
 import logging
 import re
 import time as _time
+import unicodedata
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -95,6 +103,100 @@ _CONTAS_HEADER_MAP: dict[str, str] = {
     "Url": "url",
     "TipoLista": "tipo_lista",
 }
+
+# LAI exports of "impedidos de licitar" arrive with arbitrary PT-BR header
+# casing/punctuation/accents (the operator pastes the export as-is). The
+# scraper produces the canonical names below; the LAI path needs a tolerant
+# rewrite step. Keys are headers post-normalization (lowercase, accents
+# stripped, runs of ``\s/.\-_`` collapsed to ``_``); values are the canonical
+# names ``_transform_impedidos_jsf`` already feeds to ``row_pick``.
+_LAI_IMPEDIDOS_HEADER_ALIASES: dict[str, str] = {
+    # nome
+    "nome": "nome",
+    "nome_do_sancionado": "nome",
+    "nome_completo": "nome",
+    "razao_social": "nome",
+    "responsavel": "nome",
+    # cpf_cnpj
+    "cpf_cnpj": "cpf_cnpj",
+    "cpf": "cpf_cnpj",
+    "cnpj": "cpf_cnpj",
+    "documento": "cpf_cnpj",
+    "doc": "cpf_cnpj",
+    "cpf_ou_cnpj": "cpf_cnpj",
+    # data_inicio
+    "data_inicio": "data_inicio",
+    "inicio": "data_inicio",
+    "data_de_inicio": "data_inicio",
+    "inicio_impedimento": "data_inicio",
+    "inicio_da_vigencia": "data_inicio",
+    "vigencia_inicio": "data_inicio",
+    "dt_inicio": "data_inicio",
+    # data_fim
+    "data_fim": "data_fim",
+    "fim": "data_fim",
+    "termino": "data_fim",
+    "data_termino": "data_fim",
+    "data_de_termino": "data_fim",
+    "data_de_fim": "data_fim",
+    "fim_impedimento": "data_fim",
+    "fim_da_vigencia": "data_fim",
+    "vigencia_fim": "data_fim",
+    "vigencia_final": "data_fim",
+    "dt_fim": "data_fim",
+    # orgao
+    "orgao": "orgao",
+    "orgao_sancionador": "orgao",
+    "ente": "orgao",
+    "entidade": "orgao",
+    "unidade": "orgao",
+    # processo
+    "processo": "processo",
+    "n_processo": "processo",
+    "no_processo": "processo",
+    "numero_processo": "processo",
+    "numero_do_processo": "processo",
+    "processo_administrativo": "processo",
+    # situacao
+    "situacao": "situacao",
+    "status": "situacao",
+    "tipo_sancao": "situacao",
+    "tipo_de_sancao": "situacao",
+}
+
+_HEADER_PUNCT_RE = re.compile(r"[\s/.\-_]+")
+
+
+def _normalize_csv_header(name: str) -> str:
+    """Lowercase + strip accents + collapse separator runs to ``_``.
+
+    Used by :func:`_normalize_lai_impedidos_headers` to compare arbitrary
+    LAI-export column names against ``_LAI_IMPEDIDOS_HEADER_ALIASES``. Kept
+    deterministic (no locale dependency) so fixtures stay stable in CI.
+    """
+    decomposed = unicodedata.normalize("NFKD", name)
+    ascii_only = decomposed.encode("ascii", "ignore").decode("ascii")
+    collapsed = _HEADER_PUNCT_RE.sub("_", ascii_only.strip().lower())
+    return collapsed.strip("_")
+
+
+def _normalize_lai_impedidos_headers(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename LAI-export columns to the canonical names ``row_pick`` looks for.
+
+    Applied to ``impedidos_licitar.csv`` only — the scraper already emits
+    canonical names, so this is a no-op on its own output. LAI exports may
+    use ``Nome`` / ``CPF/CNPJ`` / ``Início`` / ``Órgão Sancionador`` etc.;
+    this maps known variants in place. Unknown columns are preserved with a
+    normalized form (so a future alias addition surfaces them naturally).
+    """
+    if df.empty:
+        return df
+    rename_map: dict[str, str] = {}
+    for col in df.columns:
+        norm = _normalize_csv_header(str(col))
+        canonical = _LAI_IMPEDIDOS_HEADER_ALIASES.get(norm, norm)
+        rename_map[col] = canonical
+    return df.rename(columns=rename_map)
 
 
 def _hash_id(*parts: str, length: int = 20) -> str:
@@ -161,11 +263,12 @@ def fetch_to_disk(
 ) -> list[Path]:
     """Download the TCM-GO "contas irregulares" CSV and stage it on disk.
 
-    Writes ``impedidos.csv`` under ``output_dir`` using semicolon-separated
-    values with headers aliased to the names the pipeline's
-    :meth:`transform` step already recognises (``cpf_cnpj``, ``nome``,
-    ``motivo``, ``processo``, ``data_inicio``, ``data_fim``, plus auxiliary
-    ``municipio``, ``exercicio``, ``acordao``, ``url``, ``tipo_lista``).
+    Writes ``contas_irregulares.csv`` under ``output_dir`` using
+    semicolon-separated values with headers aliased to the names the
+    pipeline's :meth:`transform` step already recognises (``cpf_cnpj``,
+    ``nome``, ``motivo``, ``processo``, ``data_inicio``, ``data_fim``, plus
+    auxiliary ``municipio``, ``exercicio``, ``acordao``, ``url``,
+    ``tipo_lista``).
 
     Args:
         output_dir: Destination directory. Created if missing.
@@ -195,7 +298,7 @@ def fetch_to_disk(
         # TCM-GO ships UTF-8 but doesn't always declare charset.
         text = response.content.decode(response.encoding or "utf-8")
 
-    out_csv = output_dir / "impedidos.csv"
+    out_csv = output_dir / "contas_irregulares.csv"
     rows = _rewrite_contas_csv(text, out_csv, limit=limit)
     logger.info(
         "[tcmgo_sancoes] wrote %s (%d data rows)", out_csv, rows,
@@ -566,7 +669,12 @@ class TcmgoSancoesPipeline(Pipeline):
     def _read_csv_optional(self, path: Path) -> pd.DataFrame:
         if not path.exists() or path.stat().st_size == 0:
             return pd.DataFrame()
-        for sep in (";", ","):
+        # Order matters: ``;`` first because all our scraper-produced and
+        # fixture CSVs use it; then ``,``, ``\t``, ``|`` to absorb LAI
+        # exports that may arrive in any of those shapes. The ``> 1``
+        # column check rejects mis-parses (e.g. tab file read with ``;``
+        # collapses every line into a single-column row).
+        for sep in (";", ",", "\t", "|"):
             try:
                 df = pd.read_csv(
                     path, sep=sep, dtype=str, keep_default_na=False,
@@ -643,13 +751,21 @@ class TcmgoSancoesPipeline(Pipeline):
                 src_dir,
             )
             return
-        self._raw_impedidos = self._read_csv_optional(src_dir / "impedidos.csv")
+        # Contas-irregulares (REST CSV). Canonical filename is
+        # ``contas_irregulares.csv`` (renamed 2026-04 to match what the file
+        # actually carries — "contas julgadas irregulares", not "impedidos").
+        # Legacy ``impedidos.csv`` still works on read for deployments that
+        # haven't re-fetched since the rename.
+        contas_path = src_dir / "contas_irregulares.csv"
+        if not contas_path.exists():
+            contas_path = src_dir / "impedidos.csv"
+        self._raw_impedidos = self._read_csv_optional(contas_path)
         self._raw_rejeitados = self._read_csv_optional(src_dir / "rejeitados.csv")
-        # Impedidos-de-licitar (JSF scraper). Optional — pipeline nao quebra
-        # se o CSV nao foi gerado; aceita tanto o novo nome quanto fallback
-        # pra compat retroativa caso operador grave com outro rotulo.
-        self._raw_impedidos_jsf = self._read_csv_optional(
-            src_dir / _IMPEDIDOS_CSV_NAME,
+        # Impedidos-de-licitar (JSF scraper or LAI export). The scraper emits
+        # canonical column names; LAI exports may arrive with any PT-BR
+        # variation, so we run a tolerant header normalizer over the frame.
+        self._raw_impedidos_jsf = _normalize_lai_impedidos_headers(
+            self._read_csv_optional(src_dir / _IMPEDIDOS_CSV_NAME),
         )
 
         if self.limit:
