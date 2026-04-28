@@ -97,6 +97,18 @@ regras 1-3 não pegam:
   nomes já presentes no cluster canônico → REPRESENTS adicional. Conf
   0.80. Ambiguidade = skip+log.
 
+* **shadow_prefix_match** (fase 5.5) — pra shadows que ``shadow_name_exact``
+  não pegou (zero clusters com nome igual). Casa shadow cujo
+  ``name_normalized`` é prefix exato (sequência de tokens iniciais) do
+  nome de algum source num cluster já resolvido. Caso canônico:
+  shadow ``"JORGE KAJURU"`` (2 tokens) ↔ Senator ``"JORGE KAJURU REIS
+  DA COSTA NASSER"`` (6 tokens). Gating conservador: shadow precisa
+  ter ≥2 tokens (1 token = sobrenome solto, genérico demais), e o
+  prefix precisa bater EXATAMENTE 1 cluster — múltiplos clusters
+  compartilhando o mesmo prefix curto vira audit. Conf 0.70 (mais
+  baixa que ``shadow_name_exact`` porque a evidência de identidade é
+  mais fraca).
+
 Stop on ambiguidade é política do projeto (CLAUDE.md §3). Audit log em
 ``data/entity_resolution_politicos_go/audit_{run_id}.jsonl`` lista todos
 os casos puláveis pra revisão humana.
@@ -129,7 +141,7 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
   "name_stripped" | "cpf_suffix_name" | "cpf_suffix_token_overlap" |
   "cpf_suffix_cargo" | "name_partido_multi" | "shadow_name_exact" |
-  "cargo_root"``.
+  "shadow_prefix_match" | "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
   ingested_at, source_record_id).
@@ -728,11 +740,25 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         # ---- Fase 5: shadow attach ----
         # Pra cada shadow, tenta anexar a um cluster existente por nome normalizado.
         cluster_names: dict[str, list[str]] = defaultdict(list)
+        # Índice complementar pra fase 5.5 (shadow_prefix_match): chave
+        # = prefix de tokens do nome do source (k em [2, len-1]); valor
+        # = canonical_ids cujos sources começam com esse prefix.
+        # k=len(tokens) é redundante (já coberto por cluster_names).
+        cluster_prefixes: dict[str, set[str]] = defaultdict(set)
         for canonical_id, cluster in self._clusters.items():
             for edge in cluster["edges"]:
                 src_name = edge.get("_source_name_norm") or ""
-                if src_name:
-                    cluster_names[src_name].append(canonical_id)
+                if not src_name:
+                    continue
+                cluster_names[src_name].append(canonical_id)
+                src_tokens = src_name.split()
+                if len(src_tokens) < 3:
+                    continue
+                for k in range(2, len(src_tokens)):
+                    prefix = " ".join(src_tokens[:k])
+                    cluster_prefixes[prefix].add(canonical_id)
+
+        attached_shadows: set[str] = set()
 
         for shadow in persons_shadow:
             name_norm = shadow["name_normalized"]
@@ -748,6 +774,7 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                     method="shadow_name_exact",
                     confidence=0.80,
                 )
+                attached_shadows.add(shadow["element_id"])
             elif len(unique_canonicals) > 1:
                 self._audit_entries.append({
                     "type": "shadow_ambiguous",
@@ -755,14 +782,54 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                     "shadow_name": shadow["name"],
                     "candidate_canonicals": unique_canonicals,
                 })
-            # else: shadow sem match — não vira cluster próprio (só name é
-            # pouco pra criar entidade canônica nova). Cai pro audit.
-            else:
+                attached_shadows.add(shadow["element_id"])
+
+        # ---- Fase 5.5: shadow_prefix_match ----
+        # Shadow cujo nome é prefix exato (sequência de tokens iniciais)
+        # do nome de UM source num cluster já resolvido. Conservador:
+        # shadow precisa ter ≥2 tokens; prefix precisa bater 1 cluster
+        # único. Caso canônico: shadow "JORGE KAJURU" ↔ Senator "JORGE
+        # KAJURU REIS DA COSTA NASSER".
+        for shadow in persons_shadow:
+            if shadow["element_id"] in attached_shadows:
+                continue
+            name_norm = shadow["name_normalized"]
+            if not name_norm:
+                continue
+            shadow_tokens = name_norm.split()
+            if len(shadow_tokens) < 2:
+                continue
+            unique_canonicals = sorted(cluster_prefixes.get(name_norm, set()))
+            if len(unique_canonicals) == 1:
+                self._attach_source(
+                    canonical_id=unique_canonicals[0],
+                    node=shadow,
+                    method="shadow_prefix_match",
+                    confidence=0.70,
+                )
+                attached_shadows.add(shadow["element_id"])
+            elif len(unique_canonicals) > 1:
                 self._audit_entries.append({
-                    "type": "shadow_no_match",
+                    "type": "shadow_prefix_ambiguous",
                     "shadow_element_id": shadow["element_id"],
                     "shadow_name": shadow["name"],
+                    "candidate_canonicals": unique_canonicals,
                 })
+                attached_shadows.add(shadow["element_id"])
+
+        # Shadows que nenhuma regra cobriu: cai pro audit shadow_no_match.
+        # (Só name é pouco pra criar cluster canônico próprio.)
+        for shadow in persons_shadow:
+            if shadow["element_id"] in attached_shadows:
+                continue
+            name_norm = shadow["name_normalized"]
+            if not name_norm:
+                continue
+            self._audit_entries.append({
+                "type": "shadow_no_match",
+                "shadow_element_id": shadow["element_id"],
+                "shadow_name": shadow["name"],
+            })
 
         # ---- Finaliza: materializa rows pra Neo4jBatchLoader ----
         for cluster in self._clusters.values():

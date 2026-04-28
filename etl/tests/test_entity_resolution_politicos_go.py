@@ -1061,6 +1061,143 @@ class TestAmbiguity:
         assert any(e["type"] == "shadow_ambiguous" for e in entries)
 
 
+class TestShadowPrefixMatch:
+    def test_shadow_curto_matcha_cluster_unico(self, tmp_path: Path) -> None:
+        # Shadow "JORGE KAJURU" (2 tokens) ↔ Senator "JORGE KAJURU REIS
+        # DA COSTA NASSER" (6 tokens) → fase 5.5 attach conf=0.70.
+        rows = [
+            _senator("n1", "JORGE KAJURU REIS DA COSTA NASSER", id_senado="5895"),
+            _shadow("n2", "JORGE KAJURU"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges = pipeline.represents_rels
+        prefix_edges = [e for e in edges if e["method"] == "shadow_prefix_match"]
+        assert len(prefix_edges) == 1
+        assert prefix_edges[0]["target_element_id"] == "n2"
+        assert prefix_edges[0]["confidence"] == pytest.approx(0.70)
+
+    def test_shadow_prefix_multiplos_clusters_skip(self, tmp_path: Path) -> None:
+        # Shadow "JOAO SILVA" prefix de 2 clusters distintos → skip +
+        # audit shadow_prefix_ambiguous.
+        rows = [
+            _fed("n1", "JOAO SILVA PEREIRA", id_camara="1", partido="PT"),
+            _fed("n2", "JOAO SILVA SANTOS", id_camara="2", partido="PL"),
+            _shadow("n3", "JOAO SILVA"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_prefix_match" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        ambiguous = [e for e in entries if e["type"] == "shadow_prefix_ambiguous"]
+        assert len(ambiguous) == 1
+        assert ambiguous[0]["shadow_element_id"] == "n3"
+        assert sorted(ambiguous[0]["candidate_canonicals"]) == sorted([
+            "canon_camara_1", "canon_camara_2",
+        ])
+
+    def test_shadow_1_token_nunca_attach(self, tmp_path: Path) -> None:
+        # Shadow "SILVA" (1 token) — fase 5.5 deve pular (gating
+        # tokens >= 2). Cai pra shadow_no_match.
+        rows = [
+            _senator("n1", "JORGE SILVA", id_senado="999"),
+            _shadow("n2", "SILVA"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_prefix_match" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        assert any(
+            e["type"] == "shadow_no_match" and e["shadow_element_id"] == "n2"
+            for e in entries
+        )
+
+    def test_shadow_prefix_nao_desbanca_name_exact(self, tmp_path: Path) -> None:
+        # Cluster com Senator "JORGE KAJURU REIS DA COSTA NASSER" + 2
+        # shadows: um exato ("JORGE KAJURU REIS DA COSTA NASSER") e um
+        # prefix ("JORGE KAJURU"). O exact pega via fase 5; o prefix
+        # pega via fase 5.5. Ambos no mesmo cluster.
+        rows = [
+            _senator("n1", "JORGE KAJURU REIS DA COSTA NASSER", id_senado="5895"),
+            _shadow("n2", "JORGE KAJURU REIS DA COSTA NASSER"),
+            _shadow("n3", "JORGE KAJURU"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        edges_by_method: dict[str, list[str]] = {}
+        for e in pipeline.represents_rels:
+            edges_by_method.setdefault(e["method"], []).append(
+                e["target_element_id"],
+            )
+        assert edges_by_method.get("shadow_name_exact") == ["n2"]
+        assert edges_by_method.get("shadow_prefix_match") == ["n3"]
+
+    def test_shadow_prefix_respeita_ordem_tokens(self, tmp_path: Path) -> None:
+        # Shadow "KAJURU JORGE" (invertido) NÃO bate prefix de "JORGE
+        # KAJURU REIS ..." — ordem é estrita do início.
+        rows = [
+            _senator("n1", "JORGE KAJURU REIS DA COSTA NASSER", id_senado="5895"),
+            _shadow("n2", "KAJURU JORGE"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_prefix_match" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        assert any(
+            e["type"] == "shadow_no_match" and e["shadow_element_id"] == "n2"
+            for e in entries
+        )
+
+    def test_shadow_prefix_de_person_em_cluster_tambem_casa(
+        self, tmp_path: Path,
+    ) -> None:
+        # Index de prefixes itera por TODOS os sources do cluster, não
+        # só o cargo. Fed + Person TSE attached via cpf_suffix_name no
+        # cluster: shadow "FLAVIA CARREIRO" deve achar prefix do Person.
+        # Sem o Person no cluster, prefix "FLAVIA CARREIRO" não existe.
+        rows = [
+            _fed("n1", "FLAVIA MORAIS", id_camara="160598", partido="PSD"),
+            _person(
+                "n2", "FLAVIA CARREIRO ALBUQUERQUE MORAIS",
+                cpf="547.795.331-53", uf="GO",  # sufixo bate cpf mascarado do _fed default
+            ),
+            _shadow("n3", "FLAVIA CARREIRO"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        # Person foi anexado via cpf_suffix_name (cargo "FLAVIA MORAIS"
+        # tokens são subset de "FLAVIA CARREIRO ALBUQUERQUE MORAIS").
+        methods = sorted(e["method"] for e in pipeline.represents_rels)
+        assert "cpf_suffix_name" in methods
+        prefix_edges = [
+            e for e in pipeline.represents_rels
+            if e["method"] == "shadow_prefix_match"
+        ]
+        assert len(prefix_edges) == 1
+        assert prefix_edges[0]["target_element_id"] == "n3"
+
+
 class TestProvenance:
     def test_todo_canonical_tem_provenance(self, tmp_path: Path) -> None:
         rows = [_senator("n1", "JORGE KAJURU", id_senado="5895")]
