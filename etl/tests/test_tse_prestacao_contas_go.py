@@ -36,7 +36,7 @@ from bracc_etl.pipelines.tse_prestacao_contas_go import (
     TsePrestacaoContasGoPipeline,
     _classify_origem,
 )
-from bracc_etl.transforms import format_cnpj
+from bracc_etl.transforms import format_cnpj, format_cpf
 from tests._mock_helpers import mock_driver, mock_session
 
 if TYPE_CHECKING:
@@ -1086,6 +1086,130 @@ class TestLoad:
         assert "c.cnae_principal = '9492-8/00'" in query_str
         assert "c.cargo_candidatura = row.cargo_candidatura" in query_str
         assert "c.ano_eleicao = row.ano_eleicao" in query_str
+
+
+class TestDoouRoutesByDonorType:
+    """Regressao bug 2026-04-29 (cards 'Confere com o TSE' zerados).
+
+    O loader antigo fazia MERGE generico ``(p)<-[r:DOOU]-(d)`` sem chave no
+    nó ``d``, então ``ON CREATE SET d:CampaignDonor`` criava um stub novo
+    por donation_id. Resultado: doador real (Company com CNPJ, ou Person
+    real) nunca recebia a rel, e classificador da API zerava o total. Os
+    asserts abaixo cobrem o roteamento por doador_tipo:
+
+    - PJ -> MERGE :Company {cnpj: <formatado>}
+    - PF mascarado -> MERGE :CampaignDonor {doador_id: <CPF mascarado>}
+    - desconhecido -> MERGE :CampaignDonor {doador_id: 'anon:<did>'}
+    """
+
+    def test_pj_donor_merges_into_company_by_cnpj(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        pipeline.load()
+
+        session = mock_session(pipeline)
+        company_doou_calls = [
+            call for call in session.run.call_args_list
+            if "MERGE (d:Company {cnpj: row.doador_cnpj_formatted})" in str(call)
+        ]
+        assert company_doou_calls, (
+            "Doador PJ deveria mergir em :Company por CNPJ formatado"
+        )
+        query_str = str(company_doou_calls[0][0][0])
+        # Rel ainda tem MERGE por donation_id (idempotencia).
+        assert "[r:DOOU {donation_id: row.donation_id}]" in query_str
+        # ano carimbado na rel — pre-requisito pro filtro do classificador.
+        assert "r.ano = row.ano" in query_str
+
+        # A linha RC1001 (PARTIDO X, CNPJ 12345678000100) e a unica PJ na
+        # fixture — checa que o batch passado pra essa query tem 1 row.
+        rows = company_doou_calls[0][0][1]["rows"]
+        assert len(rows) == 1
+        assert rows[0]["doador_cnpj_formatted"] == "12.345.678/0001-00"
+
+    def test_pf_donor_merges_campaigndonor_by_doador_id(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        pipeline.load()
+
+        session = mock_session(pipeline)
+        pf_calls = [
+            call for call in session.run.call_args_list
+            if "MERGE (d:CampaignDonor {doador_id: row.source_key})" in str(call)
+        ]
+        assert pf_calls, (
+            "Doador PF mascarado deveria mergir em :CampaignDonor por doador_id"
+        )
+
+        # Garante que doador_id (CPF mascarado) e usado como chave do
+        # nó — não donation_id. Mesmo doador com N doações = 1 stub.
+        all_rels = [r for c in pf_calls for r in c[0][1]["rows"]]
+        # _C3 tem 5 doações do mesmo CPF "22233344456". Devem ter mesmo
+        # source_key (CPF mascarado), provando que o MERGE agruparia.
+        c3_target = format_cpf(_C3["cpf"])
+        c3_rels = [r for r in all_rels if r["target_key"] == c3_target]
+        c3_donors = {r["source_key"] for r in c3_rels}
+        assert len(c3_rels) == 5, "fixture _C3 tem 5 doacoes do mesmo CPF"
+        assert len(c3_donors) == 1, (
+            "5 doacoes do mesmo CPF mascarado devem compartilhar source_key "
+            "(MERGE por doador_id agrupa num stub so)"
+        )
+        # Source_key tem que vir mascarado (LGPD).
+        assert "*" in next(iter(c3_donors))
+
+    def test_anon_donor_falls_back_to_per_donation_stub(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        pipeline.extract()
+        pipeline.transform()
+        pipeline.load()
+
+        session = mock_session(pipeline)
+        # RC1004 e RC1005 do _C1 sao anonimos (cpf_cnpj="").
+        anon_rels = [
+            r for r in pipeline.donation_rels
+            if r["doador_tipo"] == "desconhecido"
+        ]
+        assert len(anon_rels) == 2
+        # Cada um tem source_key unico (anon:<did>) — sem agregacao.
+        assert len({r["source_key"] for r in anon_rels}) == 2
+        for r in anon_rels:
+            assert r["source_key"].startswith("anon:")
+        # Loader despacha — query bate em :CampaignDonor mas com source_key
+        # único por donation, então geraria 1 stub por anon (ok, fallback).
+        anon_calls = [
+            call for call in session.run.call_args_list
+            if "MERGE (d:CampaignDonor {doador_id: row.source_key})" in str(call)
+            and any(
+                row.get("doador_tipo") == "desconhecido"
+                for row in call[0][1]["rows"]
+            )
+        ]
+        assert anon_calls
+
+    def test_no_donor_stub_keyed_by_donation_id(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        """Bug antigo: ``MERGE (p)<-[r:DOOU {donation_id}]-(d)`` sem chave em d
+        criava um node novo por doacao. Garante que essa forma sumiu."""
+        pipeline.extract()
+        pipeline.transform()
+        pipeline.load()
+
+        session = mock_session(pipeline)
+        for call in session.run.call_args_list:
+            query_str = str(call)
+            if "[r:DOOU" not in query_str:
+                continue
+            # Toda query DOOU tem que carregar chave explicita no node d.
+            assert (
+                "(d:Company {cnpj:" in query_str
+                or "(d:CampaignDonor {doador_id:" in query_str
+            ), f"DOOU sem chave no doador: {query_str[:200]}"
 
 
 class TestDonatedAt:

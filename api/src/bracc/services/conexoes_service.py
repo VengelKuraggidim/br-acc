@@ -523,15 +523,29 @@ def classificar(
                 emp_acc.total += valor
                 emp_acc.n += 1
                 continue
-            if target_type == "person":
-                cpf_pleno = as_str(target_props, "cpf")
-                # LGPD: máscara APLICADA AQUI — o dict intermediário e o
-                # DoadorPessoa só carregam o formato mascarado.
-                cpf_mascarado = mascarar_cpf(cpf_pleno)
-                # Chave de agregação: CPF pleno (só usado como chave interna,
-                # descartada depois) se existir; senão o mascarado; senão o
-                # element_id pra preservar identidade do nó.
-                chave = cpf_pleno or cpf_mascarado or f"pessoa_{target_id}"
+            if target_type in ("person", "campaigndonor"):
+                # :CampaignDonor é stub do pipeline tse_prestacao_contas_go pra
+                # doadores PF mascarados (CPF pleno não vem por LGPD desde
+                # 2022). Carrega doador_id (CPF mascarado ou 'anon:<did>') e
+                # doador_nome no lugar de cpf/name. Tratamos junto com
+                # :Person porque o cidadão vê os dois como "doador pessoa
+                # física" no card.
+                if target_type == "campaigndonor":
+                    cpf_pleno = ""
+                    cpf_mascarado = as_str(target_props, "doador_id")
+                    chave = cpf_mascarado or f"pessoa_{target_id}"
+                    nome_doador = as_str(target_props, "doador_nome") or ""
+                else:
+                    cpf_pleno = as_str(target_props, "cpf")
+                    # LGPD: máscara APLICADA AQUI — o dict intermediário e o
+                    # DoadorPessoa só carregam o formato mascarado.
+                    cpf_mascarado = mascarar_cpf(cpf_pleno)
+                    # Chave de agregação: CPF pleno (só usado como chave
+                    # interna, descartada depois) se existir; senão o
+                    # mascarado; senão o element_id pra preservar
+                    # identidade do nó.
+                    chave = cpf_pleno or cpf_mascarado or f"pessoa_{target_id}"
+                    nome_doador = as_str(target_props, "name") or ""
                 # Proveniência da DOAÇÃO individual: idem empresa, ler da
                 # rel :DOOU primeiro (mais específica) e cair no nó só
                 # quando a rel estiver sem os 4 campos obrigatórios.
@@ -544,7 +558,7 @@ def classificar(
                 pes_acc = doacoes_pessoa.setdefault(
                     chave,
                     _DoacaoPessoaAcc(
-                        nome=as_str(target_props, "name") or "",
+                        nome=nome_doador,
                         cpf_mascarado=cpf_mascarado,
                         provenance=prov_block,
                         provenance_ingested_at=prov_ingested,

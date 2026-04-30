@@ -266,6 +266,82 @@ class TestDoadoresPessoa:
         assert doador.cpf_mascarado == "***.***.***-44"
 
 
+# --- 3.1. :CampaignDonor (stub TSE 2022+ com CPF mascarado) -----------------
+
+
+class TestDoadoresCampaignDonorStub:
+    """Pipeline ``tse_prestacao_contas_go`` cria ``:CampaignDonor`` quando o
+    TSE publica CPF mascarado (LGPD desde 2022). O classificador antigo
+    ignorava o label e zerava o ``total_doacoes`` em todo perfil 2022.
+    """
+
+    def test_campaigndonor_agrega_como_pessoa(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="d_1",
+                politico_is_source=False,
+                rel_props={"valor": 421_500.0, "ano": 2022},
+            ),
+        ]
+        entidades = {
+            "d_1": {
+                "type": "CampaignDonor",
+                "properties": {
+                    "doador_id": "***.180.041-**",
+                    "doador_nome": "AMILTON BATISTA",
+                    "doador_tipo": "pf",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID, ano_doacao=2022)
+        assert len(resultado.doadores_pessoa) == 1
+        d = resultado.doadores_pessoa[0]
+        assert d.cpf_mascarado == "***.180.041-**"
+        assert d.nome == "AMILTON BATISTA"
+        assert d.valor_total == 421_500.0
+        assert d.n_doacoes == 1
+
+    def test_n_doacoes_mesmo_doador_id_agregam(self) -> None:
+        """Stub agrupado por doador_id: 3 doações do mesmo CPF mascarado
+        viram 1 DoadorPessoa com n_doacoes=3 (não 3 entradas)."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="d_1",
+                politico_is_source=False,
+                rel_props={"valor": 100.0, "ano": 2022},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="d_1",
+                politico_is_source=False,
+                rel_props={"valor": 200.0, "ano": 2022},
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="d_1",
+                politico_is_source=False,
+                rel_props={"valor": 50.0, "ano": 2022},
+            ),
+        ]
+        entidades = {
+            "d_1": {
+                "type": "CampaignDonor",
+                "properties": {
+                    "doador_id": "***.180.041-**",
+                    "doador_nome": "AMILTON BATISTA",
+                    "doador_tipo": "pf",
+                },
+            },
+        }
+        resultado = classificar(conexoes, entidades, POLITICO_ID, ano_doacao=2022)
+        assert len(resultado.doadores_pessoa) == 1
+        d = resultado.doadores_pessoa[0]
+        assert d.n_doacoes == 3
+        assert d.valor_total == 350.0
+
+
 # --- 3.5. Filtro por ano em :DOOU (fix duplicação 201,6%) -------------------
 
 

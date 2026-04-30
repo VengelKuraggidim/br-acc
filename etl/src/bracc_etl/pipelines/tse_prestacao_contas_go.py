@@ -549,10 +549,14 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             doador_digits = strip_document(cpf_cnpj_doador_raw)
             doador_is_cpf = len(doador_digits) == 11
             doador_is_cnpj = len(doador_digits) == 14
+            doador_cnpj_formatted = ""
             if doador_is_cpf:
                 doador_id = mask_cpf(cpf_cnpj_doador_raw)
             elif doador_is_cnpj:
                 doador_id = doador_digits
+                # CNPJ formatado é usado pra mergir no :Company existente
+                # (resto do grafo usa formato pontuado XX.XXX.XXX/XXXX-XX).
+                doador_cnpj_formatted = format_cnpj(doador_digits)
             else:
                 doador_id = ""
             doador_nome = normalize_name(
@@ -600,6 +604,10 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                         "pf" if doador_is_cpf
                         else ("pj" if doador_is_cnpj else "desconhecido")
                     ),
+                    "doador_nome": doador_nome,
+                    # PJ: CNPJ formatado pra mergir no :Company existente.
+                    # PF / desconhecido: vazio.
+                    "doador_cnpj_formatted": doador_cnpj_formatted,
                 },
                 record_id=did,
                 record_url=self._zip_url,
@@ -958,25 +966,37 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             loader.load_nodes(
                 "CampaignDonation", self.donations, key_field="donation_id",
             )
-        # Ensure :CampaignDonor-like stubs for CNPJ and anon targets? We
-        # route the rel via Person(cpf) pro alvo (candidato). Fonte é
-        # mascarada/CNPJ — o product pipeline CNPJ (receita federal)
-        # resolve os nomes legíveis posteriormente.
+        # Doador → candidato. Roteamos por doador_tipo pra mergir no nó
+        # real quando dá:
+        #   - PJ: MERGE :Company {cnpj: <formatado>} — encaixa no :Company
+        #     existente (RFB, sócio, doador de outras eleições). Antes o
+        #     pipeline criava :CampaignDonor stub por donation_id, gerando
+        #     1 stub por doação em vez de mergir.
+        #   - PF mascarado: MERGE :CampaignDonor {doador_id: <CPF mascarado>}
+        #     — agrupa N doações do mesmo doador num único stub. CPF pleno
+        #     não vem (LGPD desde 2022), então não dá pra mergir num :Person
+        #     real sem risco de colisão; mantemos label próprio.
+        #   - Desconhecido (sem CPF/CNPJ): :CampaignDonor anônimo, 1 por
+        #     donation_id (mesma granularidade do bug antigo, mas escopo
+        #     pequeno — tipicamente fundos partidários sem identificação).
         if self.donation_rels:
-            # MERGE genérico: doador → candidato. source_key pode ser CPF
-            # mascarado ou CNPJ digits; não forçamos um label específico
-            # aqui (deixamos a rel "DOOU" apontando pra :Person do
-            # candidato, que é o caminho que o Flask consome).
-            query = (
-                "UNWIND $rows AS row "
-                "MATCH (p:Person {cpf: row.target_key}) "
-                "MERGE (p)<-[r:DOOU {donation_id: row.donation_id}]-(d) "
-                "ON CREATE SET d:CampaignDonor, "
-                "   d.doador_id = row.source_key, "
-                "   d.doador_tipo = row.doador_tipo "
+            rels_pj: list[dict[str, Any]] = []
+            rels_pf: list[dict[str, Any]] = []
+            rels_anon: list[dict[str, Any]] = []
+            for rel in self.donation_rels:
+                tipo = rel.get("doador_tipo")
+                if tipo == "pj" and rel.get("doador_cnpj_formatted"):
+                    rels_pj.append(rel)
+                elif tipo == "pf" and rel.get("source_key"):
+                    rels_pf.append(rel)
+                else:
+                    rels_anon.append(rel)
+
+            _DOOU_REL_SET = (
                 "SET r.valor = row.valor, "
                 "    r.ano = row.ano, "
                 "    r.donated_at = row.donated_at, "
+                "    r.doador_tipo = row.doador_tipo, "
                 "    r.source_id = row.source_id, "
                 "    r.source_record_id = row.source_record_id, "
                 "    r.source_url = row.source_url, "
@@ -984,11 +1004,41 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                 "    r.ingested_at = row.ingested_at, "
                 "    r.run_id = row.run_id"
             )
-            # Fallback simplificado: ``d`` sem ``:CampaignDonor`` MERGE-
-            # key explícito geraria novo nó por re-run. Usamos o pattern
-            # (p)<-[r:DOOU]-(d) com MERGE pela relação + ``donation_id``
-            # único pra idempotência.
-            loader.run_query_with_retry(query, self.donation_rels)
+
+            if rels_pj:
+                query_pj = (
+                    "UNWIND $rows AS row "
+                    "MATCH (p:Person {cpf: row.target_key}) "
+                    "MERGE (d:Company {cnpj: row.doador_cnpj_formatted}) "
+                    "  ON CREATE SET d.razao_social = row.doador_nome "
+                    "MERGE (p)<-[r:DOOU {donation_id: row.donation_id}]-(d) "
+                    + _DOOU_REL_SET
+                )
+                loader.run_query_with_retry(query_pj, rels_pj)
+
+            if rels_pf:
+                query_pf = (
+                    "UNWIND $rows AS row "
+                    "MATCH (p:Person {cpf: row.target_key}) "
+                    "MERGE (d:CampaignDonor {doador_id: row.source_key}) "
+                    "  ON CREATE SET d.doador_tipo = row.doador_tipo, "
+                    "                d.doador_nome = row.doador_nome "
+                    "MERGE (p)<-[r:DOOU {donation_id: row.donation_id}]-(d) "
+                    + _DOOU_REL_SET
+                )
+                loader.run_query_with_retry(query_pf, rels_pf)
+
+            if rels_anon:
+                query_anon = (
+                    "UNWIND $rows AS row "
+                    "MATCH (p:Person {cpf: row.target_key}) "
+                    "MERGE (d:CampaignDonor {doador_id: row.source_key}) "
+                    "  ON CREATE SET d.doador_tipo = row.doador_tipo, "
+                    "                d.doador_nome = row.doador_nome "
+                    "MERGE (p)<-[r:DOOU {donation_id: row.donation_id}]-(d) "
+                    + _DOOU_REL_SET
+                )
+                loader.run_query_with_retry(query_anon, rels_anon)
 
         if self.expenses:
             loader.load_nodes(
