@@ -1,15 +1,17 @@
-# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22, recheck 2026-04-27, recheck 2026-04-29)
+# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22, recheck 2026-04-27, 2026-04-29; próximo recheck 2026-05-13)
 
 > Commit `0f1b3c6` entrega o scraper completo (detalhes abaixo).
 >
-> **Produção barrada**: verificado em 2026-04-22, recheck em 2026-04-27,
-> recheck em 2026-04-29 — tanto `https://tcmgo.tc.br/robots.txt` quanto
+> **Produção barrada**: verificado em 2026-04-22, recheck em 2026-04-27 e
+> 2026-04-29 — tanto `https://tcmgo.tc.br/robots.txt` quanto
 > `https://www.tcmgo.tc.br/robots.txt` terminam com `User-agent: *\nDisallow: /`. Sob a interpretação conservadora
 > de combinar grupos com mesmo User-agent (Google/RFC 9309 em caso de
 > conflito), isso proíbe crawling de qualquer path do subdomínio — inclusive
 > o widget `/portalwidgets/xhtml/impedimento/impedimento.jsf`. O scraper
 > não deve ser executado contra este host enquanto o robots.txt estiver
-> nesse estado.
+> nesse estado. Próximo recheck programado: **2026-05-13** (cadência
+> ~quinzenal — robots.txt mudaria por edição manual no WP-admin do TCM-GO,
+> não tem urgência maior que isso).
 >
 > **Smoke-test 2026-04-27**: 25/25 tests do pipeline passam contra a fixture
 > `etl/tests/fixtures/tcmgo_sancoes/impedidos_licitar.csv` (extract +

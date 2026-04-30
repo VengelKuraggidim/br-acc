@@ -1,5 +1,40 @@
 # `tse_prestacao_contas_go` cria `:CampaignDonor` órfão por `donation_id` — classificador da API enxerga R$ 0 em 2022
 
+> **Code-side: ✅ DONE (2026-04-29).** Os dois bugs em código foram fechados:
+>
+> - **Bug 1 (loader)** — commit `61196e7` (`feat(tse,api): :CampaignDonor stub merge + classifier dual-path PF/PJ`):
+>   `tse_prestacao_contas_go.py` agora roteia `donation_rels` em 3 buckets por
+>   `doador_tipo` antes do MERGE: PJ → `:Company {cnpj: <formatado>}`,
+>   PF mascarado → `:CampaignDonor {doador_id: <CPF mascarado>}`,
+>   anônimo → `:CampaignDonor` por donation_id (escopo pequeno, mantido como
+>   fallback). Implementação em `tse_prestacao_contas_go.py:982-1041`.
+> - **Bug 2 (classifier)** — mesmo commit; `conexoes_service.classificar`
+>   agora trata `target_type in ("person", "campaigndonor")` no mesmo branch
+>   PF (`conexoes_service.py:526-533`). Card "Confere com o TSE" passa a ler
+>   stubs PF mascarados como pessoa física.
+> - **Backfill script** — commit `45fd486` entrega
+>   `scripts/backfill_doou_campaign_donor_stubs.py`. Re-aponta DOOU dos
+>   `:CampaignDonor` PJ pra `:Company {cnpj}`, agrega PF mascarado por
+>   `doador_id`, deixa anônimos como estão. Idempotente, requer APOC.
+>
+> **Bug 3 (`r.ano = NULL` em 1,65M rels)** fica em escopo separado em
+> `tse-doou-rels-sem-ano-backfill.md`.
+>
+> **⏳ Pendente (operacional, não code):** rodar o backfill contra o
+> Neo4j local — pré-requisito é Neo4j docker subir saudável (em
+> 2026-04-29 estava em restart loop, ortogonal a esse TODO). Sequência:
+>
+> ```bash
+> # depois que neo4j ficar Up (healthy):
+> NEO4J_PASSWORD=changeme \
+>   uv run --project etl python scripts/backfill_doou_campaign_donor_stubs.py --dry-run
+> # se a contagem bater com a tabela do diagnóstico, roda sem --dry-run
+> NEO4J_PASSWORD=changeme \
+>   uv run --project etl python scripts/backfill_doou_campaign_donor_stubs.py
+> # validação: curl no /politico/<entityId-Amilton> e checar
+> # validacao_tse.status == "ok" no PWA.
+> ```
+
 ## Sintoma
 
 PWA do Amilton Batista de Faria Filho (CPF `002.180.041-33`,

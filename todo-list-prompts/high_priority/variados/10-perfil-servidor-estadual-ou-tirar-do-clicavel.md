@@ -1,5 +1,16 @@
 # Servidores estaduais — perfil simples OU tirar do clicável da busca
 
+> **Opção A aplicada — 2026-04-29.** Em `pwa/index.html` o `onclick` de
+> `:StateEmployee` (e qualquer outro tipo fora de `TIPOS_PERFIL`) já era
+> ausente, mas o CSS global da `.result-item` carregava `cursor: pointer`
+> e `:active { transform: scale(0.98) }` — ou seja, o card *parecia*
+> clicável e dava feedback visual de clique sem navegar. Agora os dois
+> efeitos visuais ficam atrás de uma classe `.is-clickable` que o
+> `renderResultados` só aplica quando `temPerfil` é true. Resultado: a
+> linha do servidor estadual aparece na busca com cargo + salário +
+> lotação, sem cursor de pointer, sem animação de clique, sem seta `›`,
+> sem 404. Opção B (perfil próprio leve) fica em escopo separado.
+
 ## Contexto
 A busca devolve 165k `:StateEmployee` quando o usuário pesquisa nome comum. Hoje o item aparece no resultado **e o card é clicável** (`abrirPerfil`), mas o `perfil_service` rejeita com `EntityNotFoundError` porque `:StateEmployee` não está em `_POLITICIAN_LABELS`. Resultado: o cidadão clica no servidor → tela de erro 404. Pior UX que se nem fosse clicável.
 

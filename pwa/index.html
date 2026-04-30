@@ -278,11 +278,11 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       margin-bottom: 8px;
-      cursor: pointer;
       transition: all 0.15s;
     }
 
-    .result-item:active { transform: scale(0.98); }
+    .result-item.is-clickable { cursor: pointer; }
+    .result-item.is-clickable:active { transform: scale(0.98); }
 
     .result-avatar {
       width: 42px; height: 42px;
@@ -2207,7 +2207,7 @@ async function carregarInicio() {
       </div>
       <div class="stat">
         <div class="stat-value">${d.vereadores_goiania}</div>
-        <div class="stat-label">Cand. Vereador <span title="Candidatos a vereador em Goiânia registrados no TSE no último pleito (2024). Não é a lista de vereadores em exercício — o TSE expõe base de candidaturas, não de mandatos." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
+        <div class="stat-label">Cand. Vereador <span title="Candidatos a vereador em Goiânia registrados no TSE nos pleitos municipais de 2020 e 2024 (DISTINCT — quem disputou os dois ciclos conta uma vez). Não é a lista de vereadores em exercício — o TSE expõe base de candidaturas, não de mandatos." style="color:var(--text-dim);cursor:help;">&#9432;</span></div>
       </div>
     </div>
 
@@ -2477,11 +2477,12 @@ function renderResultados(items, total, query) {
     const pepBadge = item.is_pep ? '<span class="pep-badge">PEP</span>' : '';
     const temPerfil = TIPOS_PERFIL.has(item.tipo);
     const onclick = temPerfil ? `onclick="abrirPerfil('${item.id}')"` : '';
+    const clickableCls = temPerfil ? ' is-clickable' : '';
     const avatarInner = item.foto_url
       ? `<img src="${item.foto_url}" alt="${item.nome}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${icon}'}))">`
       : icon;
     html += `
-      <div class="result-item fade-in" style="animation-delay:${i*50}ms" ${onclick}>
+      <div class="result-item fade-in${clickableCls}" style="animation-delay:${i*50}ms" ${onclick}>
         <div class="result-avatar ${item.icone}">${avatarInner}</div>
         <div class="result-info">
           <div class="result-name">${item.nome}${pepBadge}</div>
