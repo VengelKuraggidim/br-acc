@@ -1,10 +1,14 @@
 # Pedido LAI — TCM-GO — Lista de Impedidos de Licitar ou Contratar
 
 **Status**: rascunho pronto para envio (2026-04-29)
-**Destinatário**: ouvidoria@tcmgo.tc.br (Ouvidoria do Tribunal de Contas dos Municípios do Estado de Goiás)
-**Canal alternativo**: e-SIC estadual (https://www.goias.gov.br/sic) caso a ouvidoria
-não tenha fluxo formal de LAI; nesse caso, redirecionar pelo portal estadual com
-órgão = "TCM-GO".
+**Canal primário (informal, 5 dias úteis)**: e-mail direto pra
+`ouvidoria@tcmgo.tc.br` (Ouvidoria do Tribunal de Contas dos Municípios
+do Estado de Goiás).
+**Canal de escalonamento (oficial, prazo legal 20 dias úteis + 10
+prorrogáveis)**: Fala.BR — https://falabr.cgu.gov.br/ — esfera "Estadual",
+estado "GO", órgão "TCM-GO" (login via gov.br).
+**NÃO usar**: e-SIC estadual `sic.goias.gov.br` está fora do ar
+(verificado 2026-04-29).
 **Fundamento**: Lei nº 12.527/2011 (LAI), art. 10 e art. 11.
 
 ---
@@ -65,12 +69,14 @@ Projeto Fiscal Cidadão (uso jornalístico / pesquisa cívica)
 
 ## Itens a preencher antes de enviar
 
-- [ ] Confirmar nome completo + documento de identificação (CPF) — alguns
-      órgãos exigem para protocolo formal de LAI.
-- [ ] Verificar se a Ouvidoria TCM-GO redireciona automaticamente para
-      e-SIC estadual ou se há protocolo próprio do tribunal.
-- [ ] Salvar número de protocolo da resposta para anexar ao TODO
-      `tcmgo-impedidos-jsf-scraper.md` quando o CSV chegar.
+- [ ] Confirmar nome completo + CPF (necessário pro Fala.BR; opcional no
+      e-mail informal, mas ajuda na fé pública do pedido).
+- [ ] Disparar primeiro pelo e-mail (`ouvidoria@tcmgo.tc.br`); aguardar
+      5 dias úteis. Se não responderem, escalar pro Fala.BR com cópia
+      deste mesmo texto.
+- [ ] Salvar número de protocolo da resposta (Fala.BR) ou ID do tíquete
+      da ouvidoria para anexar ao TODO `tcmgo-impedidos-jsf-scraper.md`
+      quando o CSV chegar.
 
 ## Próximo passo após resposta
 

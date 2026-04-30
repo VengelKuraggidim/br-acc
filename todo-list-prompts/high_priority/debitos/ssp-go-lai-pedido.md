@@ -9,23 +9,27 @@ homicídio doloso).
 
 Dois caminhos válidos — escolher um:
 
-1. **e-SIC Goiás (recomendado)** — `https://goias.gov.br/transparencia/sic/`
-   ou diretamente `https://sic.goias.gov.br/`. Login via gov.br ou
-   cadastro local. Pedido vira protocolo numerado, prazo legal de 20
-   dias úteis (LAI, art. 11 §1º + §2º), prorrogável por mais 10. Fica
-   gravado e rastreável; recurso administrativo se negado.
-
-2. **E-mail direto ao Observatório de Segurança Pública** —
+1. **E-mail direto ao Observatório de Segurança Pública** (caminho A — recomendado pra começar) —
    `observatorio.ssp@goias.gov.br` (endereço do rodapé do portal
-   `goias.gov.br/seguranca/estatisticas/`). Mais informal, sem
-   protocolo. Útil pra esclarecer escopo antes de protocolar via
-   e-SIC, mas o caminho oficial é o e-SIC.
+   `goias.gov.br/seguranca/estatisticas/`). Informal, sem protocolo,
+   mas é o canal mais rápido pra validar formato e disponibilidade
+   do recorte municipal. Sem prazo legal — se não responderem em 5
+   dias úteis, escalar pro caminho B.
 
-**Sugestão**: mandar primeiro um e-mail ao observatório (rascunho
-curto abaixo) pra validar formato e disponibilidade. Se eles
-responderem positivo, formalizar via e-SIC depois (com protocolo)
-referenciando a conversa. Se não responderem em 5 dias úteis, ir
-direto pro e-SIC.
+2. **Fala.BR (CGU federal)** (caminho B — fallback formal) —
+   `https://falabr.cgu.gov.br/`. O SIC estadual de Goiás
+   (`sic.goias.gov.br` e `goias.gov.br/transparencia/sic/`) está
+   fora do ar / redirecionando pra notícia velha (verificado
+   2026-04-29). O Fala.BR é o sistema unificado da CGU que aceita
+   pedidos LAI pra órgãos estaduais aderentes — incluindo SSP-GO.
+   Login via gov.br, pedido vira protocolo numerado, prazo legal de
+   20 dias úteis (LAI, art. 11 §1º + §2º), prorrogável por mais 10.
+   Recurso administrativo se negado.
+
+**Sugestão**: começar pelo caminho A (e-mail informal). Se
+responderem positivo, formalizar via Fala.BR referenciando a
+conversa. Se não responderem em 5 dias úteis, ir direto pro
+Fala.BR.
 
 ## Rascunho — e-mail informal ao Observatório
 
@@ -80,21 +84,25 @@ direto pro e-SIC.
 >
 > Agradeço antecipadamente,
 >
-> [Nome completo]
-> [Instituição/cidade]
-> Projeto Fiscal Cidadão — `https://github.com/[seu-usuário]/fiscal-cidadao`
+> Anastácia Almeida Campos
+> Goiânia – Goiás
+> Projeto Fiscal Cidadão — `https://github.com/VengelKuraggidim/fiscal-cidadao`
 
-## Rascunho — pedido formal via e-SIC
+## Rascunho — pedido formal via Fala.BR (CGU)
 
 Usar o mesmo conteúdo do e-mail acima, com ajustes:
 
-- **Órgão destinatário:** Secretaria de Estado da Segurança Pública (SSP-GO)
+- **Órgão destinatário:** Secretaria de Estado da Segurança Pública
+  do Estado de Goiás (SSP-GO). No formulário do Fala.BR, escolher
+  esfera "Estadual" → estado "GO" → órgão SSP.
 - **Tipo de pedido:** Acesso à Informação (LAI Lei 12.527/2011 + Lei
   Estadual 18.025/2013)
-- **Forma de recebimento:** download/e-mail
+- **Forma de recebimento:** download pelo próprio sistema (Fala.BR
+  notifica por e-mail quando a resposta sai)
+- **Solicitante:** Anastácia Almeida Campos — Goiânia/GO
 - **Justificativa:** "Pesquisa cívica para projeto de transparência
-  pública. A LAI dispensa justificativa, mas registro o uso para
-  contextualização."
+  pública (Fiscal Cidadão). A LAI dispensa justificativa, mas
+  registro o uso para contextualização."
 - **Pedido:** colar a lista de naturezas + período (últimos 2 anos
   completos, mensal, agregado por município).
 
@@ -120,9 +128,21 @@ Usar o mesmo conteúdo do e-mail acima, com ajustes:
 
 ## Prazos e follow-up
 
-- **e-SIC**: 20 dias úteis (prorrogáveis por mais 10).
+- **Fala.BR**: 20 dias úteis (prorrogáveis por mais 10).
 - **E-mail informal**: sem prazo legal — se não responderem em 5
-  dias úteis, escalar pro e-SIC.
+  dias úteis, escalar pro Fala.BR.
 - **Negativa**: cabem 2 níveis de recurso administrativo (autoridade
-  superior + CGU/Ouvidoria estadual). Se chegar a esse ponto,
-  registrar o número do protocolo aqui e revisar a estratégia.
+  superior + CGU/Ouvidoria estadual, no próprio Fala.BR). Se chegar
+  a esse ponto, registrar o número do protocolo aqui e revisar a
+  estratégia.
+
+## Status dos canais (verificado 2026-04-29)
+
+- ❌ `https://sic.goias.gov.br/` — não conecta (timeout). SIC
+  estadual fora do ar.
+- ❌ `https://goias.gov.br/transparencia/sic/` — redireciona pra
+  matéria de 2020, não é portal funcional.
+- ✅ `https://falabr.cgu.gov.br/` — operacional, aceita órgãos GO.
+- ✅ `observatorio.ssp@goias.gov.br` — endereço listado no rodapé
+  oficial do portal de estatísticas (presumido ativo; confirmar com
+  retorno do primeiro envio).

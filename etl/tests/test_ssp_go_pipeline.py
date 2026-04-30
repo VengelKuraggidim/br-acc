@@ -303,6 +303,76 @@ class TestParseBulletinPdf:
         assert rows == []
 
 
+class TestMunicipalCsvOverride:
+    """LAI/operator-supplied CSV com granularidade município × naturaza × mês.
+
+    Quando a SSP-GO devolver o CSV via LAI (ver
+    ``todo-list-prompts/high_priority/debitos/ssp-go-lai-pedido.md``),
+    a usuária dropa em ``data/ssp_go/ocorrencias.csv`` e o pipeline
+    deve ingerir sem regredir as rows estaduais já carregadas. O
+    contrato é: ``stat_id`` inclui ``cod_ibge`` no hash, então as
+    granularidades coexistem.
+    """
+
+    def test_csv_municipal_codigos_chegam_no_stat(
+        self, tmp_path: Path,
+    ) -> None:
+        ssp_dir = tmp_path / "ssp_go"
+        ssp_dir.mkdir()
+        # CSV sintético no shape esperado do retorno LAI: município ×
+        # naturaza × mês, com cod_ibge real (Goiânia, Anápolis,
+        # Aparecida de Goiânia) — os 3 municípios de teste do critério
+        # de aceite no débito de granularidade.
+        (ssp_dir / "ocorrencias.csv").write_text(
+            "municipio;cod_ibge;natureza;periodo;quantidade\n"
+            "GOIANIA;5208707;FEMINICIDIO;2025-01;3\n"
+            "GOIANIA;5208707;ESTUPRO;2025-01;47\n"
+            "ANAPOLIS;5201108;FEMINICIDIO;2025-01;1\n"
+            "APARECIDA DE GOIANIA;5201405;FEMINICIDIO;2025-01;2\n",
+            encoding="utf-8",
+        )
+        pipeline = SspGoPipeline(
+            driver=MagicMock(),
+            data_dir=str(tmp_path),
+            archive_pdfs=False,
+        )
+        pipeline.extract()
+        pipeline.transform()
+
+        cod_ibges = {s["cod_ibge"] for s in pipeline.stats}
+        municipios = {s["municipality"] for s in pipeline.stats}
+        assert cod_ibges == {"5208707", "5201108", "5201405"}
+        assert "5200000" not in cod_ibges  # sentinela estadual ausente
+        assert municipios == {"GOIANIA", "ANAPOLIS", "APARECIDA DE GOIANIA"}
+
+    def test_stat_id_distingue_estadual_de_municipal(
+        self, tmp_path: Path,
+    ) -> None:
+        """stat_id hash inclui cod_ibge — estado e município coexistem."""
+        ssp_dir = tmp_path / "ssp_go"
+        ssp_dir.mkdir()
+        # Mesma naturaza × mês em 2 granularidades: estadual e municipal.
+        (ssp_dir / "ocorrencias.csv").write_text(
+            "municipio;cod_ibge;natureza;periodo;quantidade\n"
+            "ESTADO DE GOIAS;5200000;FEMINICIDIO;2025-01;9\n"
+            "GOIANIA;5208707;FEMINICIDIO;2025-01;3\n",
+            encoding="utf-8",
+        )
+        pipeline = SspGoPipeline(
+            driver=MagicMock(),
+            data_dir=str(tmp_path),
+            archive_pdfs=False,
+        )
+        pipeline.extract()
+        pipeline.transform()
+
+        assert len(pipeline.stats) == 2
+        ids = {s["stat_id"] for s in pipeline.stats}
+        # Hashes distintos -> nós Neo4j não colidem e a deduplicação
+        # por stat_id no transform preserva ambos.
+        assert len(ids) == 2
+
+
 class TestOfflinePdfFallback:
     """Extract cai nos PDFs locais quando não há CSV e archive_pdfs=False."""
 

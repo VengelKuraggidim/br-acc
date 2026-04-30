@@ -1,10 +1,10 @@
-# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22, recheck 2026-04-27)
+# TCM-GO "Impedidos de licitar" via scraper JSF — 🚫 BLOQUEADO POR robots.txt (2026-04-22, recheck 2026-04-27, recheck 2026-04-29)
 
 > Commit `0f1b3c6` entrega o scraper completo (detalhes abaixo).
 >
-> **Produção barrada**: verificado em 2026-04-22, recheck em 2026-04-27 —
-> tanto `https://tcmgo.tc.br/robots.txt` quanto `https://www.tcmgo.tc.br/robots.txt`
-> terminam com `User-agent: *\nDisallow: /`. Sob a interpretação conservadora
+> **Produção barrada**: verificado em 2026-04-22, recheck em 2026-04-27,
+> recheck em 2026-04-29 — tanto `https://tcmgo.tc.br/robots.txt` quanto
+> `https://www.tcmgo.tc.br/robots.txt` terminam com `User-agent: *\nDisallow: /`. Sob a interpretação conservadora
 > de combinar grupos com mesmo User-agent (Google/RFC 9309 em caso de
 > conflito), isso proíbe crawling de qualquer path do subdomínio — inclusive
 > o widget `/portalwidgets/xhtml/impedimento/impedimento.jsf`. O scraper
@@ -23,6 +23,10 @@
 > (`ouvidoria@tcmgo.tc.br`) requisitando export da lista em CSV. Quando
 > chegar, dropar o CSV em `data/tcmgo_sancoes/impedidos_licitar.csv`
 > e rodar o pipeline normalmente (caminho de ingestão já existe).
+>
+> **Rascunho do pedido LAI** pronto em
+> `docs/legal/lai-tcmgo-impedidos-licitar.md` (2026-04-29) — preencher
+> CPF + protocolo antes do envio.
 >
 > **O scraper fica guardado**: não foi removido do código porque:
 >   1. A TODO histórica permanece útil como referência de padrão JSF
