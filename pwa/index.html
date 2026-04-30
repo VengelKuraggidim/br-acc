@@ -2232,7 +2232,7 @@ async function carregarInicio() {
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(239,68,68,0.15);">&#128176;</span>
-          <span id="quantoCustaTitulo">Quanto custa um cargo eletivo?</span>
+          <span id="quantoCustaTitulo">Quanto custa um cargo político?</span>
         </div>
       </div>
       <div id="quantoCustaSeletor" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
@@ -2333,7 +2333,6 @@ async function carregarCustoMandato(cargo) {
       return;
     }
     const d = await r.json();
-    if (titulo) titulo.textContent = `Quanto custa um(a) ${d.rotulo_humano.toLowerCase()}?`;
 
     // Empty-state: cargo sem nenhum componente com valor numérico
     // (ex.: governador GO antes da Lei estadual ser capturada). Renderiza
