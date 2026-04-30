@@ -40,6 +40,9 @@ from bracc_etl.pipelines.emendas_parlamentares_go import (
 from bracc_etl.pipelines.entity_resolution_politicos_go import (
     EntityResolutionPoliticosGoPipeline,
 )
+from bracc_etl.pipelines.entity_resolution_tce_go import (
+    EntityResolutionTceGoPipeline,
+)
 from bracc_etl.pipelines.eu_sanctions import EuSanctionsPipeline
 from bracc_etl.pipelines.folha_go import FolhaGoPipeline
 from bracc_etl.pipelines.holdings import HoldingsPipeline
@@ -161,6 +164,7 @@ PIPELINES: dict[str, type] = {
     "tse_candidatos_foto": TseCandidatosFotoPipeline,
     "propagacao_fotos_person": PropagacaoFotosPersonPipeline,
     "entity_resolution_politicos_go": EntityResolutionPoliticosGoPipeline,
+    "entity_resolution_tce_go": EntityResolutionTceGoPipeline,
     "custo_mandato_br": CustoMandatoBrPipeline,
     "custo_mandato_municipal_go": CustoMandatoMunicipalGoPipeline,
 }
