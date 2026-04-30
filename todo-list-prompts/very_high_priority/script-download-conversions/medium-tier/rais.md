@@ -1,5 +1,15 @@
 # Converter `rais` de `file_manifest` pra `script_download`
 
+> **DONE — 2026-04-29.** Convertido via Rota C (system `7z` binary
+> subprocess sobre `RAIS_ESTAB_PUB.7z` ~120 MB), não BigQuery. Evita as
+> creds GCP que estão pendentes de provisionamento (memória
+> `credenciais_externas`) e fica no mesmo padrão do `qlik` (system bin
+> não-pip). Pré-requisito: `apt install 7zip`. Pipeline emite só
+> `:LaborStats` agregado por (CNAE subclasse × UF), com a coluna `year`
+> agora dinâmica — `_from_aggregated` lê do CSV e do filename. CLI em
+> `scripts/download_rais.py`. Arquivo mantido pelo histórico; deletar
+> quando limpar `medium-tier/`.
+
 ## Contexto
 
 Pipeline `rais` (Relação Anual de Informações Sociais — microdados

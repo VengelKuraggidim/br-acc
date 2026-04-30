@@ -1,5 +1,13 @@
 # Converter `caged` de `file_manifest` pra `script_download`
 
+> **DONE — 2026-04-29.** Convertido via Rota C (system `7z` binary
+> subprocess, não `py7zr` em pip). Padrão segue o do `qlik` (firefox +
+> selenium como bin de sistema). Pré-requisito: `apt install 7zip` (Ubuntu
+> 25.10+) ou `apt install p7zip-full` (releases antigos). Helper
+> compartilhado em `etl/scripts/_download_utils.py::extract_7z_archive`.
+> CLI em `scripts/download_caged.py`. Arquivo mantido aqui pelo histórico
+> da decisão; deletar quando alguém quiser limpar `medium-tier/`.
+
 ## Contexto
 
 Pipeline `caged` (Novo CAGED — emprego formal PDET/MTE) é um dos

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import sys
+import tempfile
+import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +18,21 @@ from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import deduplicate_rows
 
 logger = logging.getLogger(__name__)
+
+# UF IBGE numeric code -> sigla (subset; MTPS uses these codes in the
+# microdata. Matches rais.py::UF_CODE_MAP exactly).
+_UF_CODE_TO_SIGLA: dict[str, str] = {
+    "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA",
+    "16": "AP", "17": "TO", "21": "MA", "22": "PI", "23": "CE",
+    "24": "RN", "25": "PB", "26": "PE", "27": "AL", "28": "SE",
+    "29": "BA", "31": "MG", "32": "ES", "33": "RJ", "35": "SP",
+    "41": "PR", "42": "SC", "43": "RS", "50": "MS", "51": "MT",
+    "52": "GO", "53": "DF",
+}
+
+# CAGED upstream FTP. Layout: NOVO CAGED/<YYYY>/<YYYYMM>/CAGEDMOV<YYYYMM>.7z
+# (plus CAGEDFOR = late, CAGEDEXC = exclusions; we ingest only MOV).
+_CAGED_FTP_BASE = "ftp://ftp.mtps.gov.br/pdet/microdados/NOVO%20CAGED"
 
 # CAGED tipo_movimentacao: 1 = admission, 2 = dismissal
 _MOVEMENT_TYPES: dict[str, str] = {
@@ -70,6 +88,211 @@ def _parse_salary(raw: str) -> float | None:
         return val if val >= 0 else None
     except ValueError:
         return None
+
+
+# ── fetch_to_disk: download .7z mensal, extrair, remapear pro layout ──
+# que CagedPipeline.extract() consome ────────────────────────────────
+
+
+# Mapeamento de cabeçalhos PDET (.txt) → colunas que o pipeline lê.
+# Os nomes upstream vêm em UTF-8 sem acento na maioria dos meses, mas a
+# normalização (NFKD + lowercase + sem espaço) é defensiva para o caso
+# de PDET republicar com acentuação. Layout fonte:
+# https://pdet.mte.gov.br/microdados-novo-caged
+_CAGED_COLUMN_MAP: dict[str, str] = {
+    "competenciamov": "_competencia",
+    "regiao": "_regiao",
+    "uf": "sigla_uf",  # numeric code → será convertido pra sigla
+    "municipio": "id_municipio",
+    "secao": "cnae_2_secao",
+    "subclasse": "cnae_2_subclasse",
+    "saldomovimentacao": "saldo_movimentacao",
+    "cbo2002ocupacao": "cbo_2002",
+    "categoria": "categoria",
+    "graudeinstrucao": "grau_instrucao",
+    "idade": "idade",
+    "horascontratuais": "horas_contratuais",
+    "racacor": "raca_cor",
+    "sexo": "sexo",
+    "tipoempregador": "tipo_empregador",
+    "tipoestabelecimento": "tipo_estabelecimento",
+    "tipomovimentacao": "tipo_movimentacao",
+    "tipodedeficiencia": "tipo_deficiencia",
+    "indtrabintermitente": "indicador_trabalho_intermitente",
+    "indtrabparcial": "indicador_trabalho_parcial",
+    "salario": "salario_mensal",
+    "cnpjraiz": "cnpj_raiz",
+}
+
+
+def _slugify_column(raw: str) -> str:
+    """Normalize a PDET column header for mapping (lowercase, no accents)."""
+    nfkd = unicodedata.normalize("NFKD", raw)
+    ascii_only = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return "".join(c for c in ascii_only.lower() if c.isalnum())
+
+
+def _parse_caged_archive(
+    archive_path: Path,
+    *,
+    year: int,
+    month: int,
+    limit: int | None,
+) -> pd.DataFrame:
+    """Extract a CAGEDMOV .7z archive and return a remapped DataFrame.
+
+    The PDET .7z always contains exactly one ``.txt`` named like the
+    archive (e.g. ``CAGEDMOV202401.txt``). We extract to a tempdir, read
+    with ``sep=";"`` UTF-8, then project onto the column layout
+    ``CagedPipeline.extract()`` expects. UF numeric → sigla conversion
+    happens here so the downstream pipeline doesn't need to care.
+    """
+    # Lazy import: scripts/ is sibling to src/ at repo level
+    scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from _download_utils import extract_7z_archive  # type: ignore[import-not-found]
+
+    with tempfile.TemporaryDirectory(prefix="caged_extract_") as tmp:
+        tmp_dir = Path(tmp)
+        extracted = extract_7z_archive(archive_path, tmp_dir)
+        txt_files = [p for p in extracted if p.suffix.lower() == ".txt"]
+        if not txt_files:
+            raise RuntimeError(
+                f"No .txt found inside {archive_path.name} after extraction "
+                f"(got: {[p.name for p in extracted]})",
+            )
+        txt = txt_files[0]
+        logger.info("[caged.fetch_to_disk] reading %s", txt.name)
+
+        df = pd.read_csv(
+            txt,
+            sep=";",
+            encoding="utf-8",
+            dtype=str,
+            keep_default_na=False,
+            nrows=limit,
+        )
+
+    # Remap headers via slugified key.
+    rename: dict[str, str] = {}
+    for col in df.columns:
+        slug = _slugify_column(col)
+        if slug in _CAGED_COLUMN_MAP:
+            rename[col] = _CAGED_COLUMN_MAP[slug]
+    df = df.rename(columns=rename)
+
+    # Convert UF numeric IBGE → sigla. Unknown codes pass through
+    # untouched (so callers can spot upstream surprises).
+    if "sigla_uf" in df.columns:
+        df["sigla_uf"] = df["sigla_uf"].map(
+            lambda v: _UF_CODE_TO_SIGLA.get(v.strip(), v.strip()),
+        )
+
+    # Synthesize ano/mes — pipeline expects them as separate columns.
+    # Prefer the upstream ``_competencia`` (YYYYMM) when present, fall
+    # back to the requested year/month so the file remains internally
+    # consistent even if the upstream column is missing.
+    if "_competencia" in df.columns:
+        comp = df["_competencia"].astype(str).str.strip()
+        df["ano"] = comp.str[:4]
+        df["mes"] = comp.str[4:6]
+        df = df.drop(columns=["_competencia"])
+    else:
+        df["ano"] = str(year)
+        df["mes"] = f"{month:02d}"
+
+    # Drop helper-only columns we don't propagate.
+    df = df.drop(columns=[c for c in ("_regiao",) if c in df.columns])
+
+    return df
+
+
+def fetch_to_disk(
+    output_dir: Path | str,
+    *,
+    year: int,
+    months: list[int] | None = None,
+    limit: int | None = None,
+    skip_existing: bool = True,
+    timeout: int = 600,
+) -> list[Path]:
+    """Download Novo CAGED monthly microdata and write CSVs the pipeline reads.
+
+    For each requested month, downloads ``CAGEDMOV<YYYYMM>.7z`` from the
+    PDET FTP, extracts the single ``.txt`` inside via the system ``7z``
+    binary, remaps PDET column names to the layout
+    ``CagedPipeline.extract()`` consumes, and writes
+    ``caged_<YYYYMM>.csv`` (UTF-8, comma-separated) to ``output_dir``.
+
+    The CAGED MOV archive for a single month is ~50 MB compressed and
+    expands to ~500 MB of plaintext. Use ``--limit`` for smoke runs.
+
+    Args:
+        output_dir: Destination directory (created if missing). Usually
+            ``data/caged``.
+        year: Calendar year (e.g. ``2024``). Required — there's no
+            sensible default for a 12 GB/year dataset.
+        months: Optional list of 1..12 to restrict which months to fetch.
+            Defaults to all 12 months.
+        limit: When set, truncate each month's CSV to the first N rows
+            (after read). Useful for smoke tests.
+        skip_existing: When True (default), reuse archives already on
+            disk under ``output_dir/raw/`` instead of re-downloading.
+        timeout: Per-file HTTP timeout in seconds.
+
+    Returns:
+        List of written CSV paths (one per successfully processed month).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    months_to_fetch = sorted(months) if months else list(range(1, 13))
+
+    scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from _download_utils import download_ftp_file
+
+    written: list[Path] = []
+    for month in months_to_fetch:
+        yyyymm = f"{year}{month:02d}"
+        archive_name = f"CAGEDMOV{yyyymm}.7z"
+        url = f"{_CAGED_FTP_BASE}/{year}/{yyyymm}/{archive_name}"
+        archive_path = raw_dir / archive_name
+
+        if skip_existing and archive_path.exists() and archive_path.stat().st_size > 0:
+            logger.info("[caged.fetch_to_disk] skip existing %s", archive_name)
+        else:
+            logger.info("[caged.fetch_to_disk] downloading %s", url)
+            if not download_ftp_file(url, archive_path, timeout=timeout):
+                logger.warning(
+                    "[caged.fetch_to_disk] download failed for %s — skipping month",
+                    archive_name,
+                )
+                continue
+
+        try:
+            df = _parse_caged_archive(
+                archive_path, year=year, month=month, limit=limit,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "[caged.fetch_to_disk] extract failed for %s: %s — skipping month",
+                archive_name, exc,
+            )
+            continue
+
+        out_path = output_dir / f"caged_{yyyymm}.csv"
+        df.to_csv(out_path, index=False, encoding="utf-8")
+        logger.info(
+            "[caged.fetch_to_disk] wrote %s (%d rows)", out_path.name, len(df),
+        )
+        written.append(out_path.resolve())
+
+    return written
 
 
 class CagedPipeline(Pipeline):

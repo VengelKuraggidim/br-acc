@@ -38,12 +38,18 @@
     },
     {
       "pipeline_id": "caged",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/caged/*"
       ],
-      "blocking_reason_if_any": "Upstream PDET serve microdados em .7z; py7zr nao esta nos deps. Pipeline aggregate-only/stale — conversao tem ROI baixo. Re-avaliar quando py7zr for aprovado ou quando PDET expor mirror .csv.gz.",
-      "core": false
+      "blocking_reason_if_any": "-",
+      "core": false,
+      "system_prerequisites": [
+        "7z (apt install 7zip on Ubuntu 25.10+, p7zip-full on older releases)"
+      ],
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_caged.py --year $(date +%Y) --output-dir ../data/caged"
+      ]
     },
     {
       "pipeline_id": "camara",
@@ -383,14 +389,17 @@
     },
     {
       "pipeline_id": "rais",
-      "acquisition_mode": "file_manifest",
+      "acquisition_mode": "script_download",
       "required_inputs": [
         "data/rais/*"
       ],
-      "blocking_reason_if_any": "Multi-GB annual dumps em PDET form-wall; basedosdados.org exige credencial GCP/BigQuery (deps pyarrow + google-cloud-bigquery nao estao no base). Reconsiderar quando creds GCP estiverem disponiveis ou quando PDET expor mirror publico.",
+      "blocking_reason_if_any": "-",
       "core": false,
-      "credential_env": [
-        "GOOGLE_APPLICATION_CREDENTIALS"
+      "system_prerequisites": [
+        "7z (apt install 7zip on Ubuntu 25.10+, p7zip-full on older releases)"
+      ],
+      "download_commands": [
+        "cd /workspace/etl && uv run python ../scripts/download_rais.py --year 2024 --output-dir ../data/rais"
       ]
     },
     {

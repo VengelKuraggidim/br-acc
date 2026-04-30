@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 import zipfile
 from typing import TYPE_CHECKING
 
@@ -12,6 +14,65 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+# ``7zip`` (Ubuntu 25.10+) ships ``7zz``. Older distros ship ``p7zip-full``
+# whose binary is ``7z`` (or ``7za`` for the standalone variant). Try in
+# order — first hit wins.
+_SEVENZIP_BINARIES = ("7zz", "7z", "7za")
+
+
+def find_7z_binary() -> str | None:
+    """Return path to the first ``7z*`` binary on PATH, or ``None``."""
+    for name in _SEVENZIP_BINARIES:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def extract_7z_archive(archive: Path, output_dir: Path) -> list[Path]:
+    """Extract a ``.7z`` archive to ``output_dir`` via the ``7z`` CLI.
+
+    Uses the system ``7zz``/``7z`` binary (Ubuntu: ``apt install 7zip``;
+    older releases: ``apt install p7zip-full``). Same dependency model as
+    the ``selenium``+``firefox`` pair the ``qlik`` scraper relies on —
+    keeps ``py7zr`` out of the pip dependency tree.
+
+    Returns the list of files extracted (top-level only, files matching
+    ``output_dir.glob("*")`` after extraction). Raises ``RuntimeError`` if
+    the binary is missing or extraction fails.
+    """
+    binary = find_7z_binary()
+    if binary is None:
+        raise RuntimeError(
+            "7z extractor not found on PATH. Install with "
+            "`sudo apt install 7zip` (Ubuntu 25.10+) or "
+            "`sudo apt install p7zip-full` (older Ubuntu/Debian).",
+        )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    before = {p.name for p in output_dir.iterdir()}
+
+    # ``x`` extracts preserving paths, ``-y`` auto-yes on prompts,
+    # ``-o<dir>`` sets output dir (no space after -o).
+    proc = subprocess.run(
+        [binary, "x", str(archive), f"-o{output_dir}", "-y"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"7z extraction failed for {archive.name} (exit {proc.returncode}): "
+            f"{proc.stderr.strip() or proc.stdout.strip()[:200]}",
+        )
+
+    extracted = sorted(p for p in output_dir.iterdir() if p.name not in before)
+    logger.info(
+        "Extracted %d file(s) from %s into %s", len(extracted), archive.name, output_dir,
+    )
+    return extracted
 
 
 def download_file(url: str, dest: Path, *, timeout: int = 600) -> bool:
@@ -65,6 +126,36 @@ def download_file(url: str, dest: Path, *, timeout: int = 600) -> bool:
 
     except httpx.HTTPError as e:
         logger.warning("Failed to download %s: %s", dest.name, e)
+        return False
+
+
+def download_ftp_file(url: str, dest: Path, *, timeout: int = 600) -> bool:
+    """Download a file from an ``ftp://`` URL via stdlib (httpx has no FTP).
+
+    Streams in 64 KiB chunks to a ``.partial`` sibling, then atomically
+    renames on success. No resume support — the caller's
+    ``skip_existing`` guard handles the "already complete" case.
+
+    Returns True on success, False on any download/IO failure.
+    """
+    import shutil as _shutil
+    import urllib.request
+
+    partial = dest.with_suffix(dest.suffix + ".partial")
+    try:
+        logger.info("Downloading %s ...", dest.name)
+        with (
+            urllib.request.urlopen(url, timeout=timeout) as resp,
+            open(partial, "wb") as f,
+        ):
+            _shutil.copyfileobj(resp, f, length=65_536)
+        partial.rename(dest)
+        size_mb = dest.stat().st_size / 1e6
+        logger.info("Downloaded: %s (%.1f MB)", dest.name, size_mb)
+        return True
+    except Exception as e:  # urllib raises URLError, OSError, etc.
+        logger.warning("Failed to download %s: %s", dest.name, e)
+        partial.unlink(missing_ok=True)
         return False
 
 
