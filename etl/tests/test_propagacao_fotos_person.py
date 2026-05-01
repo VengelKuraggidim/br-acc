@@ -100,3 +100,22 @@ def test_load_ignores_unknown_label_in_record() -> None:
     assert p._stats["FederalLegislator"] == 5
     assert "LabelInexistente" not in p._stats
     assert p.rows_loaded == 5
+
+
+def test_load_accumulates_per_label_across_tiers() -> None:
+    """A query Cypher retorna 1 record por (label, match_kind), então
+    o mesmo label pode aparecer 2x (uma por tier). _stats acumula."""
+    driver = _mock_driver_with_records([
+        {"label": "Senator", "match_kind": "exact", "propagated": 2},
+        {"label": "Senator", "match_kind": "legal_contains_social", "propagated": 1},
+        {"label": "StateLegislator", "match_kind": "exact", "propagated": 4},
+    ])
+    p = _make_pipeline(driver=driver)
+    p.load()
+    assert p._stats == {
+        "Senator": 3,
+        "StateLegislator": 4,
+        "FederalLegislator": 0,
+    }
+    assert p._tier_stats == {"exact": 6, "legal_contains_social": 1}
+    assert p.rows_loaded == 7

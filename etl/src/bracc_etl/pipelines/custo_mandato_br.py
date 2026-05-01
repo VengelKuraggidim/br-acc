@@ -218,14 +218,29 @@ _COMPONENTS: dict[str, list[dict[str, Any]]] = {
     "governador_go": [
         _comp(
             "governador_go", "subsidio", "Subsídio mensal",
+            valor_mensal=30585.01,
+            valor_observacao=(
+                "base fixada pela Lei nº 17.254/2011 (GO Art. 1°: R$ 20.042,00) "
+                "com reajustes anuais subsequentes; valor vigente em 2025-2026 "
+                "conforme levantamentos públicos. Teto constitucional é o "
+                "subsídio do Min. STF (CF Art. 37 XI). Para o valor mensal "
+                "atual auditado, consulte o Portal da Transparência GO."
+            ),
+            fonte_legal="Lei nº 17.254/2011 (GO), com reajustes posteriores; CF Art. 37 XI",
+            fonte_url="https://legisla.casacivil.go.gov.br/pesquisa_legislacao",
+        ),
+        _comp(
+            "governador_go", "vice_governador",
+            "Subsídio do Vice-Governador",
             valor_mensal=None,
             valor_observacao=(
-                "teto constitucional: subsídio do Ministro do STF "
-                "(CF Art. 37 XI). Valor exato fixado por Lei estadual GO; "
-                "consulte Casa Civil/DOE-GO."
+                "fixado pela mesma Lei nº 17.254/2011 (Art. 2°: R$ 16.033,00 "
+                "em 2011) — geralmente reajustado em paridade com Secretários "
+                "de Estado. Não somado ao total do cargo Governador."
             ),
-            fonte_legal="Constituição Federal Art. 37 XI; Lei estadual GO",
-            fonte_url="https://www.casacivil.go.gov.br/",
+            fonte_legal="Lei nº 17.254/2011 (GO), Art. 2°",
+            fonte_url="https://legisla.casacivil.go.gov.br/pesquisa_legislacao",
+            incluir_no_total=False,
         ),
     ],
 }

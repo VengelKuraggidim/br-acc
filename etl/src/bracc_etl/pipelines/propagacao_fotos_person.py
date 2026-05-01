@@ -67,18 +67,68 @@ _SOURCE_LABELS: tuple[str, ...] = (
 # Propaga só em :Person GO (ou sem uf). Política do projeto é escopo
 # Goias (CLAUDE.md §1). Defensivo: se um :FederalLegislator GO tem
 # homônimo em SP por acaso, não propagamos pra ele.
+#
+# Match em duas tiers (cascata, primeiro que casa):
+#  - Tier 1 (exact): Person.name = src.name. Cobre o caso comum onde
+#    TSE/CEAP gravaram o mesmo nome que o portal de cargo.
+#  - Tier 2 (legal contém social): nomes de Senator/StateLegislator/
+#    FederalLegislator costumam vir do portal oficial em forma legal
+#    completa ("JORGE KAJURU REIS DA COSTA NASSER"), mas TSE grava o
+#    nome social/eleitoral ("JORGE KAJURU"). Casa quando src.name
+#    começa com "Person.name " (com espaço — evita prefixo parcial
+#    como "JORGE KAJURUS" casar com "JORGE KAJURU"). Filtra Person
+#    pelo prefix dos 2 primeiros tokens do src pra usar o índice
+#    `person_name` (sem isso, query escaneia 1.6M Person por src).
+#
+# Stop-on-ambiguidade aplicado em cada tier separadamente (size=1).
+# Se Tier 1 tem 2+ candidatos, o src é skippado naquela tier mas
+# Tier 2 ainda pode rodar — mas se Tier 2 também é ambíguo, skip total.
 _PROPAGATION_QUERY = """
 UNWIND $source_labels AS source_label
 MATCH (src)
 WHERE source_label IN labels(src)
   AND coalesce(src.foto_url, '') <> ''
   AND coalesce(src.name, '') <> ''
-OPTIONAL MATCH (p:Person {name: src.name})
-WHERE coalesce(p.foto_url, '') = ''
-  AND coalesce(p.uf, 'GO') = 'GO'
-WITH src, source_label, collect(p) AS candidates
-WHERE size(candidates) = 1
-UNWIND candidates AS p
+
+// Tier 1: exact match
+OPTIONAL MATCH (p_exact:Person {name: src.name})
+WHERE coalesce(p_exact.foto_url, '') = ''
+  AND coalesce(p_exact.uf, 'GO') = 'GO'
+WITH src, source_label, collect(DISTINCT p_exact) AS exact_candidates
+
+// Tier 2: legal-name (src) contém social-name (Person) como prefixo de tokens.
+// Filtra Person via STARTS WITH com os 2 primeiros tokens do src pra
+// permitir uso do índice person_name e evitar full-scan.
+WITH src, source_label, exact_candidates,
+     CASE
+       WHEN size(split(src.name, ' ')) >= 2
+       THEN split(src.name, ' ')[0] + ' ' + split(src.name, ' ')[1]
+       ELSE src.name
+     END AS prefix2
+OPTIONAL MATCH (p_sub:Person)
+WHERE size(exact_candidates) = 0
+  AND p_sub.name STARTS WITH prefix2
+  AND src.name STARTS WITH p_sub.name + ' '
+  AND coalesce(p_sub.foto_url, '') = ''
+  AND coalesce(p_sub.uf, 'GO') = 'GO'
+WITH src, source_label, exact_candidates,
+     collect(DISTINCT p_sub) AS sub_candidates
+
+// Escolhe a tier que casou exatamente 1 (preferência exact > sub).
+WITH src, source_label,
+     CASE
+       WHEN size(exact_candidates) = 1 THEN exact_candidates
+       WHEN size(exact_candidates) = 0 AND size(sub_candidates) = 1 THEN sub_candidates
+       ELSE []
+     END AS chosen,
+     CASE
+       WHEN size(exact_candidates) = 1 THEN 'exact'
+       WHEN size(exact_candidates) = 0 AND size(sub_candidates) = 1 THEN 'legal_contains_social'
+       ELSE 'skip'
+     END AS match_kind
+WHERE size(chosen) = 1
+
+UNWIND chosen AS p
 SET p.foto_url = src.foto_url,
     p.foto_snapshot_uri = coalesce(src.foto_snapshot_uri, p.foto_snapshot_uri),
     p.foto_content_type = coalesce(src.foto_content_type, p.foto_content_type),
@@ -86,8 +136,9 @@ SET p.foto_url = src.foto_url,
     p.foto_source_url = coalesce(src.foto_source_url, src.source_url, src.foto_url),
     p.foto_run_id = $run_id,
     p.foto_ingested_at = $ingested_at,
-    p.foto_propagated_from = source_label
-RETURN source_label AS label, count(DISTINCT p) AS propagated
+    p.foto_propagated_from = source_label,
+    p.foto_match_kind = match_kind
+RETURN source_label AS label, match_kind, count(DISTINCT p) AS propagated
 """
 
 
@@ -121,6 +172,11 @@ class PropagacaoFotosPersonPipeline(Pipeline):
             **kwargs,
         )
         self._stats: dict[str, int] = {label: 0 for label in _SOURCE_LABELS}
+        # Por-tier counts: 'exact' (Tier 1) e 'legal_contains_social' (Tier 2).
+        self._tier_stats: dict[str, int] = {
+            "exact": 0,
+            "legal_contains_social": 0,
+        }
 
     def extract(self) -> None:
         """No-op: pipeline lê do próprio grafo."""
@@ -146,9 +202,12 @@ class PropagacaoFotosPersonPipeline(Pipeline):
                 )
                 for record in result:
                     label = str(record.get("label") or "")
+                    match_kind = str(record.get("match_kind") or "")
                     propagated = int(record.get("propagated") or 0)
                     if label in self._stats:
-                        self._stats[label] = propagated
+                        self._stats[label] += propagated
+                    if match_kind in self._tier_stats:
+                        self._tier_stats[match_kind] += propagated
         except Exception as exc:  # noqa: BLE001 — log + continue
             logger.warning(
                 "[%s] propagation query failed: %s", self.name, exc
@@ -158,8 +217,9 @@ class PropagacaoFotosPersonPipeline(Pipeline):
         total = sum(self._stats.values())
         self.rows_loaded = total
         logger.info(
-            "[%s] propagado foto_url para %d :Person (%s)",
+            "[%s] propagado foto_url para %d :Person (%s; tiers: %s)",
             self.name,
             total,
             ", ".join(f"{k}={v}" for k, v in self._stats.items()),
+            ", ".join(f"{k}={v}" for k, v in self._tier_stats.items()),
         )

@@ -62,7 +62,7 @@ Agradeço a atenção e fico à disposição para esclarecimentos adicionais.
 
 Atenciosamente,
 
-Fernando Ezequiel — fernandoeq@live.com
+Anastácia Almeida Campos — vengelkuraggidim@gmail.com
 Projeto Fiscal Cidadão (uso jornalístico / pesquisa cívica)
 
 ---

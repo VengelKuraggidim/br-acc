@@ -1,0 +1,65 @@
+{"type": "summary", "stubs_total": 64, "matched_cpf": 0, "matched_name": 0, "unmatched": 64, "cpf_collisions": 0, "name_ambiguous": 0}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2164149", "stub_name": "VALDESSON VIEIRA DE FREITAS", "stub_cpf_digits": "01162284153"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:847631", "stub_name": "CESAR AUGUSTO SEBBA", "stub_cpf_digits": "01476300100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342273", "stub_name": "OSCAR DE URZEDA FERRO", "stub_cpf_digits": "03206319153"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342272", "stub_name": "NADIR DE ALMEIDA MANSO", "stub_cpf_digits": "04501071168"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342305", "stub_name": "JOSE ALBERTO BORGES", "stub_cpf_digits": "05572339172"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2166761", "stub_name": "ARISTOTELES DE PAULA E SOUSA SOBRINHO", "stub_cpf_digits": "05682312104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1177561", "stub_name": "CARLOS ALBERTO MARIANO", "stub_cpf_digits": "05822491120"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342281", "stub_name": "IRANILDO RODRIGUES VALENCA", "stub_cpf_digits": "06841481100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1197826", "stub_name": "VANTUIR ALVES DE OLIVEIRA", "stub_cpf_digits": "07143183881"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342270", "stub_name": "MARIA DAS MERCES BARBOSA VIDAL", "stub_cpf_digits": "07699549104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342290", "stub_name": "IRANI RIBEIRO DE MOURA", "stub_cpf_digits": "10048898104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342269", "stub_name": "LEVINDA PASSOS", "stub_cpf_digits": "11827726172"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342309", "stub_name": "LUIZ ANTONIO AIRES DA SILVA", "stub_cpf_digits": "11836660120"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2545545", "stub_name": "CERJO TERRA DE SOUZA", "stub_cpf_digits": "12439967149"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342292", "stub_name": "LUIZ ANTONIO ARANTES", "stub_cpf_digits": "12486574115"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342268", "stub_name": "DELAIDE LUIZ MACHADO JOAQUIM DA SILVA MOURAO", "stub_cpf_digits": "12651842168"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342291", "stub_name": "JOSE AMERICO DE SOUSA", "stub_cpf_digits": "12921157187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342285", "stub_name": "DANIVALDO FRUTUOSO FRANCO", "stub_cpf_digits": "13506005120"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342279", "stub_name": "LEUSIMAR CORREA SILVA", "stub_cpf_digits": "13684566187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342277", "stub_name": "NAGIB FAYAD CHAUL", "stub_cpf_digits": "14401517172"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342304", "stub_name": "IDELMAR DE PAIVA NETO", "stub_cpf_digits": "14728907104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342282", "stub_name": "ISA BERNADETE BRAGA", "stub_cpf_digits": "16651278134"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342287", "stub_name": "HIDERALDO JORGE SANTANA MARTINS", "stub_cpf_digits": "16746660125"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1300243", "stub_name": "JULIO CEZAR VAZ DE MELO", "stub_cpf_digits": "16766091134"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342306", "stub_name": "JOSE ARNALDO VALLE MARTINS", "stub_cpf_digits": "16911083168"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342284", "stub_name": "ROBERTO MORAES JAYME", "stub_cpf_digits": "17009324115"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342297", "stub_name": "ANTONIO DURVAL DE OLIVEIRA BORGES", "stub_cpf_digits": "19434740100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:866016", "stub_name": "PAULO ANTONIO RAMOS FERREIRA", "stub_cpf_digits": "21094888168"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342298", "stub_name": "CAIRO ALBERTO DE FREITAS", "stub_cpf_digits": "21654298115"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342271", "stub_name": "MARIA DE FATIMA PEREIRA COSTA", "stub_cpf_digits": "21945969415"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342265", "stub_name": "ISA BERNADETE BRAGA", "stub_cpf_digits": "25327135187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342293", "stub_name": "PEDRO CHAVES CANEDO", "stub_cpf_digits": "26472031720"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342274", "stub_name": "REGINA CELIA DE LIMA", "stub_cpf_digits": "26614324187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342307", "stub_name": "JOSE OSVALDO DA SILVA", "stub_cpf_digits": "27646742104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342264", "stub_name": "IRAMARA SILVA BARBOSA", "stub_cpf_digits": "27797333149"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342283", "stub_name": "FABIO SILVA GOMES", "stub_cpf_digits": "28092830525"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342267", "stub_name": "EDNAMAR ETERNA DE SOUZA", "stub_cpf_digits": "28890574100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342310", "stub_name": "MARIA DE LOURDES RODRIGUES", "stub_cpf_digits": "30306876191"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:980633", "stub_name": "SERGIO CAMILO CAMARA", "stub_cpf_digits": "31109187149"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342303", "stub_name": "HAILTON GOMES DE PENA", "stub_cpf_digits": "31253512868"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342280", "stub_name": "PEDRO LUIZ CASCALHO", "stub_cpf_digits": "33005737187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342286", "stub_name": "EMILIO CARLO DE PAIVA DE PAULA", "stub_cpf_digits": "33665672104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342262", "stub_name": "ADELINA DA CUNHA ARAUJO", "stub_cpf_digits": "34125922187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342302", "stub_name": "EDUARDO JOSE REINATO", "stub_cpf_digits": "36062022100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342311", "stub_name": "SANDRA MELO LIMA VERISSIMO", "stub_cpf_digits": "40275957187"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342294", "stub_name": "ADRIANO KENNEN DE BARROS", "stub_cpf_digits": "41867971100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1383651", "stub_name": "MARCUS VINICIUS DE FARIA FELIPE", "stub_cpf_digits": "42369460172"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342300", "stub_name": "EDUARDO MARTINS NETO JUNIOR", "stub_cpf_digits": "45283389804"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342276", "stub_name": "SILMAR APARECIDA FERREIRA", "stub_cpf_digits": "47089687104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342278", "stub_name": "MARIA DE FATIMA RUFINO BATISTA", "stub_cpf_digits": "48478695168"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342263", "stub_name": "FRANCISO ROMEU CARVALHO", "stub_cpf_digits": "50758985134"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342289", "stub_name": "EMILSE TEREZINHA NAVES", "stub_cpf_digits": "51148080600"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342266", "stub_name": "EDILAMAR LUCINEIA ALVES DE PAULA", "stub_cpf_digits": "51484765168"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342308", "stub_name": "JOSELINA PEREIRA DE DEUS MAGALHAES", "stub_cpf_digits": "51742896120"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2151082", "stub_name": "RACLENE ATAIDE DE FARIA", "stub_cpf_digits": "56535473104"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342295", "stub_name": "ANDREA AURORA GUEDES VECCI", "stub_cpf_digits": "56550383153"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:641651", "stub_name": "ANDRE LUIZ DE SOUSA OLIVEIRA", "stub_cpf_digits": "59021764172"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342275", "stub_name": "ZENILDA BATISTA NOGUEIRA", "stub_cpf_digits": "59880139100"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1374382", "stub_name": "HEITOR ALARICO GONCALVES DE FREITAS", "stub_cpf_digits": "61091499772"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2149050", "stub_name": "LEONARDO VELOSO DO PRADO", "stub_cpf_digits": "72682809634"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342301", "stub_name": "ERONILDES GUIMARAES FILHO", "stub_cpf_digits": "82765405115"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342288", "stub_name": "ANA CARLA ABRAO COSTA", "stub_cpf_digits": "83613072734"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342299", "stub_name": "DANIELA MACHADO MALASPINA LIMA", "stub_cpf_digits": "90518373134"}
+{"type": "no_match", "stub_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:4342296", "stub_name": "ANDREIA CRISTINA DE OLIVEIRA XIMENES", "stub_cpf_digits": "93530269115"}

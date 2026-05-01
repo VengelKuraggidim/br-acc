@@ -1509,6 +1509,15 @@
         <div style="font-size:15px; font-weight:700; color:var(--accent);">BRACC (br/acc)</div>
         <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Infraestrutura open-source de transparência pública</div>
       </div>
+
+      <div style="padding:12px; background:var(--bg-secondary); border-radius:var(--radius-sm); margin-top:12px;">
+        <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Aviso</div>
+        <p style="font-size:12px; line-height:1.7; color:var(--text-secondary); margin:0;">
+          Este app apenas organiza e visualiza dados públicos do Portal da Transparência.
+          Não garantimos a veracidade absoluta dos dados originais do governo.
+          <strong style="color:var(--text-primary)">Verifique sempre a fonte oficial</strong> antes de tomar qualquer medida.
+        </p>
+      </div>
     </div>
   </div>
 </div>
@@ -2968,27 +2977,32 @@ function renderPerfil(d) {
     const corBorda = v.status === 'ok' ? '#10b981' : v.status === 'atencao' ? '#f59e0b' : '#ef4444';
     const corFundo = v.status === 'ok' ? 'rgba(16,185,129,0.08)' : v.status === 'atencao' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
     const icone = v.status === 'ok' ? '&#10004;' : v.status === 'atencao' ? '&#9888;' : '&#128680;';
-    const txtStatus = v.status === 'ok' ? `Bateu com o TSE (diferença de ${v.divergencia_pct}%)` : v.status === 'atencao' ? `Divergência moderada de ${v.divergencia_pct}%` : `Divergência grande de ${v.divergencia_pct}%`;
+    const txtStatus = v.status === 'ok'
+      ? `nossos dados batem com o oficial (diferença de ${v.divergencia_pct}%)`
+      : v.status === 'atencao'
+        ? `nossa soma diverge em ${v.divergencia_pct}% do oficial`
+        : `nossa soma deu muito diferente do oficial (${v.divergencia_pct}%)`;
     let infoTipTse = '';
     if (v.status !== 'ok') {
       const linkTse = `<a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal de prestação de contas TSE</a>`;
       const msgDivergencia = v.direcao === 'gap_ingestao'
-        ? `<strong>Por que a diferença?</strong> Nosso banco ingeriu menos doações que o TSE declarou. Alguns repasses (fundo partidário, FEFC) podem não ter sido carregados no grafo. O valor <strong>oficial é o do TSE</strong> — verifique a fonte no ${linkTse}.`
-        : `<strong>Por que a diferença?</strong> Estranho: nosso sistema mostra mais doações agregadas que o TSE declarou. Como nossa fonte primária é o próprio TSE, isso provavelmente indica duplicação na nossa agregação. Verifique as fontes oficiais no ${linkTse} — não estamos acusando ninguém.`;
+        ? `<strong>Por que a diferença?</strong> Nosso banco carregou menos doações do que o TSE declarou. Alguns repasses (fundo partidário, FEFC) podem não ter entrado no nosso sistema. <strong>O número oficial é o do TSE</strong> — confira no ${linkTse}.`
+        : `<strong>Por que a diferença?</strong> Nosso sistema somou mais do que o TSE declarou. Como nossa fonte é o próprio TSE, isso provavelmente é uma <strong>doação contada duas vezes</strong> aqui dentro — bug do nosso lado. <strong>Confie no número oficial do TSE</strong>; confira no ${linkTse}.`;
       infoTipTse = renderInfoTip(msgDivergencia);
     }
     html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
         <span style="font-size:20px;">${icone}</span>
-        <div style="font-weight:700; font-size:14px;">Confere com o TSE? ${txtStatus}${infoTipTse}</div>
+        <div style="font-weight:700; font-size:14px;">Conferência interna: ${txtStatus}${infoTipTse}</div>
       </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:10px; padding-left:30px;">Comparamos o total oficial do TSE com a soma das doações que carregamos no nosso banco. Não é um sinal sobre o político — é controle de qualidade dos nossos dados.</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Declarado ao TSE (${v.ano_eleicao})</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Valor oficial (TSE ${v.ano_eleicao})</div>
           <div style="font-size:16px; font-weight:700;">${v.total_declarado_tse_fmt}</div>
         </div>
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Ingerido no sistema</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Soma das doações que carregamos</div>
           <div style="font-size:16px; font-weight:700;">${v.total_ingerido_fmt}</div>
         </div>
       </div>`;
@@ -3014,30 +3028,35 @@ function renderPerfil(d) {
     const corBorda = c.status === 'ok' ? '#10b981' : c.status === 'atencao' ? '#f59e0b' : '#ef4444';
     const corFundo = c.status === 'ok' ? 'rgba(16,185,129,0.08)' : c.status === 'atencao' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
     const icone = c.status === 'ok' ? '&#10004;' : c.status === 'atencao' ? '&#9888;' : '&#128680;';
+    const deltaAbs = Math.abs((c.total_receitas || 0) - (c.total_despesas || 0));
+    const deltaFmt = (typeof formatarMoeda === 'function')
+      ? formatarMoeda(deltaAbs)
+      : `R$ ${deltaAbs.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     const txtStatus = c.status === 'ok'
-      ? `Receitas e despesas batem (diferença de ${c.divergencia_pct}%)`
-      : c.status === 'atencao'
-        ? `Divergência moderada de ${c.divergencia_pct}%`
-        : `Divergência grande de ${c.divergencia_pct}%`;
+      ? `entrou e saiu praticamente o mesmo (diferença de ${c.divergencia_pct}%)`
+      : c.direcao === 'despesas_excedem'
+        ? `gastou ${deltaFmt} a mais do que arrecadou (${c.divergencia_pct}%)`
+        : `sobrou ${deltaFmt} que não foi gasto (${c.divergencia_pct}%)`;
     let infoTipContas = '';
     if (c.status !== 'ok') {
       const msg = c.direcao === 'despesas_excedem'
-        ? `O candidato declarou ter gasto MAIS do que arrecadou. Pode ter explicação legítima (empréstimo declarado, doação posterior, gastos próprios). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`
-        : `O candidato declarou ter arrecadado MAIS do que gastou. Sobra de campanha pode ter destino regulamentado (devolução ao TSE, transferência ao partido). Verifique a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`;
+        ? `O candidato declarou ter gasto <strong>mais do que arrecadou</strong>. Pode ter explicação legítima (empréstimo declarado, doação que entrou depois, gastos do próprio bolso). Confira a prestação de contas oficial no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`
+        : `O candidato declarou ter arrecadado <strong>mais do que gastou</strong>. Esse troco normalmente vai para o partido ou volta para os doadores (regra do TSE). Quando a sobra é muito grande, vale investigar. Confira a prestação no <a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal TSE</a>.`;
       infoTipContas = renderInfoTip(msg);
     }
     html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
         <span style="font-size:20px;">${icone}</span>
-        <div style="font-weight:700; font-size:14px;">Contas batem? Despesas vs Receitas TSE ${c.ano_eleicao} &mdash; ${txtStatus}${infoTipContas}</div>
+        <div style="font-weight:700; font-size:14px;">Campanha de ${c.ano_eleicao}: ${txtStatus}${infoTipContas}</div>
       </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:10px; padding-left:30px;">Quanto entrou na campanha (doações + recursos próprios) versus quanto foi efetivamente gasto, segundo a prestação de contas oficial ao TSE.</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Receitas declaradas ao TSE</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Quanto entrou na campanha</div>
           <div style="font-size:16px; font-weight:700;">${c.total_receitas_fmt}</div>
         </div>
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Despesas pagas declaradas</div>
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Quanto a campanha gastou</div>
           <div style="font-size:16px; font-weight:700;">${c.total_despesas_fmt}</div>
         </div>
       </div>`;
