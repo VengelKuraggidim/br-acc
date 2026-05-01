@@ -941,11 +941,10 @@ def analisar_beneficiario_novo(
 ) -> list[dict[str, str]]:
     """Alerta: CNPJ recém-aberto (< 2 anos) recebendo emenda relevante.
 
-    ONGs/empresas criadas pouco antes de ganhar contrato público
-    merecem conferência de capacidade técnica e acervo — ainda mais
-    quando o volume é desproporcional à maturidade (empresa que mal
-    teve tempo de estruturar CNAE operacional recebendo meio milhão de
-    reais).
+    ONGs/empresas criadas pouco antes de ganhar contrato público são um
+    sinal clássico de fachada/laranja — ainda mais quando o volume é
+    desproporcional à maturidade (empresa que mal teve tempo de
+    estruturar CNAE operacional recebendo meio milhão de reais).
 
     Parâmetros
     ----------
@@ -1180,12 +1179,11 @@ def analisar_socio_beneficiario(
 ) -> list[dict[str, str]]:
     """Alerta grave: empresa em que o parlamentar é sócio recebeu emenda dele.
 
-    Esse é um cruzamento direto de papéis — o parlamentar propôs uma
-    emenda e o beneficiário é uma empresa em que ele mesmo aparece como
-    sócio (via ``:SOCIO_DE`` no grafo). Não configura ilegalidade por
-    si, mas é um conflito de interesse aparente que merece olhar no
-    objeto do convênio, processo licitatório e execução. Severidade
-    ``grave`` pelo grau de aparência.
+    Esse é o conflito de interesse mais direto possível — o parlamentar
+    propôs uma emenda e o beneficiário é uma empresa que ele mesmo
+    co-possui (via ``:SOCIO_DE`` no grafo). Mesmo que legalmente não
+    configure crime per se, é o tipo de padrão que investigação de
+    enriquecimento ilícito rastreia. Severidade ``grave``.
     """
     if not emendas:
         return []

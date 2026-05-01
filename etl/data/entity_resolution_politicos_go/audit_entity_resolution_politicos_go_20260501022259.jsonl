@@ -1,0 +1,705 @@
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953892", "cargo_label": "Senator", "cargo_name": "JORGE KAJURU REIS DA COSTA NASSER"}
+{"type": "cargo_name_ambiguous", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953893", "cargo_label": "Senator", "cargo_name": "VANDERLAN VIEIRA CARDOSO", "candidates": ["4:da0ec56f-cb5d-454a-b730-78a989eacdb6:371144", "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:643793"]}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953893", "cargo_label": "Senator", "cargo_name": "VANDERLAN VIEIRA CARDOSO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2013314", "cargo_label": "FederalLegislator", "cargo_name": "GLAUSTIN DA FOKUS"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953896", "cargo_label": "StateLegislator", "cargo_name": "ALESSANDRO MOREIRA"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953900", "cargo_label": "StateLegislator", "cargo_name": "ANDRE DO PREMIUM"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953902", "cargo_label": "StateLegislator", "cargo_name": "BIA DE LIMA"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953903", "cargo_label": "StateLegislator", "cargo_name": "BRUNO PEIXOTO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953907", "cargo_label": "StateLegislator", "cargo_name": "CRISTIANO GALINDO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953908", "cargo_label": "StateLegislator", "cargo_name": "CRISTOVAO TORMIN"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953912", "cargo_label": "StateLegislator", "cargo_name": "ELIEL JUNIOR"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953915", "cargo_label": "StateLegislator", "cargo_name": "HENRIQUE CESAR"}
+{"type": "cargo_name_ambiguous", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953918", "cargo_label": "StateLegislator", "cargo_name": "JOSE MACHADO", "candidates": ["4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2129783", "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2145152"]}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953918", "cargo_label": "StateLegislator", "cargo_name": "JOSE MACHADO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953919", "cargo_label": "StateLegislator", "cargo_name": "JULIO PINA"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953921", "cargo_label": "StateLegislator", "cargo_name": "LINCOLN TEJOTA"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953924", "cargo_label": "StateLegislator", "cargo_name": "LUCAS DO VALE"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953925", "cargo_label": "StateLegislator", "cargo_name": "MAJOR ARAUJO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953931", "cargo_label": "StateLegislator", "cargo_name": "TALLES BARRETO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953933", "cargo_label": "StateLegislator", "cargo_name": "VIRMONDES CRUVINEL"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1953946", "cargo_label": "StateLegislator", "cargo_name": "CORONEL ADAILTON"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2702439", "cargo_label": "StateLegislator", "cargo_name": "LUIZ SAMPAIO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2702440", "cargo_label": "StateLegislator", "cargo_name": "LEO PORTILHO"}
+{"type": "cargo_without_person", "cargo_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:2707722", "cargo_label": "StateLegislator", "cargo_name": "DELEGADA FERNANDA"}
+{"type": "shadow_prefix_ambiguous", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950494", "shadow_name": "LUIZ CARLOS", "candidate_canonicals": ["canon_cpf_49256785153", "canon_cpf_55044000825"]}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950160", "shadow_name": "ACIR GURGACZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950164", "shadow_name": "AELTON FREITAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950165", "shadow_name": "AFONSO FLORENCE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950167", "shadow_name": "AGUINALDO RIBEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950169", "shadow_name": "ALBERTO FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950171", "shadow_name": "ALESSANDRO MOLON"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950173", "shadow_name": "ALEXANDRE LEITE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950175", "shadow_name": "ALEXANDRE SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950176", "shadow_name": "ALEXANDRE SILVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950177", "shadow_name": "ALEXANDRE TOLEDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950179", "shadow_name": "ALFREDO NASCIMENTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950180", "shadow_name": "ALICE PORTUGAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950181", "shadow_name": "ALINE CORREA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950182", "shadow_name": "ALMEIDA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950184", "shadow_name": "ALVARO DIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950188", "shadow_name": "ANA RITA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950189", "shadow_name": "ANDERSON FERREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950190", "shadow_name": "ANDRE DE PAULA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950191", "shadow_name": "ANDRE FIGUEIREDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950192", "shadow_name": "ANDRE MOURA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950195", "shadow_name": "ANGELA PORTELA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950197", "shadow_name": "ANGELO VANHONI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950199", "shadow_name": "ANIBAL GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950203", "shadow_name": "ANTONIO ANDRADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950206", "shadow_name": "ANTONIO BRITO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950209", "shadow_name": "ANTONIO CARLOS VALADARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950214", "shadow_name": "ARMANDO VERGILIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950215", "shadow_name": "ARNALDO FARIA DE SA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950216", "shadow_name": "ARNALDO JARDIM"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950220", "shadow_name": "ARTHUR LIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950221", "shadow_name": "ARTHUR OLIVEIRA MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950224", "shadow_name": "ASSIS DO COUTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950225", "shadow_name": "ASSIS MELO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950226", "shadow_name": "ATAIDES OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950228", "shadow_name": "ATILA LIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950231", "shadow_name": "BENEDITA DA SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950232", "shadow_name": "BENEDITO DE LIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950245", "shadow_name": "BRUNO ARAUJO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950247", "shadow_name": "CANDIDO VACCAREZZA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950248", "shadow_name": "CARLOS ALBERTO LEREIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950249", "shadow_name": "CARLOS BEZERRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950250", "shadow_name": "CARLOS BRANDAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950255", "shadow_name": "CARLOS SAMPAIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950256", "shadow_name": "CARLOS ZARATTINI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950258", "shadow_name": "CASSIO CUNHA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950259", "shadow_name": "CELSO MALDANER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950270", "shadow_name": "CLAUDIO PUTY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950273", "shadow_name": "CYRO MIRANDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950276", "shadow_name": "DANIEL ALMEIDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950277", "shadow_name": "DANILO CABRAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950279", "shadow_name": "DANRLEI DE DEUS HINTERHOLZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950282", "shadow_name": "DECIO LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950285", "shadow_name": "DEVANIR RIBEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950286", "shadow_name": "DIEGO ANDRADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950287", "shadow_name": "DILCEU SPERAFICO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950290", "shadow_name": "DOMINGOS NETO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950302", "shadow_name": "EDIO LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950304", "shadow_name": "EDSON APARECIDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950306", "shadow_name": "EDSON PIMENTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950307", "shadow_name": "EDSON SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950308", "shadow_name": "EDSON SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950309", "shadow_name": "EDUARDO AMORIM"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950310", "shadow_name": "EDUARDO BARBOSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950311", "shadow_name": "EDUARDO BRAGA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950312", "shadow_name": "EDUARDO CUNHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950314", "shadow_name": "EDUARDO GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950316", "shadow_name": "EDUARDO SUPLICY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950317", "shadow_name": "EFRAIM FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950318", "shadow_name": "ELCIONE BARBALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950320", "shadow_name": "ELI CORREA FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950321", "shadow_name": "ELIENE LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950325", "shadow_name": "ENIO BACCI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950327", "shadow_name": "ERIKA KOKAY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950329", "shadow_name": "EROS BIONDINI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950332", "shadow_name": "EUNICIO OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950333", "shadow_name": "EURICO JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950334", "shadow_name": "EVANDRO MILHOMEN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950335", "shadow_name": "FABIO FARIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950336", "shadow_name": "FABIO RAMALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950337", "shadow_name": "FABIO REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950338", "shadow_name": "FABIO SOUTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950339", "shadow_name": "FABIO TRAD"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950341", "shadow_name": "FATIMA PELAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950344", "shadow_name": "FELIX MENDONCA JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950345", "shadow_name": "FERNANDO AFFONSO COLLOR DE MELLO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950346", "shadow_name": "FERNANDO COELHO FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950347", "shadow_name": "FERNANDO FERRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950348", "shadow_name": "FERNANDO TORRES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950349", "shadow_name": "FILIPE PEREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950351", "shadow_name": "FLAVIANO MELO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950353", "shadow_name": "FRANCISCO CHAGAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950356", "shadow_name": "FRANCISCO PRACIANO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950358", "shadow_name": "GABRIEL GUIMARAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950359", "shadow_name": "GASTAO VIEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950362", "shadow_name": "GERALDO RESENDE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950363", "shadow_name": "GERALDO SIMOES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950366", "shadow_name": "GIM"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950367", "shadow_name": "GIOVANI CHERINI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950368", "shadow_name": "GIOVANNI QUEIROZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950370", "shadow_name": "GLADSON CAMELI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950371", "shadow_name": "GLAUBER BRAGA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950372", "shadow_name": "GLEISI HOFFMANN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950375", "shadow_name": "GUILHERME CAMPOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950376", "shadow_name": "GUILHERME MUSSI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950377", "shadow_name": "GUSTAVO PETTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950378", "shadow_name": "HELCIO SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950379", "shadow_name": "HELIO SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950381", "shadow_name": "HENRIQUE EDUARDO ALVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950383", "shadow_name": "HENRIQUE OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950384", "shadow_name": "HERMES PARCIANELLO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950385", "shadow_name": "HEULER CRUVINEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950386", "shadow_name": "HUGO LEAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950389", "shadow_name": "HUMBERTO COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950390", "shadow_name": "IARA BERNARDI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950391", "shadow_name": "INACIO ARRUDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950395", "shadow_name": "IRINY LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950396", "shadow_name": "IRIS DE ARAUJO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950397", "shadow_name": "IVAN VALENTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950398", "shadow_name": "IVO CASSOL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950400", "shadow_name": "IZALCI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950403", "shadow_name": "JAIR BOLSONARO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950405", "shadow_name": "JANDIRA FEGHALI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950406", "shadow_name": "JANETE CAPIBERIBE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950407", "shadow_name": "JANETE ROCHA PIETA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950409", "shadow_name": "JAQUELINE RORIZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950413", "shadow_name": "JEFFERSON CAMPOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950418", "shadow_name": "JOAO ALBERTO SOUZA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950419", "shadow_name": "JOAO ANANIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950420", "shadow_name": "JOAO ARRUDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950421", "shadow_name": "JOAO CAMPOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950422", "shadow_name": "JOAO CAPIBERIBE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950426", "shadow_name": "JOAO LEAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950428", "shadow_name": "JOAO MAGALHAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950429", "shadow_name": "JOAO MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950430", "shadow_name": "JOAO PAULO LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950432", "shadow_name": "JOAO RODRIGUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950433", "shadow_name": "JOAO VICENTE CLAUDINO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950435", "shadow_name": "JORGE BOEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950437", "shadow_name": "JORGE TADEU MUDALEN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950438", "shadow_name": "JORGE VIANA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950439", "shadow_name": "JORGINHO MELLO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950440", "shadow_name": "JOSE AGRIPINO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950443", "shadow_name": "JOSE AUGUSTO MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950444", "shadow_name": "JOSE CARLOS ARAUJO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950445", "shadow_name": "JOSE GUIMARAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950447", "shadow_name": "JOSE LINHARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950449", "shadow_name": "JOSE NUNES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950450", "shadow_name": "JOSE OTAVIO GERMANO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950451", "shadow_name": "JOSE PIMENTEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950453", "shadow_name": "JOSE ROCHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950454", "shadow_name": "JOSE SARNEY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950455", "shadow_name": "JOSE STEDILE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950456", "shadow_name": "JOSIAS GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950458", "shadow_name": "JOVAIR ARANTES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950459", "shadow_name": "JULIO CAMPOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950461", "shadow_name": "JULIO DELGADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950462", "shadow_name": "JULIO LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950469", "shadow_name": "LAERCIO OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950470", "shadow_name": "LAZARO BOTELHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950471", "shadow_name": "LEANDRO VILELA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950473", "shadow_name": "LEONARDO MONTEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950474", "shadow_name": "LEONARDO PICCIANI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950476", "shadow_name": "LEOPOLDO MEYER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950479", "shadow_name": "LINCOLN PORTELA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950483", "shadow_name": "LOURIVAL MENDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950484", "shadow_name": "LUCI CHOINACKI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950485", "shadow_name": "LUCIA VANIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950486", "shadow_name": "LUCIANA SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950487", "shadow_name": "LUCIANO CASTRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950489", "shadow_name": "LUCIO VIEIRA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950490", "shadow_name": "LUIS CARLOS HEINZE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950495", "shadow_name": "LUIZ CARLOS BUSATO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950496", "shadow_name": "LUIZ CARLOS HAULY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950497", "shadow_name": "LUIZ COUTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950498", "shadow_name": "LUIZ DE DEUS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950499", "shadow_name": "LUIZ FERNANDO FARIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950500", "shadow_name": "LUIZ FERNANDO MACHADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950501", "shadow_name": "LUIZ HENRIQUE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950502", "shadow_name": "LUIZ NISHIMORI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950509", "shadow_name": "MAGNO MALTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950512", "shadow_name": "MANOEL JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950515", "shadow_name": "MARA GABRILLI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950516", "shadow_name": "MARCAL FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950517", "shadow_name": "MARCELO AGUIAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950518", "shadow_name": "MARCELO CASTRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950519", "shadow_name": "MARCELO CRIVELLA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950520", "shadow_name": "MARCELO MATOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950521", "shadow_name": "MARCIO BITTAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950522", "shadow_name": "MARCIO MACEDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950523", "shadow_name": "MARCIO MARINHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950524", "shadow_name": "MARCO MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950527", "shadow_name": "MARCOS MEDRADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950532", "shadow_name": "MARIA DO CARMO ALVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950533", "shadow_name": "MARIA DO ROSARIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950537", "shadow_name": "MARTA SUPLICY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950538", "shadow_name": "MAURICIO QUINTELLA LESSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950539", "shadow_name": "MAURICIO TRINDADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950541", "shadow_name": "MAURO LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950546", "shadow_name": "MILTON MONTI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950548", "shadow_name": "MIRO TEIXEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950553", "shadow_name": "NELSON MARCHEZAN JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950556", "shadow_name": "NELSON PADOVANI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950562", "shadow_name": "NILMARIO MIRANDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950564", "shadow_name": "NILSON PINTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950566", "shadow_name": "ODAIR CUNHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950569", "shadow_name": "ONYX LORENZONI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950570", "shadow_name": "OSMAR JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950572", "shadow_name": "OSMAR TERRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950573", "shadow_name": "OSVALDO REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950574", "shadow_name": "OTAVIO LEITE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950575", "shadow_name": "OTONIEL LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950576", "shadow_name": "OZIEL OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950580", "shadow_name": "PASTOR EURICO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950581", "shadow_name": "PAUDERNEY AVELINO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950584", "shadow_name": "PAULO BAUER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950585", "shadow_name": "PAULO BORNHAUSEN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950589", "shadow_name": "PAULO FOLETTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950590", "shadow_name": "PAULO FREIRE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950591", "shadow_name": "PAULO MAGALHAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950594", "shadow_name": "PAULO PEREIRA DA SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950595", "shadow_name": "PAULO PIMENTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950596", "shadow_name": "PAULO RUBEM SANTIAGO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950597", "shadow_name": "PAULO TEIXEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950598", "shadow_name": "PAULO WAGNER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950599", "shadow_name": "PEDRO CHAVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950600", "shadow_name": "PEDRO FERNANDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950604", "shadow_name": "PEDRO UCZAI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950609", "shadow_name": "POLICARPO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950613", "shadow_name": "RAIMUNDO GOMES DE MATOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950617", "shadow_name": "RAUL LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950619", "shadow_name": "REGINALDO LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950624", "shadow_name": "RENATO MOLLING"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950625", "shadow_name": "RENATO SIMOES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950627", "shadow_name": "RICARDO FERRACO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950628", "shadow_name": "RICARDO IZAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950630", "shadow_name": "ROBERTO BALESTRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950632", "shadow_name": "ROBERTO DE LUCENA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950633", "shadow_name": "ROBERTO DORNER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950634", "shadow_name": "ROBERTO FREIRE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950638", "shadow_name": "RODRIGO DE CASTRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950639", "shadow_name": "RODRIGO GARCIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950640", "shadow_name": "RODRIGO MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950641", "shadow_name": "RODRIGO ROLLEMBERG"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950642", "shadow_name": "ROGERIO CARVALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950643", "shadow_name": "ROGERIO PENINHA MENDONCA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950647", "shadow_name": "RONALDO CAIADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950648", "shadow_name": "RONALDO FONSECA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950654", "shadow_name": "RUBENS BUENO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950656", "shadow_name": "RUI COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950660", "shadow_name": "SANDES JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950661", "shadow_name": "SANDRA ROSADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950663", "shadow_name": "SANDRO MABEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950666", "shadow_name": "SEBASTIAO BALA ROCHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950667", "shadow_name": "SERGIO BRITO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950668", "shadow_name": "SERGIO MORAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950670", "shadow_name": "SERGIO ZVEITER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950672", "shadow_name": "SILAS CAMARA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950673", "shadow_name": "SILVIO COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950678", "shadow_name": "SUELI VIDIGAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950681", "shadow_name": "THIAGO PEIXOTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950686", "shadow_name": "VALMIR ASSUNCAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950687", "shadow_name": "VALTENIR PEREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950688", "shadow_name": "VANDER LOUBET"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950689", "shadow_name": "VANDERLEI MACRIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950691", "shadow_name": "VANESSA GRAZZIOTIN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950694", "shadow_name": "VICENTE CANDIDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950695", "shadow_name": "VICENTINHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950699", "shadow_name": "VILMAR ROCHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950701", "shadow_name": "VINICIUS GURGEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950703", "shadow_name": "VITOR PAULO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950709", "shadow_name": "WALTER PINHEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950710", "shadow_name": "WALTER TOSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950712", "shadow_name": "WASHINGTON REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950713", "shadow_name": "WELITON PRADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950715", "shadow_name": "WELLINGTON FAGUNDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950718", "shadow_name": "WILDER MORAIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950719", "shadow_name": "WILLIAM DIB"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950720", "shadow_name": "WILSON FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950721", "shadow_name": "WLADIMIR COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950733", "shadow_name": "ADELMO CARNEIRO LEAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950736", "shadow_name": "AFONSO MOTTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950738", "shadow_name": "ALBERTO FRAGA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950739", "shadow_name": "ALEX MANENTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950740", "shadow_name": "ALEXANDRE BALDY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950741", "shadow_name": "ALEXANDRE SERFIOTIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950742", "shadow_name": "ALEXANDRE VALLE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950743", "shadow_name": "ALFREDO NASCIMENTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950747", "shadow_name": "ANA PERUGINI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950748", "shadow_name": "ANDRE ABDON"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950772", "shadow_name": "CARLOS ANDRADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950776", "shadow_name": "CARMEN ZANOTTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950778", "shadow_name": "CELSO JACOB"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950779", "shadow_name": "CELSO RUSSOMANNO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950780", "shadow_name": "CESAR MESSIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950781", "shadow_name": "CESAR SOUZA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950783", "shadow_name": "CHRISTIANE DE SOUZA YARED"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950784", "shadow_name": "CICERO ALMEIDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950786", "shadow_name": "CONCEICAO SAMPAIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950790", "shadow_name": "DALIRIO BEBER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950792", "shadow_name": "DANIEL COELHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950793", "shadow_name": "DANIEL VILELA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950794", "shadow_name": "DARIO BERGER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950799", "shadow_name": "DELEGADO WALDIR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950801", "shadow_name": "DIEGO GARCIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950803", "shadow_name": "DOUGLAS CINTRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950806", "shadow_name": "DULCE MIRANDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950808", "shadow_name": "EDMILSON RODRIGUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950809", "shadow_name": "EDUARDO BOLSONARO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950810", "shadow_name": "EDUARDO CURY"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950814", "shadow_name": "ELMAR NASCIMENTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950815", "shadow_name": "ENIO VERRI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950816", "shadow_name": "EVAIR DE MELO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950818", "shadow_name": "EVANDRO ROMAN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950819", "shadow_name": "EXPEDITO NETTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950821", "shadow_name": "EZEQUIEL TEIXEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950823", "shadow_name": "FABIO GARCIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950824", "shadow_name": "FABIO MITIDIERI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950825", "shadow_name": "FABIO SOUSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950826", "shadow_name": "FABRICIO OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950828", "shadow_name": "FAUSTO PINATO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950829", "shadow_name": "FERNANDO BEZERRA COELHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950831", "shadow_name": "FERNANDO JORDAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950832", "shadow_name": "FERNANDO MONTEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950834", "shadow_name": "FLAVIO NOGUEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950837", "shadow_name": "GARIBALDI ALVES FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950838", "shadow_name": "GEOVANIA DE SA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950839", "shadow_name": "GILBERTO NASCIMENTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950840", "shadow_name": "GIUSEPPE VECCI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950842", "shadow_name": "GLADSON CAMELI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950844", "shadow_name": "HEITOR SCHUCH"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950845", "shadow_name": "HELDER SALOMAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950846", "shadow_name": "HELIO JOSE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950847", "shadow_name": "HELIO LEITE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950856", "shadow_name": "JESSICA SALES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950858", "shadow_name": "JOAO CASTELO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950859", "shadow_name": "JOAO DANIEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950861", "shadow_name": "JOAO FERNANDO COUTINHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950863", "shadow_name": "JOAO MARCELO SOUZA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950867", "shadow_name": "JORGE SOLLA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950868", "shadow_name": "JOSE CARLOS ALELUIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950869", "shadow_name": "JOSE FOGACA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950870", "shadow_name": "JOSE MARANHAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950871", "shadow_name": "JOSE MEDEIROS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950873", "shadow_name": "JOSE SERRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950876", "shadow_name": "JULIA MARINHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950878", "shadow_name": "JUSCELINO FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950880", "shadow_name": "LAERTE BESSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950881", "shadow_name": "LASIER MARTINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950887", "shadow_name": "LUCAS VERGILIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950888", "shadow_name": "LUCIANO DUCCI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950889", "shadow_name": "LUCIO MOSQUINI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950890", "shadow_name": "LUIZ CARLOS RAMOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950892", "shadow_name": "LUIZ LAURO FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950893", "shadow_name": "LUIZIANNE LINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950897", "shadow_name": "MARCELO ALVARO ANTONIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950900", "shadow_name": "MARCELO SQUASSONI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950902", "shadow_name": "MARCO ANTONIO CABRAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950903", "shadow_name": "MARCOS ABRAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950906", "shadow_name": "MARCOS SOARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950907", "shadow_name": "MARCUS VICENTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950909", "shadow_name": "MARIANA CARVALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950911", "shadow_name": "MARIO HERINGER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950915", "shadow_name": "MAURO PEREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950916", "shadow_name": "MAX FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950918", "shadow_name": "MIGUEL LOMBARDI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950919", "shadow_name": "MISAEL VARELLA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950921", "shadow_name": "MORONI TORGAN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950922", "shadow_name": "MOSES RODRIGUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950924", "shadow_name": "NILTO TATTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950927", "shadow_name": "OMAR AZIZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950928", "shadow_name": "ORLANDO SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950929", "shadow_name": "OTTO ALENCAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950931", "shadow_name": "PAULO AZI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950932", "shadow_name": "PAULO ROCHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950933", "shadow_name": "PEDRO CUNHA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950934", "shadow_name": "PEDRO VILELA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950938", "shadow_name": "RAFAEL MOTTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950939", "shadow_name": "RAIMUNDO LIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950940", "shadow_name": "RAQUEL MUNIZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950942", "shadow_name": "REGINA SOUSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950944", "shadow_name": "RELATOR GERAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950946", "shadow_name": "RENATA ABREU"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950947", "shadow_name": "RICARDO BARROS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950949", "shadow_name": "ROBERTO ALVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950950", "shadow_name": "ROBERTO GOES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950951", "shadow_name": "ROBERTO ROCHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950952", "shadow_name": "ROBERTO SALES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950954", "shadow_name": "RODRIGO MARTINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950955", "shadow_name": "RODRIGO PACHECO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950956", "shadow_name": "ROGERIO MARINHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950957", "shadow_name": "ROGERIO ROSSO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950960", "shadow_name": "RONALDO CAIADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950961", "shadow_name": "RONALDO CARLETTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950963", "shadow_name": "RONALDO MARTINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950964", "shadow_name": "RONALDO NOGUEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950965", "shadow_name": "RONEY NEMER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950966", "shadow_name": "ROSANGELA CURADO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950967", "shadow_name": "ROSANGELA GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950970", "shadow_name": "RUBENS PEREIRA JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950971", "shadow_name": "SAMUEL MOREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950972", "shadow_name": "SANDRA BRAGA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950973", "shadow_name": "SERGIO REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950974", "shadow_name": "SERGIO SOUZA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950979", "shadow_name": "SILVIO TORRES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950981", "shadow_name": "SIMONE TEBET"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950982", "shadow_name": "SORAYA SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950983", "shadow_name": "SOSTENES CAVALCANTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950992", "shadow_name": "VALDIR COLATTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950996", "shadow_name": "VICTOR MENDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950997", "shadow_name": "VINICIUS CARVALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1950998", "shadow_name": "VITOR LIPPI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951000", "shadow_name": "WADSON RIBEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951001", "shadow_name": "WALTER ALVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951002", "shadow_name": "WELLINGTON FAGUNDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951007", "shadow_name": "ANDRE AMARAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951011", "shadow_name": "BANCADA DE GOIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951039", "shadow_name": "DAVI ALVES SILVA JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951041", "shadow_name": "JOAO BOSCO DA COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951042", "shadow_name": "JONES MARTINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951044", "shadow_name": "MOISES DINIZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951048", "shadow_name": "PEDRO CHAVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951050", "shadow_name": "REJANE DIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951052", "shadow_name": "ROBERTO MUNIZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951056", "shadow_name": "CARLOS SOUZA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951058", "shadow_name": "EDUARDO LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951059", "shadow_name": "FELIPE CARRERAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951063", "shadow_name": "LUANA COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951064", "shadow_name": "MARCELO DELAROLI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951068", "shadow_name": "RENATO ANDRADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951073", "shadow_name": "WILSON BESERRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951078", "shadow_name": "GIOVANI FELTES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951080", "shadow_name": "MARCIO BIOLCHI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951082", "shadow_name": "PROFESSOR PACCO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951083", "shadow_name": "SEBASTIAO OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951087", "shadow_name": "ADOLFO VIANA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951088", "shadow_name": "ADRIANA VENTURA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951091", "shadow_name": "AIRTON FALEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951093", "shadow_name": "ALCIDES RODRIGUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951095", "shadow_name": "ALENCAR SANTANA BRAGA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951096", "shadow_name": "ALESSANDRO VIEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951097", "shadow_name": "ALEX SANTANA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951099", "shadow_name": "ALEXANDRE PADILHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951100", "shadow_name": "ALEXIS FONTEYNE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951101", "shadow_name": "ALINE GURGEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951102", "shadow_name": "ALINE SLEUTJES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951103", "shadow_name": "AMARO NETO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951104", "shadow_name": "ANDRE FERREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951105", "shadow_name": "ANDRE JANONES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951124", "shadow_name": "CARLOS CHIODINI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951126", "shadow_name": "CARLOS VERAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951127", "shadow_name": "CARLOS VIANA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951128", "shadow_name": "CAROLINE DE TONI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951129", "shadow_name": "CASSIO ANDRADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951131", "shadow_name": "CELIO MOURA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951135", "shadow_name": "CHARLES FERNANDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951136", "shadow_name": "CHARLLES EVANGELISTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951188", "shadow_name": "CRISTIANO VALE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951190", "shadow_name": "DANIEL FREITAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951191", "shadow_name": "DANIEL SILVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951195", "shadow_name": "DARCI DE MATOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951196", "shadow_name": "DAVID MIRANDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951197", "shadow_name": "DAVID SOARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951201", "shadow_name": "DENIS BEZERRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951210", "shadow_name": "EDILAZIO JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951212", "shadow_name": "EDUARDO BISMARCK"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951213", "shadow_name": "EDUARDO BRAIDE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951214", "shadow_name": "EDUARDO COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951216", "shadow_name": "EDUARDO GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951217", "shadow_name": "ELI BORGES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951218", "shadow_name": "ELIAS VAZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951222", "shadow_name": "ENEIAS REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951223", "shadow_name": "ENRICO MISASI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951227", "shadow_name": "FABIANO GALLETTI TOLENTINO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951228", "shadow_name": "FABIO HENRIQUE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951236", "shadow_name": "FLAVIA ARRUDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951240", "shadow_name": "FRANCISCO JR."}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951248", "shadow_name": "GERVASIO MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951250", "shadow_name": "GILBERTO ABRAMO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951251", "shadow_name": "GILSON MARQUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951252", "shadow_name": "GLAUSTIN FOKUS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951253", "shadow_name": "GLEISI HOFFMANN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951254", "shadow_name": "GREYCE ELIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951256", "shadow_name": "GUILHERME DERRITE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951258", "shadow_name": "GUSTAVO FRUET"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951260", "shadow_name": "GUTEMBERG REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951262", "shadow_name": "HEITOR FREIRE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951263", "shadow_name": "HELIO COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951264", "shadow_name": "HELIO LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951268", "shadow_name": "IGOR TIMO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951271", "shadow_name": "IZALCI LUCAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951274", "shadow_name": "JEAN PAUL PRATES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951276", "shadow_name": "JOAO H. CAMPOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951277", "shadow_name": "JOAO ROMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951279", "shadow_name": "JOICE HASSELMANN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951282", "shadow_name": "JORGINHO MELLO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951283", "shadow_name": "JOSE MARIO SCHREINER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951284", "shadow_name": "JOSE MEDEIROS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951286", "shadow_name": "JOSE RICARDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951288", "shadow_name": "JUAREZ COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951291", "shadow_name": "JULIO CESAR RIBEIRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951297", "shadow_name": "KIM KATAGUIRI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951298", "shadow_name": "LAFAYETTE DE ANDRADA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951304", "shadow_name": "LEUR LOMANTO JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951308", "shadow_name": "LOURIVAL GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951309", "shadow_name": "LUCAS BARRETO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951310", "shadow_name": "LUCAS GONZALEZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951311", "shadow_name": "LUCAS REDECKER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951312", "shadow_name": "LUCIANO BIVAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951313", "shadow_name": "LUIS CARLOS HEINZE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951314", "shadow_name": "LUIS MIRANDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951316", "shadow_name": "LUIZ ANTONIO CORREA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951317", "shadow_name": "LUIZ CARLOS MOTTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951318", "shadow_name": "LUIZ DO CARMO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951319", "shadow_name": "LUIZ FLAVIO GOMES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951320", "shadow_name": "LUIZ LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951321", "shadow_name": "LUIZ PHILIPPE DE ORLEANS E BRAGANCA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951326", "shadow_name": "MAJOR VITOR HUGO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951328", "shadow_name": "MARA GABRILLI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951329", "shadow_name": "MARA ROCHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951330", "shadow_name": "MARCEL VAN HATTEM"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951333", "shadow_name": "MARCELO CASTRO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951334", "shadow_name": "MARCELO FREIXO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951335", "shadow_name": "MARCELO MORAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951337", "shadow_name": "MARCELO RAMOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951338", "shadow_name": "MARCIO BITTAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951340", "shadow_name": "MARCIO LABRE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951341", "shadow_name": "MARCO BERTAIOLLI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951342", "shadow_name": "MARCOS AURELIO SAMPAIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951344", "shadow_name": "MARCOS PEREIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951346", "shadow_name": "MARGARETE COELHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951347", "shadow_name": "MARIA ROSAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951349", "shadow_name": "MARINA SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951350", "shadow_name": "MARLON SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951352", "shadow_name": "MAURICIO DZIEDRICKI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951353", "shadow_name": "MAURO BENEVIDES FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951357", "shadow_name": "MILTON VIEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951358", "shadow_name": "NATALIA BONAVIDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951362", "shadow_name": "NERI GELLER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951366", "shadow_name": "OSIRES DAMASO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951367", "shadow_name": "OSSESIO SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951370", "shadow_name": "OTTO ALENCAR FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951373", "shadow_name": "PAULA BELMONTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951375", "shadow_name": "PAULO EDUARDO MARTINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951377", "shadow_name": "PAULO GUEDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951378", "shadow_name": "PAULO RAMOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951379", "shadow_name": "PEDRO AUGUSTO BEZERRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951380", "shadow_name": "PEDRO LUCAS FERNANDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951382", "shadow_name": "PEDRO WESTPHALEN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951387", "shadow_name": "PROFESSOR ISRAEL BATISTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951391", "shadow_name": "RAIMUNDO COSTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951392", "shadow_name": "REINHOLD STEPHANES JUNIOR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951393", "shadow_name": "RELATOR GERAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951394", "shadow_name": "RENILDO CALHEIROS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951395", "shadow_name": "RICARDO GUIDI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951397", "shadow_name": "ROBERTO PESSOA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951399", "shadow_name": "RODRIGO COELHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951400", "shadow_name": "RODRIGO CUNHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951401", "shadow_name": "RODRIGO PACHECO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951402", "shadow_name": "ROGERIO CARVALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951404", "shadow_name": "ROSANA VALLE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951406", "shadow_name": "RUI FALCAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951407", "shadow_name": "SAMIA BOMFIM"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951411", "shadow_name": "SERGIO TOLEDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951412", "shadow_name": "SEVERINO PESSOA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951413", "shadow_name": "SIDNEY LEITE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951415", "shadow_name": "SILVIO COSTA FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951416", "shadow_name": "SORAYA THRONICKE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951427", "shadow_name": "VANDERLAN CARDOSO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951432", "shadow_name": "VINICIUS FARAH"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951433", "shadow_name": "VINICIUS POIT"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951442", "shadow_name": "CARLOS FAVARO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951445", "shadow_name": "JOSEILDO RAMOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951447", "shadow_name": "MILTON COELHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951450", "shadow_name": "PEDRO AUGUSTO PALARETI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951452", "shadow_name": "RICARDO SILVA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951456", "shadow_name": "JONES MOURA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951459", "shadow_name": "ALEXANDRE SILVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951462", "shadow_name": "GUARACY SILVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951464", "shadow_name": "JULIO VENTURA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951466", "shadow_name": "PATRICIA FERRAZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951471", "shadow_name": "ALBERTO MOURAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951473", "shadow_name": "ALEXANDRE GUIMARAES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951474", "shadow_name": "ALEXANDRE LINDENMEYER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951477", "shadow_name": "AMALIA BARROS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951480", "shadow_name": "ANA PAULA LEAO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951481", "shadow_name": "ANA PAULA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951482", "shadow_name": "ANA PAULA LOBATO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951483", "shadow_name": "ANA PIMENTEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951484", "shadow_name": "ANDRE FERNANDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951485", "shadow_name": "ANDREIA SIQUEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951486", "shadow_name": "ANTONIO ANDRADE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951487", "shadow_name": "ANTONIO CARLOS RODRIGUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951489", "shadow_name": "ANY ORTIZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951491", "shadow_name": "ATILA LIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951499", "shadow_name": "BRUNO FARIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951500", "shadow_name": "BRUNO GANEM"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951522", "shadow_name": "CRISTIANE LOPES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951523", "shadow_name": "DAIANA SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951525", "shadow_name": "DAMARES ALVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951529", "shadow_name": "DANIEL BARBOSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951530", "shadow_name": "DANIELA REINEHR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951543", "shadow_name": "DENISE PESSOA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951546", "shadow_name": "DILVANDA FARO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951548", "shadow_name": "DORINALDO MALAFAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951561", "shadow_name": "EFRAIM FILHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951562", "shadow_name": "ELY SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951563", "shadow_name": "ERIBERTO MEDEIROS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951565", "shadow_name": "EUNICIO OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951566", "shadow_name": "FABIO MACEDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951567", "shadow_name": "FABIO TERUEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951572", "shadow_name": "FERNANDO FARIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951574", "shadow_name": "FILIPE MARTINS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951575", "shadow_name": "FLORENTINO NETO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951577", "shadow_name": "FRED LINHARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951578", "shadow_name": "GABRIEL MOTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951579", "shadow_name": "GABRIEL NUNES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951581", "shadow_name": "GERALDO MENDES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951585", "shadow_name": "GILVAN MAXIMO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951586", "shadow_name": "GUILHERME BOULOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951590", "shadow_name": "HELENA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951591", "shadow_name": "HENDERSON PINTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951593", "shadow_name": "ISMAEL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951595", "shadow_name": "IVONEIDE CAETANO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951596", "shadow_name": "IZA ARRUDA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951598", "shadow_name": "JADYEL ALENCAR"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951599", "shadow_name": "JAIME BAGATTOLI"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951601", "shadow_name": "JILMAR TATTO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951606", "shadow_name": "JULIA ZANATTA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951607", "shadow_name": "JULIANA CARDOSO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951608", "shadow_name": "JULIO ARCOVERDE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951609", "shadow_name": "JUSSARA LIMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951610", "shadow_name": "KENISTON BRAGA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951612", "shadow_name": "LAERCIO OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951617", "shadow_name": "LUCAS RAMOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951618", "shadow_name": "LUCIANO AMARAL"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951619", "shadow_name": "LUCIANO VIEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951623", "shadow_name": "MARCELO CRIVELLA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951624", "shadow_name": "MARCELO QUEIROZ"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951625", "shadow_name": "MARCIO CORREA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951626", "shadow_name": "MARCIO HONAISER"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951627", "shadow_name": "MARCOS POLLON"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951628", "shadow_name": "MARCOS TAVARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951630", "shadow_name": "MARIO FRIAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951632", "shadow_name": "MATHEUS NORONHA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951633", "shadow_name": "MAURICIO CARVALHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951635", "shadow_name": "MAURICIO MARCON"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951636", "shadow_name": "MAURICIO NEVES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951637", "shadow_name": "MAX LEMOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951651", "shadow_name": "PAULO ALEXANDRE BARBOSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951654", "shadow_name": "PEDRO AIHARA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951655", "shadow_name": "PEDRO CAMPOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951657", "shadow_name": "PROF. PAULO FERNANDO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951658", "shadow_name": "PROF. REGINALDO VERAS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951662", "shadow_name": "RAFAEL BRITO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951663", "shadow_name": "RAFAEL PRUDENTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951664", "shadow_name": "RAFAEL SIMOES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951665", "shadow_name": "RAIMUNDO SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951666", "shadow_name": "REGINETE BISPO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951670", "shadow_name": "RICARDO MAIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951671", "shadow_name": "RICARDO SALLES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951672", "shadow_name": "ROBERTA ROMA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951673", "shadow_name": "ROBERTO DUARTE"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951675", "shadow_name": "ROBINSON FARIA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951676", "shadow_name": "RODOLFO NOGUEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951678", "shadow_name": "RODRIGO VALADARES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951679", "shadow_name": "ROGERIA SANTOS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951680", "shadow_name": "ROGERIO MARINHO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951681", "shadow_name": "ROMERO RODRIGUES"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951682", "shadow_name": "ROSANGELA MORO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951683", "shadow_name": "ROSANGELA REIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951684", "shadow_name": "SAMUEL VIANA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951687", "shadow_name": "SAULLO VIANNA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951689", "shadow_name": "SERGIO MORO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951691", "shadow_name": "SILVIO ANTONIO"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951695", "shadow_name": "SONIZE BARBOSA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951703", "shadow_name": "WALDEMAR OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951715", "shadow_name": "NEWTON BONIN"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951716", "shadow_name": "TADEU OLIVEIRA"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951719", "shadow_name": "LENIR DE ASSIS"}
+{"type": "shadow_no_match", "shadow_element_id": "4:da0ec56f-cb5d-454a-b730-78a989eacdb6:1951723", "shadow_name": "SAMUEL SANTOS"}
