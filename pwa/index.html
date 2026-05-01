@@ -2490,12 +2490,21 @@ function renderResultados(items, total, query) {
     const avatarInner = item.foto_url
       ? `<img src="${item.foto_url}" alt="${item.nome}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${icon}'}))">`
       : icon;
+    let cargosTip = '';
+    if (item.cargos_relacionados && item.cargos_relacionados.length) {
+      const lista = item.cargos_relacionados
+        .map(c => `<li>${c}</li>`)
+        .join('');
+      cargosTip = renderInfoTip(
+        `<strong>Outros cargos desta mesma pessoa:</strong><ul style="margin:6px 0 0 18px;padding:0;">${lista}</ul>`
+      );
+    }
     html += `
       <div class="result-item fade-in${clickableCls}" style="animation-delay:${i*50}ms" ${onclick}>
         <div class="result-avatar ${item.icone}">${avatarInner}</div>
         <div class="result-info">
           <div class="result-name">${item.nome}${pepBadge}</div>
-          <div class="result-detail">${item.detalhe || item.tipo}</div>
+          <div class="result-detail">${item.detalhe || item.tipo}${cargosTip}</div>
         </div>
         ${temPerfil ? '<span class="result-arrow">&#8250;</span>' : ''}
       </div>`;
@@ -2720,6 +2729,52 @@ function renderPerfil(d) {
     html += '</div></details></div>';
   }
 
+  // Carreira política — presença em eleições TSE (não mandato exercido).
+  // ``d.carreira_politica`` é null quando o cluster canônico não tem
+  // nenhuma :Election ligada — perfis muito pré-2020 ou siblings TSE não
+  // resolvidos caem aqui. Card mostra primeira/última eleição, nº de
+  // candidaturas e cargos distintos. NUNCA afirma "foi eleito" — TSE só
+  // registra candidatura, não resultado de urna.
+  if (d.carreira_politica && d.carreira_politica.num_candidaturas > 0) {
+    const cp = d.carreira_politica;
+    const cargosTxt = cp.cargos_distintos.length
+      ? cp.cargos_distintos.join(' &middot; ')
+      : '';
+    const badgeTxt = cp.anos_carreira > 0
+      ? `${cp.anos_carreira} anos`
+      : `${cp.num_candidaturas} eleição(ões)`;
+    let listaHtml = '';
+    if (cp.candidaturas.length) {
+      listaHtml = cp.candidaturas.map(c => {
+        const local = c.municipio
+          ? `${c.municipio}/${c.uf}`
+          : (c.uf || '');
+        return `<div class="conexao-card" style="flex-wrap:wrap;">
+          <div class="conexao-info">
+            <div class="conexao-nome">${c.ano} &middot; ${c.cargo || 'Candidatura'}</div>
+            <div class="conexao-rel">${local}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    html += `<div class="section fade-in">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(245,158,11,0.15);">&#128218;</span>
+          Carreira política (TSE)
+        </div>
+        <span class="badge badge-accent">${badgeTxt}</span>
+      </div>
+      ${cp.resumo ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5;">${cp.resumo}</div>` : ''}
+      ${cargosTxt ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Cargos disputados: ${cargosTxt}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;font-style:italic;">TSE registra candidatura, não mandato exercido — eleito ou não eleito requer cruzamento separado.</div>
+      <details class="collapsible">
+        <summary>Ver ${cp.candidaturas.length} candidatura(s)</summary>
+        <div class="collapsible-body">${listaHtml}</div>
+      </details>
+    </div>`;
+  }
+
   // Emendas
   if (d.emendas.length) {
     const fonteLabel = d.fonte_emendas === 'transparencia'
@@ -2876,17 +2931,15 @@ function renderPerfil(d) {
     // Extrai nome curto da cota pra o titulo: "... (CEAPS) — ..." -> "CEAPS".
     const siglaMatch = avisoHead.match(/\(([A-Z]{3,6})\)/);
     const sigla = siglaMatch ? siglaMatch[1] : 'cota parlamentar';
+    const infoTipAviso = avisoHead ? renderInfoTip(avisoHead) : '';
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(249,115,22,0.15);">&#128179;</span>
-          Gastos com a politica (${sigla})
+          Gastos com a politica (${sigla})${infoTipAviso}
         </div>
         <span class="badge badge-warning">${d.total_despesas_gabinete_fmt}</span>
       </div>`;
-    if (avisoHead) {
-      html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${avisoHead}</div>`;
-    }
     html += `<details class="collapsible">
         <summary>Ver ${d.despesas_gabinete.length} tipo(s) de gasto</summary>
         <div class="collapsible-body">`;
@@ -2925,19 +2978,17 @@ function renderPerfil(d) {
     const badgeClass = nAbusivo > 0 ? 'danger' : (nElevado > 0 ? 'warning' : 'accent');
     const badgeText = nAbusivo > 0 ? `${nAbusivo} abusivo(s)` : (nElevado > 0 ? `${nElevado} elevado(s)` : 'OK');
 
+    const tipPartes = ['Comparação com o que uma pessoa normal gasta por mês.'];
+    if (d.comparacao_cidada_resumo) tipPartes.push(d.comparacao_cidada_resumo);
+    const infoTipResumoCidadao = renderInfoTip(tipPartes.join(' '));
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(255,59,92,0.15);">&#128101;</span>
-          Gastos vs Cidadão Comum
+          Gastos vs Cidadão Comum${infoTipResumoCidadao}
         </div>
         <span class="badge badge-${badgeClass}">${badgeText}</span>
-      </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Comparação com o que uma pessoa normal gasta por mês</div>`;
-
-    if (d.comparacao_cidada_resumo) {
-      html += `<div class="cidadao-resumo">${d.comparacao_cidada_resumo}</div>`;
-    }
+      </div>`;
 
     // Ordenar: abusivos primeiro, depois elevados, depois normais
     const ordem = {abusivo: 0, elevado: 1, normal: 2};
@@ -2982,6 +3033,7 @@ function renderPerfil(d) {
       : v.status === 'atencao'
         ? `nossa soma diverge em ${v.divergencia_pct}% do oficial`
         : `nossa soma deu muito diferente do oficial (${v.divergencia_pct}%)`;
+    const infoTipDescricao = renderInfoTip('Comparamos o total oficial do TSE com a soma das doações que carregamos no nosso banco. Não é um sinal sobre o político — é controle de qualidade dos nossos dados.');
     let infoTipTse = '';
     if (v.status !== 'ok') {
       const linkTse = `<a href="https://divulgacandcontas.tse.jus.br/" target="_blank" rel="noopener">portal de prestação de contas TSE</a>`;
@@ -2991,11 +3043,10 @@ function renderPerfil(d) {
       infoTipTse = renderInfoTip(msgDivergencia);
     }
     html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:20px;">${icone}</span>
-        <div style="font-weight:700; font-size:14px;">Conferência interna: ${txtStatus}${infoTipTse}</div>
+        <div style="font-weight:700; font-size:14px;">Conferência interna: ${txtStatus}${infoTipDescricao}${infoTipTse}</div>
       </div>
-      <div style="font-size:11px; color:var(--text-muted); margin-bottom:10px; padding-left:30px;">Comparamos o total oficial do TSE com a soma das doações que carregamos no nosso banco. Não é um sinal sobre o político — é controle de qualidade dos nossos dados.</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
           <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Valor oficial (TSE ${v.ano_eleicao})</div>
@@ -3037,6 +3088,7 @@ function renderPerfil(d) {
       : c.direcao === 'despesas_excedem'
         ? `gastou ${deltaFmt} a mais do que arrecadou (${c.divergencia_pct}%)`
         : `sobrou ${deltaFmt} que não foi gasto (${c.divergencia_pct}%)`;
+    const infoTipDescricaoContas = renderInfoTip('Quanto entrou na campanha (doações + recursos próprios) versus quanto foi efetivamente gasto, segundo a prestação de contas oficial ao TSE.');
     let infoTipContas = '';
     if (c.status !== 'ok') {
       const msg = c.direcao === 'despesas_excedem'
@@ -3045,11 +3097,10 @@ function renderPerfil(d) {
       infoTipContas = renderInfoTip(msg);
     }
     html += `<div class="section fade-in" style="background:${corFundo}; border-left:3px solid ${corBorda};">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
         <span style="font-size:20px;">${icone}</span>
-        <div style="font-weight:700; font-size:14px;">Campanha de ${c.ano_eleicao}: ${txtStatus}${infoTipContas}</div>
+        <div style="font-weight:700; font-size:14px;">Campanha de ${c.ano_eleicao}: ${txtStatus}${infoTipDescricaoContas}${infoTipContas}</div>
       </div>
-      <div style="font-size:11px; color:var(--text-muted); margin-bottom:10px; padding-left:30px;">Quanto entrou na campanha (doações + recursos próprios) versus quanto foi efetivamente gasto, segundo a prestação de contas oficial ao TSE.</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div style="padding:10px; background:var(--bg-card); border-radius:6px;">
           <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Quanto entrou na campanha</div>

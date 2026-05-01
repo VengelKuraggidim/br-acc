@@ -28,6 +28,7 @@ from bracc.services.traducao_service import (
 if TYPE_CHECKING:
     from bracc.models.perfil import (
         BensDeclarados,
+        CarreiraPolitica,
         DoadorEmpresa,
         Emenda,
         RedFlagsSummary,
@@ -65,6 +66,26 @@ PATRIMONIO_LIMITES_POR_CARGO: dict[str, float] = {
 }
 
 PATRIMONIO_ABSURDO = 50_000_000  # Acima: alerta info genérico
+
+# Limiar para flag informativa de "patrimonio elevado" quando nao casamos
+# o cargo (ou quando o valor passa o teto por cargo mas ainda esta abaixo
+# de PATRIMONIO_ABSURDO). Pega o caso "rico de berco / coronel com
+# fazendas" sem afirmar irregularidade — texto pede pra olhar evolucao.
+PATRIMONIO_ELEVADO = 10_000_000
+
+# Limiares pro alerta de carreira eleitoral longa.
+#
+# ``CARREIRA_LONGA_ANOS``: 16 anos = 4 ciclos eleitorais consecutivos.
+# Acima disso, "presente em eleicao" virou padrao estavel.
+# ``CARREIRA_MUITO_LONGA_ANOS``: 24 anos = 6 ciclos. Politico que aparece
+# em urna ha mais de 2 decadas. Sinal de "casta politica" classica em GO
+# (coroneis, dinastias municipais).
+# ``CARREIRA_MUITAS_CANDIDATURAS``: 5+ candidaturas distintas e o piso pra
+# alerta isolado quando a janela de anos nao bate o limiar (ex: pessoa
+# muito ativa em eleicoes proximas).
+CARREIRA_LONGA_ANOS = 16
+CARREIRA_MUITO_LONGA_ANOS = 24
+CARREIRA_MUITAS_CANDIDATURAS = 5
 
 
 # Cotas CEAP mensais por UF (R$). Fonte: Câmara dos Deputados, atualizado 2026.
@@ -107,7 +128,22 @@ def analisar_patrimonio(
         return {
             "tipo": "info",
             "icone": "patrimonio",
-            "texto": f"Patrimonio declarado muito alto: {fmt_brl(patrimonio)}",
+            "texto": (
+                f"Patrimonio declarado muito alto: {fmt_brl(patrimonio)}. "
+                "Vale conferir a evolucao entre eleicoes — patrimonio alto "
+                "pre-existente nao e irregularidade, mas saltos durante o "
+                "mandato exigem explicacao."
+            ),
+        }
+    if patrimonio > PATRIMONIO_ELEVADO:
+        return {
+            "tipo": "info",
+            "icone": "patrimonio",
+            "texto": (
+                f"Patrimonio declarado elevado: {fmt_brl(patrimonio)}. "
+                "Por si so nao e irregularidade — o sinal investigavel e a "
+                "*variacao* entre eleicoes, nao o valor absoluto."
+            ),
         }
     return None
 
@@ -514,6 +550,71 @@ def analisar_variacao_patrimonial(
             ),
         })
     return alertas
+
+
+def analisar_carreira_longa(
+    carreira: CarreiraPolitica | None,
+) -> list[dict[str, str]]:
+    """Alerta de presenca eleitoral prolongada (proxy de "casta politica").
+
+    O TSE so registra candidatura, nao mandato exercido. Por isso o
+    alerta fala em *presenca em eleicoes* (nao "anos de mandato"). Em GO
+    o caso de uso e direto: identificar coroneis e dinastias que rodam
+    cargos ha decadas. Sinal isolado e fraco — pode ser candidato
+    perene que nunca elege —, mas combinado com patrimonio alto e
+    conexoes locais ajuda a contextualizar perfil.
+
+    Severidade:
+
+    * presenca >= 24 anos OU >= 5 candidaturas+ >= 16 anos -> ``atencao``
+    * presenca >= 16 anos                                 -> ``info``
+    * caso contrario                                      -> nao gera
+
+    Sem ``grave`` aqui — TSE so cobre candidatura, e estar muito tempo na
+    politica nao e crime. O texto convida a investigar, nao acusa.
+    """
+    if carreira is None or carreira.num_candidaturas == 0:
+        return []
+    anos = carreira.anos_carreira
+    num = carreira.num_candidaturas
+    primeira = carreira.primeira_eleicao
+    ultima = carreira.ultima_eleicao
+    if anos < CARREIRA_LONGA_ANOS:
+        return []
+
+    janela = (
+        f"entre {primeira} e {ultima}"
+        if primeira and ultima and primeira != ultima
+        else f"em {primeira}"
+    )
+    if anos >= CARREIRA_MUITO_LONGA_ANOS:
+        tipo = "atencao"
+        prefixo = (
+            f"Presenca eleitoral muito longa: {num} candidatura(s) {janela} "
+            f"({anos} anos)"
+        )
+    elif num >= CARREIRA_MUITAS_CANDIDATURAS:
+        tipo = "atencao"
+        prefixo = (
+            f"Carreira eleitoral consolidada: {num} candidatura(s) {janela} "
+            f"({anos} anos)"
+        )
+    else:
+        tipo = "info"
+        prefixo = (
+            f"Presenca eleitoral longa: {num} candidatura(s) {janela} "
+            f"({anos} anos)"
+        )
+
+    return [{
+        "tipo": tipo,
+        "icone": "carreira",
+        "texto": (
+            f"{prefixo} — vale olhar evolucao patrimonial e conexoes locais "
+            "no mesmo periodo. TSE so registra candidatura, nao mandato "
+            "exercido."
+        ),
+    }]
 
 
 def analisar_cnpj_baixados(

@@ -14,6 +14,7 @@ removed once the PWA is updated to call ``/api/v1`` directly.
 """
 
 import re
+import unicodedata
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -75,6 +76,54 @@ _CLUSTER_RANK = {
 
 def _cluster_rank(labels: list[str]) -> int:
     return min((_CLUSTER_RANK.get(lbl, 4) for lbl in labels), default=4)
+
+
+_PERSON_DEDUP_TYPES = {
+    "person",
+    "federal_legislator", "federallegislator",
+    "state_legislator", "statelegislator",
+    "senator",
+    "go_vereador", "govereador",
+}
+
+_DIGITS_RE = re.compile(r"\D")
+
+
+def _normalize_name(nome: str) -> str:
+    """Uppercase + sem acentos + collapsa espacos."""
+    if not nome:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", nome)
+    sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return " ".join(sem_acento.upper().split())
+
+
+def _person_cpf(item: dict[str, Any]) -> str:
+    """CPF normalizado (so digitos, 11 chars) ou ''."""
+    props = item.get("properties") or {}
+    cpf_raw = item.get("document") or props.get("cpf") or ""
+    cpf = _DIGITS_RE.sub("", str(cpf_raw))
+    return cpf if len(cpf) == 11 else ""
+
+
+def _person_group_key(item: dict[str, Any]) -> tuple[str, str] | None:
+    """Chave grossa de agrupamento: nome normalizado + UF.
+
+    Subdivisao por CPF acontece depois — dentro do grupo, rows com CPFs
+    diferentes sao tratadas como pessoas distintas, mas rows sem CPF
+    fundem com o cluster do unico CPF presente (caso Karlos: Person com
+    CPF + Person sem CPF, mesmo nome+UF → mesma pessoa).
+    Retorna None pra rows que nao devem dedupar (companies, contracts).
+    """
+    tipo = str(item.get("type") or "").lower()
+    if tipo not in _PERSON_DEDUP_TYPES:
+        return None
+    props = item.get("properties") or {}
+    nome = _normalize_name(str(item.get("name") or ""))
+    uf = str(props.get("uf") or "").upper()
+    if not nome or not uf:
+        return None
+    return (nome, uf)
 
 
 def _to_lucene_query(query: str) -> str:
@@ -429,10 +478,116 @@ async def pwa_buscar_tudo(
             by_cluster[canonical] = r
     deduped.extend(by_cluster.values())
 
+    # Fase 3 de dedup: colapsa pessoa-fisica que ficou em mais de um no
+    # do grafo apesar de ER nao ter unificado. Tres mecanismos:
+    # (a) Mesmo CPF puro (mesmo se nomes divergem — ex: "KARLOS CABRAL"
+    #     StateLeg + "KARLOS MARCIO VIEIRA CABRAL" Person — ambos com
+    #     CPF 831.869.051-68 sao a mesma pessoa).
+    # (b) Mesmo nome+UF (Person+Person sem CPF ou com CPF unico).
+    # (c) Subgrupo dentro de (b) por CPF: homonimos com CPFs distintos
+    #     ficam separados.
+    # NAO cobre nomes diferentes SEM CPF compartilhado — caso assim
+    # precisa de fix no entity resolution upstream.
+
+    def _latest_cargo_year(row: dict[str, Any]) -> int:
+        props = row.get("properties") or {}
+        anos = [
+            int(k.rsplit("_", 1)[1])
+            for k in props
+            if k.startswith("cargo_tse_") and props.get(k) and k.rsplit("_", 1)[1].isdigit()
+        ]
+        return max(anos) if anos else 0
+
+    def _rank(row: dict[str, Any]) -> tuple[int, int, int, float, str]:
+        # Vencedor preferido: cargo mais recente (TSE eleicao mais nova) >
+        # tem CPF (perfil mais rico no grafo) > label mais oficial >
+        # maior score > id menor. Priorizar ano cobre o pedido da usuaria
+        # de "deixar apenas o perfil mais recente" (ex: Prefeito 2024 ganha
+        # de Deputado 2022 mesmo se a row Deputado tiver CPF).
+        has_cpf = 0 if _person_cpf(row) else 1
+        return (
+            -_latest_cargo_year(row),
+            has_cpf,
+            _cluster_rank(row.get("labels") or []),
+            -float(row.get("score") or 0.0),
+            str(row.get("id")),
+        )
+
+    def _merge_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        rows.sort(key=_rank)
+        winner = rows[0]
+        for loser in rows[1:]:
+            winner.setdefault("cargos_relacionados", [])
+            loser_format = _format_item(loser)
+            if loser_format is not None and loser_format.detalhe:
+                detalhe = loser_format.detalhe
+                if detalhe not in winner["cargos_relacionados"]:
+                    winner["cargos_relacionados"].append(detalhe)
+            for cargo in loser.get("cargos_relacionados") or []:
+                if cargo not in winner["cargos_relacionados"]:
+                    winner["cargos_relacionados"].append(cargo)
+        return winner
+
+    # (a) Pre-pass por CPF puro: rows com mesmo CPF colapsam mesmo
+    # quando o nome diverge (StateLeg "X" + Person "X Y Z W").
+    cpf_index: dict[str, list[dict[str, Any]]] = {}
+    sem_cpf: list[dict[str, Any]] = []
+    final_results: list[dict[str, Any]] = []
+    for r in deduped:
+        if _person_group_key(r) is None:
+            final_results.append(r)
+            continue
+        cpf = _person_cpf(r)
+        if cpf:
+            cpf_index.setdefault(cpf, []).append(r)
+        else:
+            sem_cpf.append(r)
+
+    cpf_winners: list[dict[str, Any]] = []
+    for rows in cpf_index.values():
+        cpf_winners.append(_merge_group(rows))
+
+    # (b) Agrupamento por nome+UF dos vencedores de CPF + rows sem CPF.
+    person_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in (*cpf_winners, *sem_cpf):
+        key = _person_group_key(r)
+        if key is None:
+            final_results.append(r)
+            continue
+        person_groups.setdefault(key, []).append(r)
+
+    for rows in person_groups.values():
+        # Subgrupos por CPF: depois do pre-pass, rows com mesmo CPF ja
+        # foram colapsadas. Aqui rows com CPFs distintos sao homonimos
+        # reais — ficam separadas. Rows sem CPF se juntam ao unico
+        # cluster com CPF se houver exatamente um.
+        cpf_buckets: dict[str, list[dict[str, Any]]] = {}
+        no_cpf: list[dict[str, Any]] = []
+        for row in rows:
+            cpf = _person_cpf(row)
+            if cpf:
+                cpf_buckets.setdefault(cpf, []).append(row)
+            else:
+                no_cpf.append(row)
+        if len(cpf_buckets) == 1 and no_cpf:
+            (only_cpf,) = cpf_buckets.keys()
+            cpf_buckets[only_cpf].extend(no_cpf)
+        elif not cpf_buckets:
+            cpf_buckets[""] = no_cpf
+        elif no_cpf:
+            cpf_buckets["__none__"] = no_cpf
+
+        for bucket_rows in cpf_buckets.values():
+            if bucket_rows:
+                final_results.append(_merge_group(bucket_rows))
+
     items: list[BuscarTudoItem] = []
-    for r in sorted(deduped, key=lambda x: -x.get("score", 0)):
+    for r in sorted(final_results, key=lambda x: -x.get("score", 0)):
         item = _format_item(r)
         if item is not None:
+            cargos_extras = r.get("cargos_relacionados")
+            if cargos_extras:
+                item.cargos_relacionados = cargos_extras
             items.append(item)
 
     return BuscarTudoResponse(resultados=items, total=total, pagina=page)

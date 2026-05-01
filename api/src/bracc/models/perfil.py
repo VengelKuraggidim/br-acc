@@ -473,6 +473,46 @@ class BensDeclarados(BaseModel):
     resumo: str = ""
 
 
+class CandidaturaTSE(BaseModel):
+    """Uma candidatura registrada no TSE (eleicao + cargo + local).
+
+    Vem de ``(:Person)-[:CANDIDATO_EM]->(:Election)``. Nao indica se foi
+    eleita — a relacao no grafo e pura candidatura, nao mandato. Eleito ou
+    nao eleito requer cruzar com :FederalLegislator/:StateLegislator/
+    :Senator/:GoVereador, o que ainda nao tem cobertura historica completa
+    (so legislatura atual).
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    ano: int
+    cargo: str
+    uf: str
+    municipio: str | None = None
+
+
+class CarreiraPolitica(BaseModel):
+    """Resumo da presenca do politico em eleicoes (TSE).
+
+    Conta candidaturas distintas no cluster canonico — primeira/ultima
+    eleicao + total + intervalo (anos). NAO mede mandato exercido (TSE so
+    grava candidatura). Texto pro PWA fica em ``resumo`` quando ha pelo
+    menos 1 candidatura. ``anos_carreira`` e a diferenca em anos entre a
+    primeira e a ultima eleicao registradas — usado pelo alerta de
+    carreira longa.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    num_candidaturas: int
+    primeira_eleicao: int | None = None
+    ultima_eleicao: int | None = None
+    anos_carreira: int = 0
+    cargos_distintos: list[str] = []
+    candidaturas: list[CandidaturaTSE] = []
+    resumo: str = ""
+
+
 class PerfilPolitico(BaseModel):
     """Response principal do endpoint /politico/{entity_id} (22 campos top-level).
 
@@ -511,3 +551,4 @@ class PerfilPolitico(BaseModel):
     teto_gastos: TetoGastos | None = None
     red_flags_summary: RedFlagsSummary | None = None
     bens_declarados: BensDeclarados | None = None
+    carreira_politica: CarreiraPolitica | None = None

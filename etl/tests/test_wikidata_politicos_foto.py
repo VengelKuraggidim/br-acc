@@ -556,6 +556,41 @@ class TestLimitHonrado:
 
 
 # ---------------------------------------------------------------------------
+# Discovery priorizada por cargo — antes do fix de 2026-04-30 a query rodava
+# ORDER BY name e o batch=100 enchia com candidatos obscuros começando com
+# "A..." sem entrada Wikidata (matched=0/84). Agora ORDER BY priority,name
+# garante que governadores/senadores cheguem primeiro.
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoveryPriorizada:
+    def test_query_ordena_por_priority_antes_de_name(self) -> None:
+        """A discovery query deve ter ORDER BY priority,name na cauda."""
+        from bracc_etl.pipelines.wikidata_politicos_foto import _DISCOVERY_QUERY
+
+        assert "ORDER BY priority, name" in _DISCOVERY_QUERY
+
+    def test_query_atribui_priority_por_cargo_tse(self) -> None:
+        """Pra Person via CANDIDATO_EM, priority vem do CASE sobre e.cargo;
+        Federal/StateLegislator levam priority fixo (3/4)."""
+        from bracc_etl.pipelines.wikidata_politicos_foto import _DISCOVERY_QUERY
+
+        # Cargos majoritários presentes na query.
+        for cargo in (
+            "GOVERNADOR",
+            "SENADOR",
+            "DEPUTADO FEDERAL",
+            "DEPUTADO ESTADUAL",
+            "PREFEITO",
+            "VEREADOR",
+        ):
+            assert f"'{cargo}'" in _DISCOVERY_QUERY
+        # Federal/StateLegislator entram com priority literal.
+        assert "3 AS priority" in _DISCOVERY_QUERY
+        assert "4 AS priority" in _DISCOVERY_QUERY
+
+
+# ---------------------------------------------------------------------------
 # Etiqueta — User-Agent + throttle
 # ---------------------------------------------------------------------------
 

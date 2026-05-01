@@ -55,6 +55,7 @@ from bracc.models.perfil import (
     PoliticoResumo,
 )
 from bracc.services.alertas_service import (
+    analisar_carreira_longa,
     analisar_despesas_gabinete,
     analisar_despesas_vs_media,
     analisar_picos_mensais,
@@ -64,6 +65,9 @@ from bracc.services.alertas_service import (
     gerar_alertas_completos,
 )
 from bracc.services.bens_service import obter_bens_declarados
+from bracc.services.historico_eleitoral_service import (
+    obter_historico_eleitoral,
+)
 from bracc.services.analise_service import (
     analisar_despesas_vs_cidadao,
     gerar_resumo_politico,
@@ -746,6 +750,14 @@ async def obter_perfil(
     except Exception:  # noqa: BLE001 — degradacao silenciosa
         bens_declarados = None
 
+    # Historico eleitoral (TSE :Election + :CANDIDATO_EM cluster-walk).
+    # Mesmo padrao de fallback silencioso — sem candidaturas conhecidas
+    # o card simplesmente nao aparece no PWA.
+    try:
+        carreira_politica = await obter_historico_eleitoral(driver, entity_id)
+    except Exception:  # noqa: BLE001 — degradacao silenciosa
+        carreira_politica = None
+
     # Fonte de emendas: mescla as duas fontes disponíveis por id. A query
     # dedicada ``perfil_emendas_deputado`` enriquece com
     # ``beneficiario_cnpj``/``beneficiario_nome`` via OPTIONAL MATCH em
@@ -866,6 +878,11 @@ async def obter_perfil(
     if bens_declarados is not None:
         alertas.extend(analisar_variacao_patrimonial(bens_declarados))
 
+    # Alerta de carreira eleitoral longa (proxy de "casta politica" / coronel
+    # com decadas de presenca em urna). Sem carreira_politica -> lista vazia.
+    if carreira_politica is not None:
+        alertas.extend(analisar_carreira_longa(carreira_politica))
+
     uf_deputado = politico.uf
     if despesas_raw:
         alertas.extend(analisar_despesas_gabinete(despesas_raw, uf_deputado))
@@ -956,4 +973,5 @@ async def obter_perfil(
         teto_gastos=teto_gastos,
         red_flags_summary=red_flags_summary,
         bens_declarados=bens_declarados,
+        carreira_politica=carreira_politica,
     )

@@ -53,6 +53,7 @@ class BuscarTudoItem(BaseModel):
     is_pep: bool | None = None
     is_comissionado: bool | None = None
     foto_url: str | None = None
+    cargos_relacionados: list[str] | None = None
 
 
 class BuscarTudoResponse(BaseModel):
