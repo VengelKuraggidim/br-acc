@@ -158,18 +158,36 @@ def _classify_origem(raw: str) -> str:
     return _BUCKET_OUTROS
 
 
-def _donation_id(sq_candidato: str, year: int, cpf_cnpj: str, valor: str, seq: int) -> str:
+def _donation_id(
+    sq_candidato: str,
+    year: int,
+    cpf_cnpj: str,
+    valor: str,
+    donated_at: str,
+    seq: int,
+) -> str:
     """Deterministic id para ``:CampaignDonation`` — estável entre re-runs.
 
-    Inclui ``seq`` (índice na CSV row) pra diferenciar múltiplas doações
-    idênticas do mesmo doador pro mesmo candidato (TSE permite várias
-    linhas idênticas quando há parcelamento).
+    O ``seq`` é um contador **local** à chave de identidade da doação
+    (sq_candidato, doador, valor, donated_at) — só passa de 0 quando o
+    TSE realmente publica linhas idênticas (parcelamento). NÃO usar
+    índice global do iterator: o tamanho/ordem do CSV TSE muda entre
+    publicações (retificadoras), o que deslocaria o seq de toda doação
+    e quebraria a idempotência do MERGE :DOOU {donation_id} no Neo4j.
     """
-    payload = f"{sq_candidato}|{year}|{cpf_cnpj}|{valor}|{seq}"
+    payload = f"{sq_candidato}|{year}|{cpf_cnpj}|{valor}|{donated_at}|{seq}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
-def _expense_id(sq_candidato: str, year: int, cnpj_cpf: str, valor: str, seq: int) -> str:
+def _expense_id(
+    sq_candidato: str,
+    year: int,
+    cnpj_cpf: str,
+    valor: str,
+    seq: int,
+) -> str:
+    """Idem ``_donation_id`` — ``seq`` local à chave (sem ``DT_`` confiável
+    em ``despesas_pagas`` TSE 2022+, então a chave é só sq+fornecedor+valor)."""
     payload = f"exp|{sq_candidato}|{year}|{cnpj_cpf}|{valor}|{seq}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -429,6 +447,14 @@ class TsePrestacaoContasGoPipeline(Pipeline):
         # por CNPJ dentro do mesmo ano.
         by_committee_cnpj: dict[str, dict[str, Any]] = {}
 
+        # Contadores locais à chave de identidade de doação/despesa.
+        # Usado como ``seq`` na geração do donation_id/expense_id pra
+        # diferenciar parcelamentos reais (linhas TSE realmente idênticas)
+        # sem depender do índice global do iterator — que muda entre runs
+        # quando o TSE republica o ZIP com retificadoras.
+        donation_seq_counter: dict[tuple[str, str, str, str], int] = {}
+        expense_seq_counter: dict[tuple[str, str, str], int] = {}
+
         def _ensure(cpf_formatted: str, cpf_digits: str, nome: str, sq: str) -> dict[str, Any]:
             # Quando CPF vem mascarado (TSE 2024+), usamos sq_candidato
             # como chave do bucket. O dict by_cpf continua válido porque
@@ -566,7 +592,12 @@ class TsePrestacaoContasGoPipeline(Pipeline):
             # devolve "" quando ausente/inválida (Neo4j aceita string
             # vazia na rel).
             donated_at = parse_date((row.get("DT_RECEITA") or "").strip())
-            did = _donation_id(sq, year, doador_id or "anon", f"{valor:.2f}", idx)
+            valor_str = f"{valor:.2f}"
+            doador_key = doador_id or "anon"
+            seq_key = (sq, doador_key, valor_str, donated_at)
+            seq_local = donation_seq_counter.get(seq_key, 0)
+            donation_seq_counter[seq_key] = seq_local + 1
+            did = _donation_id(sq, year, doador_key, valor_str, donated_at, seq_local)
             donation_node = self.attach_provenance(
                 {
                     "donation_id": did,
@@ -756,7 +787,12 @@ class TsePrestacaoContasGoPipeline(Pipeline):
                     fornecedor_nome = fornecedor_info["fornecedor_nome"]
                     if not tipo_despesa:
                         tipo_despesa = fornecedor_info["tipo_despesa"]
-            eid = _expense_id(sq, year, fornecedor_digits or "sem_doc", f"{valor:.2f}", idx)
+            valor_str = f"{valor:.2f}"
+            fornecedor_key = fornecedor_digits or "sem_doc"
+            exp_seq_key = (sq, fornecedor_key, valor_str)
+            exp_seq_local = expense_seq_counter.get(exp_seq_key, 0)
+            expense_seq_counter[exp_seq_key] = exp_seq_local + 1
+            eid = _expense_id(sq, year, fornecedor_key, valor_str, exp_seq_local)
             expense_node = self.attach_provenance(
                 {
                     "expense_id": eid,

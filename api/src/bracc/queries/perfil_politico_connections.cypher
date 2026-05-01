@@ -213,6 +213,17 @@ WITH candidates,
          CASE WHEN c.rank < best.rank THEN c ELSE best END
      ) AS focal
 WITH focal.node AS p, [c IN candidates | c.node] AS siblings
+// União de props dos irmãos: campos TSE (total_tse_<ano>,
+// total_despesas_tse_<ano>, cargo_tse_<ano>, breakdown tse_<ano>_*) ficam
+// no :Person, mas o focal pode ser :StateLegislator/:FederalLegislator
+// sem esses campos. Sem o merge, validacao_tse/contas_campanha/teto
+// devolvem null mesmo quando o cluster tem o :Person TSE com os dados.
+// Focal sobrescreve no Python — preserva nome de gabinete, foto e party
+// do nó mais oficial.
+WITH p, siblings,
+     apoc.map.mergeList(
+         [sib IN siblings WHERE elementId(sib) <> elementId(p) | properties(sib)]
+     ) AS sibling_props
 // União de edges: busca em TODOS os nós-irmãos do cluster, não só no
 // focal. Sem isso, perfil do :FederalLegislator perde AUTOR_EMENDA/DOOU
 // carimbados no :Person TSE irmão.
@@ -228,14 +239,14 @@ WHERE NOT (t:User OR t:Investigation OR t:Annotation OR t:Tag)
 // ``politico_entity_id`` (=elementId do focal) — senão dropa a edge.
 // Semanticamente correto porque cluster canônico = mesma pessoa real.
 // Direção preservada: se sibling era source da rel, focal vira source.
-WITH p, siblings, r, t, sibling,
+WITH p, siblings, sibling_props, r, t, sibling,
      startNode(r) AS src,
      endNode(r) AS tgt,
      CASE WHEN startNode(r) = sibling THEN elementId(p) ELSE elementId(t) END
          AS source_id,
      CASE WHEN endNode(r) = sibling THEN elementId(p) ELSE elementId(t) END
          AS target_id
-WITH p,
+WITH p, sibling_props,
      // Deduplica por elementId da rel — evita que a mesma aresta
      // apareça duas vezes quando ambas as pontas caem no UNWIND
      // siblings (filtro `NOT t IN siblings` já previne o caso,
@@ -250,6 +261,8 @@ WITH p,
          target_labels: labels(t),
          target_props: properties(t)
      }) AS conexoes_raw
-WITH p, [c IN conexoes_raw WHERE c.rel_type IS NOT NULL | c] AS conexoes
+WITH p, sibling_props,
+     [c IN conexoes_raw WHERE c.rel_type IS NOT NULL | c] AS conexoes
 RETURN p {.*, element_id: elementId(p), labels: labels(p)} AS politico,
-       conexoes
+       conexoes,
+       sibling_props

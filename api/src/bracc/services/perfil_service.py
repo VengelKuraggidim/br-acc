@@ -597,6 +597,21 @@ async def obter_perfil(
 
     politico = _build_politico_resumo(politico_element_id, props)
 
+    # Props mergeadas (irmaos do cluster + focal) — usadas pelos services
+    # TSE (validacao, contas_campanha, teto) e alertas, que dependem de
+    # campos como ``total_tse_<ano>``, ``total_despesas_tse_<ano>`` e
+    # ``cargo_tse_<ano>``. Esses campos vivem no ``:Person`` do TSE, mas
+    # o focal pode ser ``:StateLegislator``/``:FederalLegislator``/
+    # ``:Senator`` sem eles. Focal sobrescreve no merge — preserva nome
+    # de gabinete, foto e party do nó oficial. Cabeçalho (``politico``,
+    # ``id_camara``, ``legislator_id`` etc.) continua usando ``props``
+    # do focal pra não vazar identidade de irmão.
+    sibling_props_raw: Any = record.get("sibling_props") or {}
+    sibling_props: dict[str, Any] = (
+        dict(sibling_props_raw) if isinstance(sibling_props_raw, dict) else {}
+    )
+    merged_props: dict[str, Any] = {**sibling_props, **props}
+
     # --- 2. Classificar conexões ---------------------------------------------
     raw_conexoes: list[dict[str, Any]] = list(record.get("conexoes") or [])
     conexoes_norm, entidades_conectadas = _adapt_connections(
@@ -609,7 +624,7 @@ async def obter_perfil(
     # Pra vereador TSE 2024 (Person sem cargo_tse_2022), o detector
     # promove pra 2024 e destrava as 200+ doações que ficavam invisíveis
     # com o filtro hardcoded.
-    ano_eleicao_doacao = _detectar_ano_eleitoral_recente(props)
+    ano_eleicao_doacao = _detectar_ano_eleitoral_recente(merged_props)
     resultado = classificar(
         conexoes_norm,
         entidades_conectadas,
@@ -669,7 +684,7 @@ async def obter_perfil(
     # que o perfil esta vazio. _build_aviso_despesas usa o flag pra
     # explicar que so Goiania tem feed integrado de cota municipal.
     cargo_tse_recente = (
-        str(props.get(f"cargo_tse_{ano_eleicao_doacao}") or "").upper()
+        str(merged_props.get(f"cargo_tse_{ano_eleicao_doacao}") or "").upper()
     )
     is_vereador_tse_outro_municipio = bool(
         not is_vereador_goiania
@@ -795,8 +810,8 @@ async def obter_perfil(
         num_familia=len(resultado.familia),
     )
 
-    validacao_tse = gerar_validacao_tse(props, total_doacoes)
-    contas_campanha = gerar_comparacao_contas(props, 2022)
+    validacao_tse = gerar_validacao_tse(merged_props, total_doacoes)
+    contas_campanha = gerar_comparacao_contas(merged_props, 2022)
 
     # Teto de gastos de campanha vs despesas declaradas (Resolução TSE
     # 23.607/2019 — MVP só cobre eleição 2022). ``total_despesas_tse_2022``
@@ -805,12 +820,16 @@ async def obter_perfil(
     # None (degradação silenciosa, seção omitida no PWA).
     # TODO: parametrizar o ano quando adicionarmos ``TETOS_2026``.
     teto_ano = 2022
-    total_despesas_tse_raw = props.get(f"total_despesas_tse_{teto_ano}") or 0.0
+    total_despesas_tse_raw = merged_props.get(f"total_despesas_tse_{teto_ano}") or 0.0
     try:
         total_despesas_tse = float(total_despesas_tse_raw)
     except (TypeError, ValueError):
         total_despesas_tse = 0.0
-    cargo_tse = props.get(f"cargo_tse_{teto_ano}") or props.get("role") or props.get("cargo")
+    cargo_tse = (
+        merged_props.get(f"cargo_tse_{teto_ano}")
+        or props.get("role")
+        or props.get("cargo")
+    )
     teto_gastos = calcular_teto(
         cargo=str(cargo_tse) if cargo_tse else None,
         uf=politico.uf,
@@ -819,7 +838,7 @@ async def obter_perfil(
     )
 
     # --- 6. Alertas (orquestração completa) ----------------------------------
-    entidade_para_alertas = _build_entidade_for_alertas(props)
+    entidade_para_alertas = _build_entidade_for_alertas(merged_props)
     emendas_raw_alertas = _emendas_to_raw_dicts(emendas)
     alertas = gerar_alertas_completos(
         entidade_para_alertas,
@@ -891,7 +910,7 @@ async def obter_perfil(
     # --- 7. Descrição de conexões + aviso de despesas ------------------------
     descricao_conexoes = _build_descricao_conexoes(resultado)
     municipio_vereador_props = (
-        str(props.get(f"municipio_tse_{ano_eleicao_doacao}") or "").strip()
+        str(merged_props.get(f"municipio_tse_{ano_eleicao_doacao}") or "").strip()
     )
     aviso_despesas = _build_aviso_despesas(
         despesas_gabinete,

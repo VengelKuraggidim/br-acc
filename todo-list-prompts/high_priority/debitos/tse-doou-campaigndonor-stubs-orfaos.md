@@ -20,20 +20,21 @@
 > **Bug 3 (`r.ano = NULL` em 1,65M rels)** fica em escopo separado em
 > `tse-doou-rels-sem-ano-backfill.md`.
 >
-> **⏳ Pendente (operacional, não code):** rodar o backfill contra o
-> Neo4j local — pré-requisito é Neo4j docker subir saudável (em
-> 2026-04-29 estava em restart loop, ortogonal a esse TODO). Sequência:
+> **✅ Backfill operacional rodado (2026-04-30).** Estado atual no Neo4j local:
+> - PJ: 0 stubs (já tinha sido migrado pra :Company antes / pipeline novo já merge correto)
+> - PF mascarado: 1.424 stubs, 12.193 rels, 1.424 doador_ids únicos (1:1, sem duplicatas pra agregar)
+> - Desconhecido: 274 stubs, 274 rels (caminho frio, fica como está por design)
 >
-> ```bash
-> # depois que neo4j ficar Up (healthy):
-> NEO4J_PASSWORD=changeme \
->   uv run --project etl python scripts/backfill_doou_campaign_donor_stubs.py --dry-run
-> # se a contagem bater com a tabela do diagnóstico, roda sem --dry-run
-> NEO4J_PASSWORD=changeme \
->   uv run --project etl python scripts/backfill_doou_campaign_donor_stubs.py
-> # validação: curl no /politico/<entityId-Amilton> e checar
-> # validacao_tse.status == "ok" no PWA.
-> ```
+> **Validação** — `/politico/4:da0ec56f-cb5d-454a-b730-78a989eacdb6:7089`
+> (Amilton):
+> - `total_doacoes` saiu de R$ 0 → **R$ 843.001,44** (classifier agora
+>   enxerga `:CampaignDonor` PF mascarado ✅).
+> - `validacao_tse.status` = `"divergente"` com `direcao: "excesso_ingestao"`.
+>   TSE declara R$ 421,5k mas grafo tem R$ 843k (contém :Company 2022 = R$ 222,9k
+>   que provavelmente é repasse partidário, e :CampaignDonor 2022 = R$ 620,1k).
+>   **Esse é outro bug**, ortogonal ao stub fix — agora vira escopo separado:
+>   ou o `total_declarado_tse` exclui repasse partidário do somatório, ou o
+>   loader duplica receita. Não cabe neste TODO; criar TODO novo.
 
 ## Sintoma
 

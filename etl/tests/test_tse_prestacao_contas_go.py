@@ -812,6 +812,59 @@ class TestTransform:
             assert d["source_snapshot_uri"].startswith(f"{_SOURCE_ID}/")
             assert d["source_url"].startswith("https://cdn.tse.jus.br")
 
+    def test_donation_id_stable_across_runs(
+        self,
+        archival_root: Path,  # noqa: ARG002
+        tmp_path: Path,
+    ) -> None:
+        """Regressão: ``donation_id`` tem que ser idêntico entre re-runs do
+        mesmo CSV. Antes do fix, o id usava o índice global do iterator de
+        receitas (``enumerate(self._receitas_raw)``) — qualquer mudança no
+        tamanho/ordem do CSV TSE entre runs (retificadora) deslocava o seq
+        de toda doação, gerando ids novos. O MERGE
+        ``MERGE (p)<-[r:DOOU {donation_id}]-(d)`` então criava rels
+        duplicadas em vez de upsert, dobrando o total ingerido (caso real:
+        Zeli Fritsche 2022, R$ 826.620 vs R$ 413.310 declarado).
+        """
+        def _make() -> TsePrestacaoContasGoPipeline:
+            transport = _build_transport()
+            return TsePrestacaoContasGoPipeline(
+                driver=MagicMock(),
+                data_dir=str(tmp_path),
+                http_client_factory=lambda: httpx.Client(
+                    transport=transport, follow_redirects=True,
+                ),
+                year=_YEAR,
+                uf="GO",
+            )
+
+        ids_run_a: list[str] = []
+        ids_run_b: list[str] = []
+        for sink in (ids_run_a, ids_run_b):
+            p = _make()
+            p.extract()
+            p.transform()
+            sink.extend(d["donation_id"] for d in p.donations)
+        assert ids_run_a == ids_run_b, (
+            "donation_id mudou entre runs — fórmula não é determinística"
+        )
+
+    def test_donation_id_distinguishes_real_duplicates(
+        self, pipeline: TsePrestacaoContasGoPipeline,
+    ) -> None:
+        """Quando o TSE publica duas linhas genuinamente idênticas (mesmo
+        candidato, doador, valor, data — caso de parcelamento), o ``seq``
+        local incrementa e gera ids distintos. Garantia complementar ao
+        teste de estabilidade: idempotência **não pode** colapsar
+        parcelamentos legítimos."""
+        pipeline.extract()
+        pipeline.transform()
+        ids = [d["donation_id"] for d in pipeline.donations]
+        assert len(ids) == len(set(ids)), (
+            "donation_id colidiu entre doações distintas — parcelamento "
+            "legítimo foi colapsado"
+        )
+
     def test_committees_produced(
         self, pipeline: TsePrestacaoContasGoPipeline,
     ) -> None:

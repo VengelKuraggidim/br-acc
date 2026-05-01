@@ -129,27 +129,63 @@ _ENTITY_JSON_CONTENT_TYPE = "application/json"
 # - :StateLegislator (alego) — todos sao GO por construção;
 # - :Person ligado a uma candidatura GO via TSE (politicos historicos).
 # A query filtra por nome não vazio, sem foto preexistente, deduplica.
-_DISCOVERY_QUERY = """
-CALL {
+#
+# Priorização de cargo (menor = mais alto):
+#   1: GOVERNADOR / VICE-GOVERNADOR
+#   2: SENADOR
+#   3: DEPUTADO FEDERAL
+#   4: DEPUTADO ESTADUAL
+#   5: PREFEITO
+#   6: VICE-PREFEITO
+#   7: VEREADOR
+#   9: outros / sem candidatura mapeada (suplentes, presidente, etc)
+#
+# Pra cada Person com múltiplas candidaturas, mantemos o cargo de mais
+# alto rank (min). FederalLegislator/StateLegislator entram com rank fixo
+# 3/4 — eles já têm cargo definido pelo label, não dependem de Election.
+# ORDER BY priority,name garante que o batch=100 capture os famosos
+# (ex-governadores, ex-senadores) antes dos vereadores obscuros — antes
+# do fix de 2026-04-30 a query rodava ORDER BY name e o batch enchia
+# com candidatos de letra "A" sem entrada Wikidata (matched=0/84).
+_CARGO_PRIORITY_CASE = """
+CASE e.cargo
+    WHEN 'GOVERNADOR' THEN 1
+    WHEN 'VICE-GOVERNADOR' THEN 1
+    WHEN 'SENADOR' THEN 2
+    WHEN 'DEPUTADO FEDERAL' THEN 3
+    WHEN 'DEPUTADO ESTADUAL' THEN 4
+    WHEN 'PREFEITO' THEN 5
+    WHEN 'VICE-PREFEITO' THEN 6
+    WHEN 'VEREADOR' THEN 7
+    ELSE 9
+END
+""".strip()
+
+_DISCOVERY_QUERY = f"""
+CALL {{
     MATCH (n:FederalLegislator)
     WHERE n.uf = 'GO'
       AND coalesce(n.name, '') <> ''
       AND coalesce(n.foto_url, '') = ''
-    RETURN n.name AS name, labels(n) AS labels, n.legislator_id AS key
+    RETURN n.name AS name, labels(n) AS labels, n.legislator_id AS key,
+           3 AS priority
 UNION
     MATCH (n:StateLegislator)
     WHERE coalesce(n.name, '') <> ''
       AND coalesce(n.foto_url, '') = ''
-    RETURN n.name AS name, labels(n) AS labels, n.legislator_id AS key
+    RETURN n.name AS name, labels(n) AS labels, n.legislator_id AS key,
+           4 AS priority
 UNION
-    MATCH (n:Person)-[:CANDIDATO_EM]->(:Election {uf: 'GO'})
+    MATCH (n:Person)-[:CANDIDATO_EM]->(e:Election {{uf: 'GO'}})
     WHERE coalesce(n.name, '') <> ''
       AND coalesce(n.foto_url, '') = ''
+    WITH n, min({_CARGO_PRIORITY_CASE}) AS priority
     RETURN n.name AS name, labels(n) AS labels,
-           coalesce(n.cpf, n.name) AS key
-}
-RETURN name, labels, key
-ORDER BY name
+           coalesce(n.cpf, n.name) AS key,
+           priority
+}}
+RETURN name, labels, key, priority
+ORDER BY priority, name
 LIMIT $batch_size
 """
 
