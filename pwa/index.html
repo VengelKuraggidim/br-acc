@@ -2792,6 +2792,124 @@ function renderPerfil(d) {
     </div>`;
   }
 
+  // Histórico de irregularidades — agrupa Sanções (CGU), Contas
+  // irregulares (TCE-GO), Impedidos (TCM-GO) e Embargos ambientais
+  // (IBAMA/SEMAD). O bloco inteiro só aparece se pelo menos 1 dos 4
+  // arrays vier preenchido. Cada card é independente — colapsável por
+  // <details> e mostra a lista em cards de conexão.
+  const sancoes = d.sancoes_detalhe || [];
+  const tceGo = d.tce_go_irregulares || [];
+  const tcmGo = d.tcm_go_impedidos || [];
+  const embargos = d.embargos_ambientais || [];
+  const temIrregularidade = sancoes.length || tceGo.length || tcmGo.length || embargos.length;
+  if (temIrregularidade) {
+    // Helper: ISO "YYYY-MM-DD" -> "DD/MM/YYYY". Strings que não casam
+    // voltam intactas — datas como "" simplesmente não renderizam linha.
+    const fmtData = s => {
+      if (!s) return '';
+      const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+    };
+    const fmtPeriodo = (ini, fim) => {
+      const a = fmtData(ini);
+      const b = fmtData(fim);
+      if (a && b) return `${a} – ${b}`;
+      return a || b || '';
+    };
+    // Trunca textos longos (CEIS muitas vezes traz um parágrafo inteiro
+    // de citação da lei). Mostra primeiros 240 char + "…" quando > 280.
+    const trunc = (s, n) => {
+      const t = String(s || '');
+      if (t.length <= n) return t;
+      return t.slice(0, n - 1).trimEnd() + '…';
+    };
+    html += `<div class="section fade-in" style="border-left:3px solid #dc2626;">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon" style="background:rgba(220,38,38,0.15);">&#9888;&#65039;</span>
+          Histórico de irregularidades
+        </div>
+        <span class="badge badge-danger">${sancoes.length + tceGo.length + tcmGo.length + embargos.length} registro(s)</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">
+        Agrega registros oficiais de sanções administrativas, contas julgadas irregulares e embargos ambientais ligados ao político ou ao cluster canônico.
+      </div>`;
+    if (sancoes.length) {
+      const itens = sancoes.map(s => {
+        const periodo = fmtPeriodo(s.data_inicio, s.data_fim);
+        return `<div class="conexao-card" style="flex-wrap:wrap;">
+          <div class="conexao-info">
+            <div class="conexao-nome">${s.tipo || 'Sanção'}${s.fonte && s.fonte !== s.tipo ? ` &middot; ${s.fonte}` : ''}</div>
+            <div class="conexao-rel">${trunc(s.motivo, 280) || '—'}</div>
+            ${periodo ? `<div class="conexao-rel" style="margin-top:2px;color:var(--text-muted);">Vigência: ${periodo}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      html += `<details class="collapsible" style="margin-bottom:8px;">
+        <summary><strong>${sancoes.length}</strong> sanção(ões) administrativa(s) (CGU CEIS/CNEP)</summary>
+        <div class="collapsible-body">${itens}</div>
+      </details>`;
+    }
+    if (tceGo.length) {
+      const itens = tceGo.map(c => {
+        const link = c.pdf_url || c.fonte_url;
+        const linkHtml = link ? `<a href="${link}" target="_blank" rel="noopener" style="color:var(--accent);">Ver decisão</a>` : '';
+        const julg = fmtData(c.julgamento);
+        return `<div class="conexao-card" style="flex-wrap:wrap;">
+          <div class="conexao-info">
+            <div class="conexao-nome">Processo ${c.processo || '—'}${c.ano ? ` (${c.ano})` : ''}</div>
+            <div class="conexao-rel">${trunc(c.cargo, 280) || '—'}</div>
+            ${julg ? `<div class="conexao-rel" style="margin-top:2px;color:var(--text-muted);">Julgamento: ${julg}</div>` : ''}
+            ${linkHtml ? `<div style="margin-top:4px;font-size:12px;">${linkHtml}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      html += `<details class="collapsible" style="margin-bottom:8px;">
+        <summary><strong>${tceGo.length}</strong> conta(s) julgada(s) irregular(es) pelo TCE-GO</summary>
+        <div class="collapsible-body">${itens}</div>
+      </details>`;
+    }
+    if (tcmGo.length) {
+      const itens = tcmGo.map(i => {
+        const periodo = fmtPeriodo(i.data_inicio, i.data_fim);
+        const link = i.fonte_url ? `<a href="${i.fonte_url}" target="_blank" rel="noopener" style="color:var(--accent);">Ver fonte</a>` : '';
+        return `<div class="conexao-card" style="flex-wrap:wrap;">
+          <div class="conexao-info">
+            <div class="conexao-nome">Processo ${i.processo || '—'}</div>
+            <div class="conexao-rel">${i.motivo || '—'}</div>
+            ${periodo ? `<div class="conexao-rel" style="margin-top:2px;color:var(--text-muted);">Período: ${periodo}</div>` : ''}
+            ${link ? `<div style="margin-top:4px;font-size:12px;">${link}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      html += `<details class="collapsible" style="margin-bottom:8px;">
+        <summary><strong>${tcmGo.length}</strong> impedimento(s) TCM-GO <span style="color:var(--text-muted);font-weight:normal;">(match por nome — verificar fonte)</span></summary>
+        <div class="collapsible-body">${itens}</div>
+      </details>`;
+    }
+    if (embargos.length) {
+      const itens = embargos.map(e => {
+        const data = fmtData(e.data);
+        const local = e.municipio ? `${e.municipio}/${e.uf || ''}` : (e.uf || '');
+        const area = (e.area_ha && e.area_ha > 0) ? `${e.area_ha.toLocaleString('pt-BR')} ha` : '';
+        const meta = [local, area, e.biome].filter(Boolean).join(' &middot; ');
+        return `<div class="conexao-card" style="flex-wrap:wrap;">
+          <div class="conexao-info">
+            <div class="conexao-nome">${e.fonte ? e.fonte.toUpperCase() : 'IBAMA'}${e.auto_infracao ? ` &middot; Auto ${e.auto_infracao}` : ''}</div>
+            <div class="conexao-rel">${trunc(e.infracao, 280) || '—'}</div>
+            ${meta ? `<div class="conexao-rel" style="margin-top:2px;color:var(--text-muted);">${meta}</div>` : ''}
+            ${data ? `<div class="conexao-rel" style="margin-top:2px;color:var(--text-muted);">Data: ${data}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      html += `<details class="collapsible" style="margin-bottom:8px;">
+        <summary><strong>${embargos.length}</strong> embargo(s) ambiental(is) (IBAMA/SEMAD)</summary>
+        <div class="collapsible-body">${itens}</div>
+      </details>`;
+    }
+    html += `</div>`;
+  }
+
   // Emendas
   if (d.emendas.length) {
     const fonteLabel = d.fonte_emendas === 'transparencia'

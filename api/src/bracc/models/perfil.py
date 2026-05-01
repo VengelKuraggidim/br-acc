@@ -513,6 +513,92 @@ class CarreiraPolitica(BaseModel):
     resumo: str = ""
 
 
+class SancaoCard(BaseModel):
+    """Sancao administrativa (CGU CEIS/CNEP/Expulsao) ligada ao politico.
+
+    Vem de ``(:Person)-[:SANCIONADA]->(:Sanction)``. Renderizada num card
+    proprio em "Historico de irregularidades" no PWA, em vez de virar uma
+    linha agregada nos alertas — o cidadao precisa ver tipo, motivo e
+    vigencia.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    sanction_id: str | None = None
+    tipo: str = ""
+    motivo: str = ""
+    fonte: str = ""
+    data_inicio: str = ""
+    data_fim: str = ""
+
+
+class TceGoIrregularCard(BaseModel):
+    """Conta julgada irregular pelo TCE-GO ligada ao politico.
+
+    Vem de ``(:Person)-[:IMPEDIDO_TCE_GO]->(:TceGoIrregularAccount)``.
+    Difere de ``:TceGoDecision`` (10k decisoes orfas, sem rel) — o no
+    relevante e ``:TceGoIrregularAccount`` que carrega ``julgamento``,
+    ``processo`` e ``pdf_url``.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    account_id: str
+    ano: str = ""  # Vem como string no grafo (ex.: "2014").
+    cargo: str = ""
+    processo: str = ""
+    julgamento: str = ""
+    motivo: str = ""
+    uf: str = ""
+    pdf_url: str = ""
+    fonte_url: str = ""
+
+
+class TcmGoImpedidoCard(BaseModel):
+    """Pessoa impedida de licitar pelo TCM-GO.
+
+    Match feito por nome exato (case-insensitive, normalizado): o
+    ``imp.document`` vem mascarado pela fonte upstream
+    (``76***.***-**``), entao CPF nao bate. Risco de falso positivo
+    em homonimos — ``fonte_url`` permite verificacao manual. Quando a
+    LAI 21021 (prazo 2026-05-18) responder com lista nominal completa,
+    apertar o match com CPF.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    impedido_id: str
+    processo: str = ""
+    motivo: str = ""
+    data_inicio: str = ""
+    data_fim: str = ""
+    fonte_url: str = ""
+
+
+class EmbargoCard(BaseModel):
+    """Embargo ambiental (IBAMA/SEMAD) ligado ao politico.
+
+    Vem de ``(:Person)-[:EMBARGADA]->(:Embargo)`` direto. O TODO original
+    sugeria 2-hop via empresas conectadas, mas no grafo local
+    Person→SOCIO_DE→Company→EMBARGADA→Embargo retorna 0 — o caminho
+    direto eh o que rende. Pode estender com UNION quando socios de
+    politico tiverem :EMBARGADA.
+    """
+
+    model_config = _PERFIL_MODEL_CONFIG
+
+    embargo_id: str
+    infracao: str = ""
+    auto_infracao: str = ""
+    data: str = ""
+    municipio: str = ""
+    uf: str = ""
+    biome: str = ""
+    area_ha: float | None = None
+    processo: str = ""
+    fonte: str = ""
+
+
 class PerfilPolitico(BaseModel):
     """Response principal do endpoint /politico/{entity_id} (22 campos top-level).
 
@@ -552,3 +638,7 @@ class PerfilPolitico(BaseModel):
     red_flags_summary: RedFlagsSummary | None = None
     bens_declarados: BensDeclarados | None = None
     carreira_politica: CarreiraPolitica | None = None
+    sancoes_detalhe: list[SancaoCard] = []
+    tce_go_irregulares: list[TceGoIrregularCard] = []
+    tcm_go_impedidos: list[TcmGoImpedidoCard] = []
+    embargos_ambientais: list[EmbargoCard] = []

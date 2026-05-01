@@ -228,6 +228,58 @@ agora soma R$ 6.906.500 em 6 rels DOOU 2024 — antes do backfill, filtro
 `ano_doacao=2024` descartava todas. Card "Confere com TSE" do PWA passa
 a funcionar pra 2020/2024 além de 2022.
 
+Débito `09-perfil-sancoes-tce-embargos-cards.md` resolvido em 2026-05-01:
+4 queries Cypher (`perfil_sancoes`, `perfil_tce_go_irregulares`,
+`perfil_tcm_impedidos`, `perfil_embargos`), service unificado
+`irregularidades_service.py` (4 funções cluster-aware que retornam lista
+vazia silenciosamente quando sem registros), 4 models
+(`SancaoCard/TceGoIrregularCard/TcmGoImpedidoCard/EmbargoCard` em
+`api/src/bracc/models/perfil.py:516-606`), 4 campos novos no
+`PerfilPolitico`, plumbagem em `perfil_service.py:761-787,983-986`, e
+card único "Histórico de irregularidades" no PWA
+(`pwa/index.html:2795-2918`) com 4 sub-blocos colapsáveis. **Decisões
+de design vs. TODO original**: (1) o nó relevante pra "Decisões TCE-GO"
+é `:TceGoIrregularAccount` via `:IMPEDIDO_TCE_GO`, não `:TceGoDecision`
+(esse último são 10k decisões órfãs, sem rel com Person — provável
+backlog futuro); (2) `:TcmGoImpedido` casa por nome (case-insensitive,
+normalizado) porque `imp.document` vem mascarado pela fonte upstream
+(`76***.***-**`) — risco de falso positivo em homônimos, card expõe
+`fonte_url` pra verificação; (3) caminho 2-hop sugerido no TODO
+(`Person→SOCIO_DE→Company→EMBARGADA→Embargo`) retorna 0 no local —
+ficou só o caminho direto `(:Person)-[:EMBARGADA]->(:Embargo)` que tem
+84k rels; (4) simplificação dos alertas agregados (sanção/impedido) NÃO
+foi feita — alertas atuais têm escopo "qualquer conexão sancionada"
+enquanto os cards cobrem só o cluster do próprio político; semânticas
+não são equivalentes, simplificar regrediria informação. Smoke test
+2026-05-01 (3 políticos): Mauro de Souza Junior → 1 sanção CEIS;
+Alcides Rodrigues Filho → 2 embargos IBAMA Fazenda Santo Antônio (MT);
+Adelina da Cunha Araujo → 2 contas julgadas irregulares TCE-GO
+(processos 2005-2014); Adailton Vidal dos Santos → 1 impedimento
+TCM-GO (Balancete Semestral, processo 2414/23-2). 27 testes unit
+`test_perfil_service.py` passando. Validação UI no browser fica pendente
+da usuária. Container `fiscal-bracc-api` precisou ser rebuilt+rerun
+manualmente (memory `project_ceap_federal_ingerido` confirma que é
+built image, não bind-mount); criado na rede `br-acc_default` porque o
+`fiscal-neo4j` é do compose `br-acc` (legado da renomeação do
+projeto).
+
+Débito `08-perfil-historico-eleitoral.md` resolvido em 2026-04-30 (commit
+`66f0076` "v157 - Dados politicos"): query
+`perfil_historico_eleitoral.cypher` (cluster-walk via :CanonicalPerson →
+:CANDIDATO_EM → :Election), service `historico_eleitoral_service.py`
+(monta `CarreiraPolitica` com num_candidaturas, primeira/última eleição,
+anos_carreira, cargos_distintos, lista de candidaturas e resumo
+narrativo), models `CandidaturaTSE` + `CarreiraPolitica`
+(`api/src/bracc/models/perfil.py:476-512`) e card "Carreira política
+(TSE)" no PWA (`pwa/index.html:2746-2793`). **Divergência intencional vs.
+TODO original**: não exibe "Eleito ✓ / Não eleito" porque 443k de 517k
+rels `:CANDIDATO_EM` têm `r.situacao=NULL` no grafo local — afirmar
+resultado seria errado pra maioria. Tooltip do card explica: "TSE
+registra candidatura, não mandato exercido — eleito ou não eleito requer
+cruzamento separado." Smoke test 2026-05-01: Vanderlan Vieira Cardoso
+retorna 2 candidaturas (Prefeito Goiânia/GO 2024 e 2020), 4 anos de
+carreira. Validação UI no browser fica pendente da usuária.
+
 Débito `aura-prod-source-id-migracao.md` resolvido em 2026-04-22: dry-run
 mostrou zero resíduos de `portal_transparencia` / `tribunal_superior_eleitoral`
 no Aura prod (IngestionRun, nodes e rels). Slugs canônicos

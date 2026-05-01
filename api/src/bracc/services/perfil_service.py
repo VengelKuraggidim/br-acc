@@ -68,6 +68,12 @@ from bracc.services.bens_service import obter_bens_declarados
 from bracc.services.historico_eleitoral_service import (
     obter_historico_eleitoral,
 )
+from bracc.services.irregularidades_service import (
+    obter_embargos,
+    obter_sancoes,
+    obter_tce_go_irregulares,
+    obter_tcm_go_impedidos,
+)
 from bracc.services.analise_service import (
     analisar_despesas_vs_cidadao,
     gerar_resumo_politico,
@@ -758,6 +764,27 @@ async def obter_perfil(
     except Exception:  # noqa: BLE001 — degradacao silenciosa
         carreira_politica = None
 
+    # Cards de irregularidades (Sancao/TCE-GO/TCM/Embargo) — TODO 09 do
+    # high_priority/variados. Cada lookup e cluster-aware igual aos
+    # acima. Falha silenciosa: lista vazia se a query der erro ou nao
+    # houver registro, e o PWA omite o card.
+    try:
+        sancoes_detalhe = await obter_sancoes(driver, entity_id)
+    except Exception:  # noqa: BLE001
+        sancoes_detalhe = []
+    try:
+        tce_go_irregulares = await obter_tce_go_irregulares(driver, entity_id)
+    except Exception:  # noqa: BLE001
+        tce_go_irregulares = []
+    try:
+        tcm_go_impedidos = await obter_tcm_go_impedidos(driver, entity_id)
+    except Exception:  # noqa: BLE001
+        tcm_go_impedidos = []
+    try:
+        embargos_ambientais = await obter_embargos(driver, entity_id)
+    except Exception:  # noqa: BLE001
+        embargos_ambientais = []
+
     # Fonte de emendas: mescla as duas fontes disponíveis por id. A query
     # dedicada ``perfil_emendas_deputado`` enriquece com
     # ``beneficiario_cnpj``/``beneficiario_nome`` via OPTIONAL MATCH em
@@ -974,4 +1001,8 @@ async def obter_perfil(
         red_flags_summary=red_flags_summary,
         bens_declarados=bens_declarados,
         carreira_politica=carreira_politica,
+        sancoes_detalhe=sancoes_detalhe,
+        tce_go_irregulares=tce_go_irregulares,
+        tcm_go_impedidos=tcm_go_impedidos,
+        embargos_ambientais=embargos_ambientais,
     )
