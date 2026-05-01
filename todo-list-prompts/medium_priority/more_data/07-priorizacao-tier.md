@@ -217,6 +217,17 @@ doadores pessoa + 2 empresa, R$ 605k em 2022). Follow-up
 2026-04-24 (commit `0c28ce5`): filtro agora descarta `ano IS NULL`
 ativamente — falha rápido se pipeline futuro esquecer de carimbar.
 
+Réplica do mesmo débito no Neo4j **local** resolvida em 2026-04-30 (TODO
+`tse-doou-rels-sem-ano-backfill.md`): 1.654.900 rels `:DOOU` com
+`ano IS NULL` (year=2022: 536.568; year=2024: 1.118.332) — vinham de runs
+do `tse.py` antes do fix `7aca93b`. Mesmo backfill `SET r.ano = r.year`
+via `apoc.periodic.iterate` (34 batches × 50k, 0 falhas). Distribuição
+final no local: ano=2024 → 1.169.638; ano=2022 → 548.583; ano=2020 →
+63.692; NULL → 0. Smoke test: Vanderlan Vieira Cardoso (Prefeito 2024)
+agora soma R$ 6.906.500 em 6 rels DOOU 2024 — antes do backfill, filtro
+`ano_doacao=2024` descartava todas. Card "Confere com TSE" do PWA passa
+a funcionar pra 2020/2024 além de 2022.
+
 Débito `aura-prod-source-id-migracao.md` resolvido em 2026-04-22: dry-run
 mostrou zero resíduos de `portal_transparencia` / `tribunal_superior_eleitoral`
 no Aura prod (IngestionRun, nodes e rels). Slugs canônicos

@@ -17,8 +17,10 @@
 >   `:CampaignDonor` PJ pra `:Company {cnpj}`, agrega PF mascarado por
 >   `doador_id`, deixa anônimos como estão. Idempotente, requer APOC.
 >
-> **Bug 3 (`r.ano = NULL` em 1,65M rels)** fica em escopo separado em
-> `tse-doou-rels-sem-ano-backfill.md`.
+> **Bug 3 (`r.ano = NULL` em 1,65M rels)** ✅ resolvido em 2026-04-30 via
+> backfill Cypher `SET r.ano = r.year` (apoc.periodic.iterate, 34 batches,
+> 0 falhas). Distribuição final: 2024 = 1.169.638; 2022 = 548.583;
+> 2020 = 63.692; NULL = 0. Card "Confere com TSE" passa a cobrir 2020/2024.
 >
 > **✅ Backfill operacional rodado (2026-04-30).** Estado atual no Neo4j local:
 > - PJ: 0 stubs (já tinha sido migrado pra :Company antes / pipeline novo já merge correto)

@@ -1216,11 +1216,11 @@ def analisar_socio_beneficiario(
             "tipo": "grave",
             "icone": "empresa",
             "texto": (
-                f"Parlamentar consta como socio(a) em {nome} e a empresa "
-                f"recebeu {fmt_brl(valor_emendas)} em emenda(s) proposta(s) "
-                "pelo proprio parlamentar — cruzamento aparente de papeis "
-                "via :SOCIO_DE no grafo; vale conferir objeto do convenio, "
-                "processo licitatorio e execucao"
+                f"Parlamentar e socio(a) em {nome} — empresa recebeu "
+                f"{fmt_brl(valor_emendas)} em emenda(s) proposta(s) pelo "
+                "proprio parlamentar (conflito de interesse direto via "
+                ":SOCIO_DE no grafo); padrao classico de enriquecimento "
+                "ilicito, exige verificacao imediata"
             ),
         })
     return alertas
@@ -1232,19 +1232,19 @@ def analisar_doador_beneficiario(
 ) -> list[dict[str, str]]:
     """Alerta grave: empresa que doou pra campanha virou beneficiária de emenda.
 
-    Cruza dois papéis no mesmo CNPJ: a empresa financiou a campanha do
-    parlamentar (doador registrado no TSE) e o mesmo parlamentar propôs
-    emenda que acabou beneficiando-a (relação
-    ``(:Amendment)-[:BENEFICIOU]->(:Company)`` no grafo).
+    Este é o red flag clássico de troca de favor eleitoral. A empresa
+    financiou a campanha do parlamentar (doador registrado no TSE) e o
+    mesmo parlamentar propôs emenda que acabou beneficiando-a
+    (relação ``(:Amendment)-[:BENEFICIOU]->(:Company)`` no grafo).
 
     Comparação é feita por CNPJ normalizado (só dígitos) pra robustez
     entre pipelines TSE (doações) e Transferegov (beneficiários de
     emenda) que podem carimbar o documento em formatos diferentes.
 
-    Aparecer aqui não é irregularidade por si — a lei permite doação e
-    emenda. Mas a correlação é um sinal forte o bastante pra valer uma
-    olhada no objeto do convênio, no processo licitatório e na execução
-    da obra/serviço. Por isso severidade ``grave``.
+    Aparecer aqui não é prova de crime — a lei permite doação e emenda.
+    Mas a correlação é um sinal forte o bastante pra valer uma olhada
+    no objeto do convênio, no processo licitatório e na execução da
+    obra/serviço. Por isso severidade ``grave``.
     """
     if not emendas:
         return []
@@ -1282,8 +1282,8 @@ def analisar_doador_beneficiario(
                 f"{nome} doou {doador.valor_total_fmt} para a campanha e "
                 f"recebeu {fmt_brl(valor_emendas)} em emenda(s) proposta(s) "
                 "pelo parlamentar — cruzamento TSE (doacoes) x Transferegov "
-                "(beneficiarios) mostra a empresa nos dois papeis; vale "
-                "conferir objeto do convenio e processo licitatorio"
+                "(beneficiarios) sugere possivel troca de favor; vale "
+                "investigar objeto do convenio e processo licitatorio"
             ),
         })
     return alertas
