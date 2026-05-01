@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         BensDeclarados,
         CarreiraPolitica,
         DoadorEmpresa,
+        DoadorPessoa,
         Emenda,
         RedFlagsSummary,
         SocioConectado,
@@ -49,8 +50,8 @@ class _PerfilComEmpresas(Protocol):
     doadores_empresa: list[DoadorEmpresa]
     socios: list[SocioConectado]
 
-# Situações RFB não-operacionais levantam alerta grave em doadores/sócios.
-# Constantes canônicas centralizadas em `rfb_status`.
+# Situações RFB não-operacionais levantam alerta de atenção em
+# doadores/sócios. Constantes canônicas centralizadas em `rfb_status`.
 from bracc.services.rfb_status import SITUACOES_GRAVES as _SITUACOES_GRAVES  # noqa: E402
 
 # --- Constantes de análise ---------------------------------------------------
@@ -617,16 +618,141 @@ def analisar_carreira_longa(
     }]
 
 
+# Limiares do alerta "concentracao em doador unico".
+#
+# Uma campanha pode legalmente ser 100% financiada pelo partido (FEFC +
+# Fundo Partidario), mas concentracao em uma unica fonte revela
+# dependencia politica — candidato sem capilaridade propria, ou
+# direcao partidaria "comprando" o candidato. Sinal isolado nao prova
+# irregularidade, mas merece olhar.
+#
+# * ``CONCENTRACAO_DOADOR_PCT_MIN``: 70% do total da campanha em uma
+#   unica fonte. Abaixo disso ainda existe diversificacao minima.
+# * ``CONCENTRACAO_DOADOR_VALOR_MIN``: R$ 500k de campanha total — abaixo
+#   disso o alerta vira ruido (vereador rural com R$ 30k tipicamente
+#   tem 1-2 doadores e isso e normal).
+# * ``CONCENTRACAO_DOADOR_PCT_GRAVE``: 90% e o piso pra "praticamente
+#   uma fonte unica" — assina dependencia quase total.
+CONCENTRACAO_DOADOR_PCT_MIN = 0.70
+CONCENTRACAO_DOADOR_PCT_GRAVE = 0.90
+CONCENTRACAO_DOADOR_VALOR_MIN = 500_000.0
+
+
+_CNAE_PARTIDO_COMITE = "9492-8/00"
+_TIPO_COMITE_CAMPANHA = "comite_campanha"
+
+
+def _eh_partido_ou_comite(doador: DoadorEmpresa) -> bool:
+    """Identifica CNPJ de partido/comitê pra excluir do alerta de baixadas.
+
+    CNPJ de comitê de campanha é temporário: a Receita Federal baixa o
+    cadastro depois da eleição como ciclo de vida normal — não é sinal
+    de irregularidade. CNAE 9492-8/00 ("Atividades de organizações
+    políticas") é compartilhado por partidos e comitês; ``tipo_entidade``
+    é carimbado pelo pipeline ``tse_prestacao_contas_go``. Espelha a
+    classificação que o PWA faz em ``_classificarCNPJDoador``.
+    """
+    if getattr(doador, "tipo_entidade", None) == _TIPO_COMITE_CAMPANHA:
+        return True
+    if getattr(doador, "cnae_principal", None) == _CNAE_PARTIDO_COMITE:
+        return True
+    return False
+
+
+def analisar_concentracao_doador(
+    perfil: _PerfilComEmpresas,
+) -> list[dict[str, str]]:
+    """Alerta: parcela dominante da campanha veio de uma unica fonte.
+
+    Soma todas as doacoes (PJ + PF) e verifica se o maior doador
+    individual responde por >= 70% do total. Comites de campanha sao
+    tratados como o partido associado (mesma fonte politica), entao
+    nao "diluem" a concentracao.
+
+    Severidade:
+
+    * top doador >= 90% do total -> ``atencao`` (texto mais forte)
+    * top doador >= 70% do total -> ``atencao``
+    * total < R$ 500k             -> nao gera (campanha pequena, ruido)
+
+    Sinal isolado nao prova irregularidade — partido pode legalmente
+    bancar 100% da campanha via FEFC. Mas dependencia financeira total
+    de uma fonte unica e contexto investigavel: revela quem "comprou"
+    o candidato e a quem ele deve resposta no mandato. Por isso o texto
+    convida a olhar, sem acusar.
+    """
+    doadores_empresa: list[DoadorEmpresa] = (
+        getattr(perfil, "doadores_empresa", []) or []
+    )
+    doadores_pessoa: list[DoadorPessoa] = (
+        getattr(perfil, "doadores_pessoa", []) or []
+    )
+    if not doadores_empresa and not doadores_pessoa:
+        return []
+
+    total_pj = sum(d.valor_total or 0.0 for d in doadores_empresa)
+    total_pf = sum(d.valor_total or 0.0 for d in doadores_pessoa)
+    total = total_pj + total_pf
+    if total < CONCENTRACAO_DOADOR_VALOR_MIN:
+        return []
+
+    top_nome: str | None = None
+    top_valor = 0.0
+    top_eh_partido = False
+    for dpj in doadores_empresa:
+        valor = dpj.valor_total or 0.0
+        if valor > top_valor:
+            top_valor = valor
+            top_nome = (dpj.nome or "").strip() or "Doador sem nome"
+            top_eh_partido = _eh_partido_ou_comite(dpj)
+    for dpf in doadores_pessoa:
+        valor = dpf.valor_total or 0.0
+        if valor > top_valor:
+            top_valor = valor
+            top_nome = (dpf.nome or "").strip() or "Doador sem nome"
+            top_eh_partido = False
+
+    if top_nome is None or total <= 0:
+        return []
+
+    pct = top_valor / total
+    if pct < CONCENTRACAO_DOADOR_PCT_MIN:
+        return []
+
+    rotulo_fonte = "partido/comite" if top_eh_partido else "doador"
+    if pct >= CONCENTRACAO_DOADOR_PCT_GRAVE:
+        prefixo = (
+            f"Quase toda a campanha ({pct * 100:.0f}%) foi financiada "
+            f"por um unico {rotulo_fonte}"
+        )
+    else:
+        prefixo = (
+            f"{pct * 100:.0f}% da campanha foi financiada por um unico "
+            f"{rotulo_fonte}"
+        )
+    return [{
+        "tipo": "atencao",
+        "icone": "doador",
+        "texto": (
+            f"{prefixo}: {top_nome} ({fmt_brl(top_valor)} de "
+            f"{fmt_brl(total)} total) — fonte unica nao e ilegal "
+            "(partido pode bancar 100% via FEFC), mas revela "
+            "dependencia politica direta; vale olhar a quem o "
+            "mandato responde"
+        ),
+    }]
+
+
 def analisar_cnpj_baixados(
     perfil: _PerfilComEmpresas,
 ) -> list[dict[str, str]]:
-    """Alerta grave: empresas doadoras ou sócias com situação não-operacional.
+    """Alerta de atenção: empresas doadoras/sócias com cadastro não-operacional.
 
     Conta CNPJs em ``perfil.doadores_empresa`` e ``perfil.socios`` cuja
     ``situacao`` está em ``_SITUACOES_GRAVES`` (BAIXADA / SUSPENSA /
-    INAPTA). Uma única ocorrência já dispara alerta ``grave`` — esses
-    são sinais clássicos de laranja / caixa 2 / fraude documental que o
-    investigador precisa ver no topo do perfil.
+    INAPTA). Partidos e comitês de campanha são excluídos — CNPJ de
+    comitê é temporário e fica baixado depois da eleição por padrão,
+    então somar isso geraria ruído sobre vida normal do cadastro.
 
     Empresas ``ATIVA``, ``NULA`` ou sem ``situacao`` (ainda não
     verificadas pelo pipeline ``brasilapi_cnpj_status``) não geram
@@ -644,6 +770,7 @@ def analisar_cnpj_baixados(
     doadores_baixados: list[DoadorEmpresa] = [
         d for d in doadores_empresa_raw
         if getattr(d, "situacao", None) in _SITUACOES_GRAVES
+        and not _eh_partido_ou_comite(d)
     ]
     socios_baixados: list[SocioConectado] = [
         s for s in socios_raw
@@ -668,12 +795,13 @@ def analisar_cnpj_baixados(
         )
     descricao = " e ".join(partes)
     return [{
-        "tipo": "grave",
+        "tipo": "atencao",
         "icone": "empresa",
         "texto": (
-            f"{descricao} estao baixadas/suspensas/inaptas na Receita "
-            f"Federal — sinal de possivel laranja, caixa 2 ou fraude "
-            f"documental (total: {total})."
+            f"{descricao} consta(m) com cadastro nao-operacional na "
+            f"Receita Federal (baixada/suspensa/inapta) — vale conferir "
+            f"a situacao do CNPJ na data da doacao/sociedade (total: "
+            f"{total})."
         ),
     }]
 
@@ -813,10 +941,11 @@ def analisar_beneficiario_novo(
 ) -> list[dict[str, str]]:
     """Alerta: CNPJ recém-aberto (< 2 anos) recebendo emenda relevante.
 
-    ONGs/empresas criadas pouco antes de ganhar contrato público são um
-    sinal clássico de fachada/laranja — ainda mais quando o volume é
-    desproporcional à maturidade (empresa que mal teve tempo de
-    estruturar CNAE operacional recebendo meio milhão de reais).
+    ONGs/empresas criadas pouco antes de ganhar contrato público
+    merecem conferência de capacidade técnica e acervo — ainda mais
+    quando o volume é desproporcional à maturidade (empresa que mal
+    teve tempo de estruturar CNAE operacional recebendo meio milhão de
+    reais).
 
     Parâmetros
     ----------
@@ -1051,11 +1180,12 @@ def analisar_socio_beneficiario(
 ) -> list[dict[str, str]]:
     """Alerta grave: empresa em que o parlamentar é sócio recebeu emenda dele.
 
-    Esse é o conflito de interesse mais direto possível — o parlamentar
-    propôs uma emenda e o beneficiário é uma empresa que ele mesmo
-    co-possui (via ``:SOCIO_DE`` no grafo). Mesmo que legalmente não
-    configure crime per se, é o tipo de padrão que investigação de
-    enriquecimento ilícito rastreia. Severidade ``grave``.
+    Esse é um cruzamento direto de papéis — o parlamentar propôs uma
+    emenda e o beneficiário é uma empresa em que ele mesmo aparece como
+    sócio (via ``:SOCIO_DE`` no grafo). Não configura ilegalidade por
+    si, mas é um conflito de interesse aparente que merece olhar no
+    objeto do convênio, processo licitatório e execução. Severidade
+    ``grave`` pelo grau de aparência.
     """
     if not emendas:
         return []
@@ -1088,11 +1218,11 @@ def analisar_socio_beneficiario(
             "tipo": "grave",
             "icone": "empresa",
             "texto": (
-                f"Parlamentar e socio(a) em {nome} — empresa recebeu "
-                f"{fmt_brl(valor_emendas)} em emenda(s) proposta(s) pelo "
-                "proprio parlamentar (conflito de interesse direto via "
-                ":SOCIO_DE no grafo); padrao classico de enriquecimento "
-                "ilicito, exige verificacao imediata"
+                f"Parlamentar consta como socio(a) em {nome} e a empresa "
+                f"recebeu {fmt_brl(valor_emendas)} em emenda(s) proposta(s) "
+                "pelo proprio parlamentar — cruzamento aparente de papeis "
+                "via :SOCIO_DE no grafo; vale conferir objeto do convenio, "
+                "processo licitatorio e execucao"
             ),
         })
     return alertas
@@ -1104,19 +1234,19 @@ def analisar_doador_beneficiario(
 ) -> list[dict[str, str]]:
     """Alerta grave: empresa que doou pra campanha virou beneficiária de emenda.
 
-    Este é o red flag clássico de troca de favor eleitoral. A empresa
-    financiou a campanha do parlamentar (doador registrado no TSE) e o
-    mesmo parlamentar propôs emenda que acabou beneficiando-a
-    (relação ``(:Amendment)-[:BENEFICIOU]->(:Company)`` no grafo).
+    Cruza dois papéis no mesmo CNPJ: a empresa financiou a campanha do
+    parlamentar (doador registrado no TSE) e o mesmo parlamentar propôs
+    emenda que acabou beneficiando-a (relação
+    ``(:Amendment)-[:BENEFICIOU]->(:Company)`` no grafo).
 
     Comparação é feita por CNPJ normalizado (só dígitos) pra robustez
     entre pipelines TSE (doações) e Transferegov (beneficiários de
     emenda) que podem carimbar o documento em formatos diferentes.
 
-    Aparecer aqui não é prova de crime — a lei permite doação e emenda.
-    Mas a correlação é um sinal forte o bastante pra valer uma olhada
-    no objeto do convênio, no processo licitatório e na execução da
-    obra/serviço. Por isso severidade ``grave``.
+    Aparecer aqui não é irregularidade por si — a lei permite doação e
+    emenda. Mas a correlação é um sinal forte o bastante pra valer uma
+    olhada no objeto do convênio, no processo licitatório e na execução
+    da obra/serviço. Por isso severidade ``grave``.
     """
     if not emendas:
         return []
@@ -1154,8 +1284,8 @@ def analisar_doador_beneficiario(
                 f"{nome} doou {doador.valor_total_fmt} para a campanha e "
                 f"recebeu {fmt_brl(valor_emendas)} em emenda(s) proposta(s) "
                 "pelo parlamentar — cruzamento TSE (doacoes) x Transferegov "
-                "(beneficiarios) sugere possivel troca de favor; vale "
-                "investigar objeto do convenio e processo licitatorio"
+                "(beneficiarios) mostra a empresa nos dois papeis; vale "
+                "conferir objeto do convenio e processo licitatorio"
             ),
         })
     return alertas
@@ -1278,6 +1408,7 @@ def gerar_alertas_completos(
     # opt-in pra não quebrar chamadas antigas que passam só ``entidade``.
     if perfil is not None:
         alertas.extend(analisar_cnpj_baixados(perfil))
+        alertas.extend(analisar_concentracao_doador(perfil))
         if emendas_tipadas:
             alertas.extend(analisar_doador_beneficiario(perfil, emendas_tipadas))
             alertas.extend(analisar_socio_beneficiario(perfil, emendas_tipadas))

@@ -7,7 +7,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from bracc.models.perfil import DoadorEmpresa, Emenda, SocioConectado, TetoGastos
+from bracc.models.perfil import (
+    DoadorEmpresa,
+    DoadorPessoa,
+    Emenda,
+    SocioConectado,
+    TetoGastos,
+)
 from bracc.services.alertas_service import (
     BENEFICIARIO_NOVO_VALOR_MIN,
     BENEFICIARIO_RECORRENTE_MIN_EMENDAS,
@@ -18,6 +24,7 @@ from bracc.services.alertas_service import (
     analisar_beneficiario_novo,
     analisar_beneficiario_recorrente,
     analisar_cnpj_baixados,
+    analisar_concentracao_doador,
     analisar_conexoes,
     analisar_despesas_gabinete,
     analisar_despesas_vs_media,
@@ -228,7 +235,11 @@ class TestGerarAlertasCompletos:
 
 
 def _doador(
-    cnpj: str, situacao: str | None, valor: float = 10_000.0,
+    cnpj: str,
+    situacao: str | None,
+    valor: float = 10_000.0,
+    tipo_entidade: str | None = None,
+    cnae_principal: str | None = None,
 ) -> DoadorEmpresa:
     """Factory mínima pra :class:`DoadorEmpresa` nos tests de alerta."""
     return DoadorEmpresa(
@@ -240,6 +251,8 @@ def _doador(
         situacao=situacao,
         situacao_fmt=situacao.capitalize() if situacao else None,
         situacao_verified_at="2026-04-15T10:00:00+00:00",
+        tipo_entidade=tipo_entidade,
+        cnae_principal=cnae_principal,
     )
 
 
@@ -253,15 +266,27 @@ def _socio(cnpj: str, situacao: str | None) -> SocioConectado:
     )
 
 
+def _doador_pf(nome: str, valor: float) -> DoadorPessoa:
+    return DoadorPessoa(
+        nome=nome,
+        cpf_mascarado="***.***.***-**",
+        valor_total=valor,
+        valor_total_fmt=f"R$ {valor:.2f}",
+        n_doacoes=1,
+    )
+
+
 class _PerfilDuck:
-    """Duck-typed stand-in pro ``PerfilPolitico`` com só os 2 campos usados."""
+    """Duck-typed stand-in pro ``PerfilPolitico`` com só os campos usados."""
 
     def __init__(
         self,
         doadores_empresa: list[DoadorEmpresa] | None = None,
+        doadores_pessoa: list[DoadorPessoa] | None = None,
         socios: list[SocioConectado] | None = None,
     ) -> None:
         self.doadores_empresa = doadores_empresa or []
+        self.doadores_pessoa = doadores_pessoa or []
         self.socios = socios or []
 
 
@@ -285,33 +310,33 @@ class TestAnalisarCnpjBaixados:
         )
         assert analisar_cnpj_baixados(perfil) == []
 
-    def test_doador_baixada_dispara_grave(self) -> None:
+    def test_doador_baixada_dispara_atencao(self) -> None:
         perfil = _PerfilDuck(
             doadores_empresa=[_doador("11111111000101", "BAIXADA")],
         )
         alertas = analisar_cnpj_baixados(perfil)
         assert len(alertas) == 1
         alerta = alertas[0]
-        assert alerta["tipo"] == "grave"
+        assert alerta["tipo"] == "atencao"
         assert "baixada" in alerta["texto"].lower()
         assert "doadora" in alerta["texto"].lower()
 
-    def test_socio_inapta_dispara_grave(self) -> None:
+    def test_socio_inapta_dispara_atencao(self) -> None:
         perfil = _PerfilDuck(
             socios=[_socio("22222222000102", "INAPTA")],
         )
         alertas = analisar_cnpj_baixados(perfil)
         assert len(alertas) == 1
-        assert alertas[0]["tipo"] == "grave"
+        assert alertas[0]["tipo"] == "atencao"
         assert "socio" in alertas[0]["texto"].lower()
 
-    def test_doador_suspensa_dispara_grave(self) -> None:
+    def test_doador_suspensa_dispara_atencao(self) -> None:
         perfil = _PerfilDuck(
             doadores_empresa=[_doador("11111111000101", "SUSPENSA")],
         )
         alertas = analisar_cnpj_baixados(perfil)
         assert len(alertas) == 1
-        assert alertas[0]["tipo"] == "grave"
+        assert alertas[0]["tipo"] == "atencao"
 
     def test_multiplas_empresas_contam_no_total(self) -> None:
         perfil = _PerfilDuck(
@@ -327,17 +352,154 @@ class TestAnalisarCnpjBaixados:
         )
         alertas = analisar_cnpj_baixados(perfil)
         assert len(alertas) == 1
-        # 3 graves: 2 doadores + 1 socio.
+        # 3 entradas: 2 doadores + 1 socio.
         assert "total: 3" in alertas[0]["texto"]
         assert "doadora" in alertas[0]["texto"].lower()
         assert "socio" in alertas[0]["texto"].lower()
 
     def test_nula_nao_dispara(self) -> None:
-        """NULA e um estado limbo RFB mais raro; mantemos fora do grave."""
+        """NULA e um estado limbo RFB mais raro; mantemos fora do alerta."""
         perfil = _PerfilDuck(
             doadores_empresa=[_doador("11111111000101", "NULA")],
         )
         assert analisar_cnpj_baixados(perfil) == []
+
+    def test_comite_baixado_e_excluido(self) -> None:
+        """Comite de campanha baixado e ciclo normal pos-eleicao, nao alerta."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador(
+                    "11111111000101",
+                    "BAIXADA",
+                    tipo_entidade="comite_campanha",
+                ),
+            ],
+        )
+        assert analisar_cnpj_baixados(perfil) == []
+
+    def test_partido_baixado_por_cnae_e_excluido(self) -> None:
+        """CNAE 9492-8/00 (partidos/comites) nao gera ruido quando baixado."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador(
+                    "22222222000102",
+                    "BAIXADA",
+                    cnae_principal="9492-8/00",
+                ),
+            ],
+        )
+        assert analisar_cnpj_baixados(perfil) == []
+
+    def test_empresa_privada_baixada_nao_e_filtrada_por_engano(self) -> None:
+        """Sem tipo/CNAE de partido/comite, baixada normal continua acendendo."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador("33333333000103", "BAIXADA"),
+                _doador(
+                    "44444444000104",
+                    "BAIXADA",
+                    tipo_entidade="comite_campanha",
+                ),
+            ],
+        )
+        alertas = analisar_cnpj_baixados(perfil)
+        assert len(alertas) == 1
+        assert "total: 1" in alertas[0]["texto"]
+
+
+class TestAnalisarConcentracaoDoador:
+    def test_sem_doadores_vazio(self) -> None:
+        assert analisar_concentracao_doador(_PerfilDuck()) == []
+
+    def test_total_baixo_ignora(self) -> None:
+        """Campanha de R$ 30k com fonte unica nao gera ruido (vereador rural)."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA", valor=30_000)],
+        )
+        assert analisar_concentracao_doador(perfil) == []
+
+    def test_diversificada_sem_alerta(self) -> None:
+        """Top doador < 70% nao gera alerta."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador("11111111000101", "ATIVA", valor=400_000),
+                _doador("22222222000102", "ATIVA", valor=400_000),
+                _doador("33333333000103", "ATIVA", valor=400_000),
+            ],
+        )
+        assert analisar_concentracao_doador(perfil) == []
+
+    def test_partido_dominante_dispara_atencao(self) -> None:
+        """Caso reportado: partido com 98% de R$ 6.8M na campanha."""
+        partido = _doador(
+            "13629827000100",
+            "ATIVA",
+            valor=6_700_000,
+            cnae_principal="9492-8/00",
+        )
+        partido.nome = "DIRECAO NACIONAL"
+        comite = _doador(
+            "15397777000109",
+            "ATIVA",
+            valor=6_500,
+            tipo_entidade="comite_campanha",
+        )
+        perfil = _PerfilDuck(doadores_empresa=[partido, comite])
+        alertas = analisar_concentracao_doador(perfil)
+        assert len(alertas) == 1
+        alerta = alertas[0]
+        assert alerta["tipo"] == "atencao"
+        assert "partido/comite" in alerta["texto"]
+        assert "DIRECAO NACIONAL" in alerta["texto"]
+
+    def test_empresa_privada_dominante_marca_doador(self) -> None:
+        """Doador empresa nao-partido aparece como 'doador' no texto."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador("11111111000101", "ATIVA", valor=900_000),
+                _doador("22222222000102", "ATIVA", valor=100_000),
+            ],
+        )
+        alertas = analisar_concentracao_doador(perfil)
+        assert len(alertas) == 1
+        alerta = alertas[0]
+        assert "partido/comite" not in alerta["texto"]
+        assert " doador" in alerta["texto"]
+
+    def test_pessoa_fisica_dominante(self) -> None:
+        """PF com >70% do total tambem dispara."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[_doador("11111111000101", "ATIVA", valor=100_000)],
+            doadores_pessoa=[_doador_pf("Joao da Silva", 800_000)],
+        )
+        alertas = analisar_concentracao_doador(perfil)
+        assert len(alertas) == 1
+        assert "Joao da Silva" in alertas[0]["texto"]
+
+    def test_70pct_dispara_mas_nao_quase_toda(self) -> None:
+        """Entre 70 e 90% usa o texto suave."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador("11111111000101", "ATIVA", valor=750_000),
+                _doador("22222222000102", "ATIVA", valor=250_000),
+            ],
+        )
+        alertas = analisar_concentracao_doador(perfil)
+        assert len(alertas) == 1
+        assert "Quase toda" not in alertas[0]["texto"]
+        assert "75%" in alertas[0]["texto"]
+
+    def test_90pct_usa_texto_forte(self) -> None:
+        """>=90% usa 'Quase toda a campanha'."""
+        perfil = _PerfilDuck(
+            doadores_empresa=[
+                _doador("11111111000101", "ATIVA", valor=950_000),
+                _doador("22222222000102", "ATIVA", valor=50_000),
+            ],
+        )
+        alertas = analisar_concentracao_doador(perfil)
+        assert len(alertas) == 1
+        assert "Quase toda" in alertas[0]["texto"]
 
 
 def _emenda(
@@ -766,7 +928,7 @@ class TestGerarAlertasCompletosComPerfil:
         alertas = gerar_alertas_completos({"properties": {}}, [], {}, [])
         assert alertas[0]["tipo"] == "info"
 
-    def test_perfil_com_doador_baixada_injeta_alerta_grave(self) -> None:
+    def test_perfil_com_doador_baixada_injeta_alerta_atencao(self) -> None:
         perfil = _PerfilDuck(
             doadores_empresa=[_doador("11111111000101", "BAIXADA")],
         )
@@ -774,7 +936,7 @@ class TestGerarAlertasCompletosComPerfil:
             {"properties": {}}, [], {}, [], perfil=perfil,
         )
         assert any(
-            a["tipo"] == "grave" and "baixada" in a["texto"].lower()
+            a["tipo"] == "atencao" and "baixada" in a["texto"].lower()
             for a in alertas
         )
 

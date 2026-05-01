@@ -21,9 +21,11 @@ SITUACOES_CADASTRAIS: tuple[str, ...] = (
     "NULA",
 )
 
-# Situações não-operacionais — empresa não devia estar ativa no mercado.
-# Doador ou sócio com situação aqui levanta alerta grave no
-# `alertas_service` (sinal forte de laranja, caixa 2 ou fraude eleitoral).
+# Situações não-operacionais — empresa consta com cadastro inativo na
+# Receita. Doador ou sócio com situação aqui levanta alerta de atenção
+# no ``alertas_service`` pra que o investigador confira a situação do
+# CNPJ na data da doação/sociedade. Comitês de campanha ficam baixados
+# por ciclo normal pós-eleição e são filtrados separadamente.
 SITUACOES_GRAVES: frozenset[str] = frozenset({"BAIXADA", "SUSPENSA", "INAPTA"})
 
 # Labels leigos (pt-BR) pra exibir no UI. Mantém string bruta em

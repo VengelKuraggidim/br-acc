@@ -1959,6 +1959,19 @@ function renderGrupoCNPJDoador(arr, icone, titulo, categoria) {
     const dataStr = renderDatasDoacao(e);
     const chip = renderChipFonte(e.provenance, 'sub');
     const flagPos2015 = _doacaoPos2015Privado(e, categoria);
+    // Selo de cadastro nao-operacional na Receita. Em partido/comite e ciclo
+    // normal pos-eleicao (CNPJ temporario fica baixado), entao exibimos como
+    // info neutra. Em "outro" (privado) e ponto de atencao pra investigador
+    // conferir a situacao do CNPJ na data da doacao.
+    const situacaoGrave = e.situacao && ['BAIXADA', 'SUSPENSA', 'INAPTA'].includes(e.situacao);
+    const seloSituacao = situacaoGrave
+      ? (categoria === 'outro'
+        ? `<span style="display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:rgba(245,158,11,0.18); border:1px solid rgba(245,158,11,0.5); border-radius:10px; font-size:11px; color:#b45309;" title="Cadastro do CNPJ consta como ${escaparHTML(e.situacao_fmt || e.situacao)} na Receita Federal. Vale conferir a situação na data da doação.">&#128681; Cadastro ${escaparHTML((e.situacao_fmt || e.situacao).toLowerCase())} na Receita</span>`
+        : `<span style="display:inline-flex; align-items:center; gap:4px; padding:2px 8px; background:rgba(148,163,184,0.18); border:1px solid rgba(148,163,184,0.4); border-radius:10px; font-size:11px; color:var(--text-muted);" title="CNPJ de comitê/partido costuma ficar baixado depois da eleição — ciclo normal do cadastro temporário.">Cadastro ${escaparHTML((e.situacao_fmt || e.situacao).toLowerCase())} (ciclo pós-eleição)</span>`)
+      : '';
+    const seloSituacaoHTML = seloSituacao
+      ? `<div style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">${seloSituacao}</div>`
+      : '';
     const estiloFlagDetails = flagPos2015
       ? ' style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4);"'
       : '';
@@ -1974,6 +1987,7 @@ function renderGrupoCNPJDoador(arr, icone, titulo, categoria) {
         <div class="conexao-rel">Repassou valor à campanha${cnpjStr}${nStr}${dataStr}</div>
       </div>
       <div class="conexao-valor">${e.valor_total_fmt}</div>
+      ${seloSituacaoHTML}
       ${chip ? `<div style="flex-basis:100%;">${chip}</div>` : ''}
       ${avisoFlag}`;
     if (e.provenance) {
@@ -2757,17 +2771,20 @@ function renderPerfil(d) {
         </div>`;
       }).join('');
     }
+    const tipPartes = [];
+    if (cp.resumo) tipPartes.push(cp.resumo);
+    if (cargosTxt) tipPartes.push(`Cargos disputados: ${cargosTxt.replace(/&middot;/g, '·')}`);
+    tipPartes.push('TSE registra candidatura, não mandato exercido — eleito ou não eleito requer cruzamento separado.');
+    const tipAttr = tipPartes.join('\n\n');
     html += `<div class="section fade-in">
       <div class="section-header">
         <div class="section-title">
           <span class="section-icon" style="background:rgba(245,158,11,0.15);">&#128218;</span>
           Carreira política (TSE)
+          <span title="${tipAttr.replace(/"/g, '&quot;')}" style="margin-left:6px;color:var(--text-dim);cursor:help;font-size:13px;">&#9432;</span>
         </div>
         <span class="badge badge-accent">${badgeTxt}</span>
       </div>
-      ${cp.resumo ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5;">${cp.resumo}</div>` : ''}
-      ${cargosTxt ? `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Cargos disputados: ${cargosTxt}</div>` : ''}
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;font-style:italic;">TSE registra candidatura, não mandato exercido — eleito ou não eleito requer cruzamento separado.</div>
       <details class="collapsible">
         <summary>Ver ${cp.candidaturas.length} candidatura(s)</summary>
         <div class="collapsible-body">${listaHtml}</div>

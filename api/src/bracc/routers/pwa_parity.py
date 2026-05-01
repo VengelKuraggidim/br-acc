@@ -449,34 +449,18 @@ async def pwa_buscar_tudo(
 
     total = max(pessoas_total, outros_total)
 
-    # Segundo passo de dedup: colapsa rows do mesmo CanonicalPerson
-    # (Person + cargo + Person TSE no mesmo cluster) para o nó mais
-    # oficial. Sem cluster passa direto. Empate de oficialidade é
-    # resolvido por score; tie-breaker final pelo id pra ordem estável.
-    by_cluster: dict[str, dict[str, Any]] = {}
+    # Segundo passo de dedup: agrupa rows do mesmo CanonicalPerson
+    # (Person + cargo + Person TSE no mesmo cluster). Eleicao do
+    # vencedor + acumulo de cargos_relacionados acontece via
+    # _merge_group abaixo (mesma logica da fase 3 pra coerencia).
+    by_cluster: dict[str, list[dict[str, Any]]] = {}
     deduped: list[dict[str, Any]] = []
     for r in combined.values():
         canonical = r.get("canonical_id")
         if not canonical:
             deduped.append(r)
             continue
-        current = by_cluster.get(canonical)
-        if current is None:
-            by_cluster[canonical] = r
-            continue
-        candidate_key = (
-            _cluster_rank(r.get("labels") or []),
-            -float(r.get("score") or 0.0),
-            str(r.get("id")),
-        )
-        current_key = (
-            _cluster_rank(current.get("labels") or []),
-            -float(current.get("score") or 0.0),
-            str(current.get("id")),
-        )
-        if candidate_key < current_key:
-            by_cluster[canonical] = r
-    deduped.extend(by_cluster.values())
+        by_cluster.setdefault(canonical, []).append(r)
 
     # Fase 3 de dedup: colapsa pessoa-fisica que ficou em mais de um no
     # do grafo apesar de ER nao ter unificado. Tres mecanismos:
@@ -527,6 +511,12 @@ async def pwa_buscar_tudo(
                 if cargo not in winner["cargos_relacionados"]:
                     winner["cargos_relacionados"].append(cargo)
         return winner
+
+    # Aplica _merge_group nos clusters da fase 2 (CanonicalPerson) pra
+    # acumular cargos_relacionados — sem isso, ALEGO StateLeg + Person
+    # TSE no mesmo canonical reduzem pra 1 row mas perdem o cargo extra.
+    for cluster_rows in by_cluster.values():
+        deduped.append(_merge_group(cluster_rows))
 
     # (a) Pre-pass por CPF puro: rows com mesmo CPF colapsam mesmo
     # quando o nome diverge (StateLeg "X" + Person "X Y Z W").

@@ -3,7 +3,8 @@
 Hoje o perfil do politico mostra CNPJs que doaram pra campanha ou em que ele
 aparece como socio, sem verificar **se a empresa ainda existe na Receita
 Federal**. Empresa BAIXADA, SUSPENSA ou INAPTA doando pra campanha ou com
-socio politico e sinal vermelho relevante (laranja, caixa 2, fraude).
+socio politico e ponto de atencao relevante — vale conferir a situacao do
+CNPJ na data da doacao/sociedade.
 
 O caminho "bulk RFB" (pipeline ``cnpj`` via prompt 07) resolveria todas as
 empresas do grafo de uma vez, mas exige baixar dezenas de GB mensais e ainda
