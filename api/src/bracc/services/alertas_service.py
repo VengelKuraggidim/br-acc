@@ -638,7 +638,7 @@ CONCENTRACAO_DOADOR_PCT_GRAVE = 0.90
 CONCENTRACAO_DOADOR_VALOR_MIN = 500_000.0
 
 
-_CNAE_PARTIDO_COMITE = "9492-8/00"
+_CNAE_PARTIDO_COMITE_DIGITOS = "9492800"
 _TIPO_COMITE_CAMPANHA = "comite_campanha"
 
 
@@ -651,12 +651,18 @@ def _eh_partido_ou_comite(doador: DoadorEmpresa) -> bool:
     políticas") é compartilhado por partidos e comitês; ``tipo_entidade``
     é carimbado pelo pipeline ``tse_prestacao_contas_go``. Espelha a
     classificação que o PWA faz em ``_classificarCNPJDoador``.
+
+    O grafo guarda ``cnae_principal`` em dois formatos legados — formatado
+    (``"9492-8/00"``, ~1.2k nos) e dígito-puro (``"9492800"``, ~7.4k nos).
+    Pra robustez, normaliza pra dígitos antes de comparar.
     """
     if getattr(doador, "tipo_entidade", None) == _TIPO_COMITE_CAMPANHA:
         return True
-    if getattr(doador, "cnae_principal", None) == _CNAE_PARTIDO_COMITE:
-        return True
-    return False
+    cnae = getattr(doador, "cnae_principal", None)
+    if cnae is None:
+        return False
+    digitos = "".join(ch for ch in cnae if ch.isdigit())
+    return digitos == _CNAE_PARTIDO_COMITE_DIGITOS
 
 
 def analisar_concentracao_doador(

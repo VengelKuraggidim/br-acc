@@ -430,12 +430,17 @@ class TestAnalisarConcentracaoDoador:
         assert analisar_concentracao_doador(perfil) == []
 
     def test_partido_dominante_dispara_atencao(self) -> None:
-        """Caso reportado: partido com 98% de R$ 6.8M na campanha."""
+        """Caso reportado: partido com 98% de R$ 6.8M na campanha.
+
+        Usa o formato dígito-puro do CNAE (``9492800``) — predominante
+        no grafo (~7.4k nós) ao lado do formatado (~1.2k nós). O helper
+        ``_eh_partido_ou_comite`` precisa tratar os dois.
+        """
         partido = _doador(
             "13629827000100",
             "ATIVA",
             valor=6_700_000,
-            cnae_principal="9492-8/00",
+            cnae_principal="9492800",
         )
         partido.nome = "DIRECAO NACIONAL"
         comite = _doador(
