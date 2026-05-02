@@ -12,11 +12,9 @@ if TYPE_CHECKING:
     from neo4j import Driver
 from bracc_etl.loader import Neo4jBatchLoader
 from bracc_etl.transforms import (
-    format_cnpj,
     normalize_name,
     parse_date,
     parse_numeric_comma,
-    strip_document,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,51 +90,90 @@ class PgfnPipeline(Pipeline):
                 skipped_pf += int((~mask_pj).sum())
                 skipped_corresponsavel += int((mask_pj & ~mask_principal).sum())
 
-                filtered = chunk[mask_pj & mask_principal]
+                filtered = chunk.loc[mask_pj & mask_principal]
+                if filtered.empty:
+                    continue
 
-                for _, row in filtered.iterrows():
-                    cnpj_raw = str(row["CPF_CNPJ"]).strip()
-                    digits = strip_document(cnpj_raw)
-                    if len(digits) != 14:
-                        skipped_bad_cnpj += 1
-                        continue
+                # Vectorize document/inscricao filters before per-row work.
+                cnpj_digits = filtered["CPF_CNPJ"].str.replace(r"\D", "", regex=True)
+                mask_cnpj_ok = cnpj_digits.str.len() == 14
+                skipped_bad_cnpj += int((~mask_cnpj_ok).sum())
 
-                    inscricao = str(row["NUMERO_INSCRICAO"]).strip()
-                    if not inscricao or inscricao in seen_inscricoes:
-                        continue
-                    seen_inscricoes.add(inscricao)
+                inscricao_clean = filtered["NUMERO_INSCRICAO"].str.strip()
+                mask_has_inscricao = inscricao_clean.ne("")
 
-                    cnpj_formatted = format_cnpj(cnpj_raw)
-                    finance_id = f"pgfn_{inscricao}"
-                    valor = parse_numeric_comma(row["VALOR_CONSOLIDADO"])
-                    date = parse_date(str(row["DATA_INSCRICAO"]))
-                    nome = normalize_name(str(row["NOME_DEVEDOR"]))
-                    situacao = str(row["SITUACAO_INSCRICAO"]).strip()
-                    receita = str(row["RECEITA_PRINCIPAL"]).strip()
-                    ajuizado = str(row["INDICADOR_AJUIZADO"]).strip()
+                kept = filtered.loc[mask_cnpj_ok & mask_has_inscricao].copy()
+                if kept.empty:
+                    continue
 
-                    finances.append({
-                        "finance_id": finance_id,
-                        "type": "divida_ativa",
-                        "inscription_number": inscricao,
-                        "value": valor,
-                        "date": date,
-                        "situation": situacao,
-                        "revenue_type": receita,
-                        "court_action": ajuizado,
-                        "source": "pgfn",
-                    })
+                kept_digits = cnpj_digits.loc[kept.index]
+                kept_inscricao = inscricao_clean.loc[kept.index]
 
-                    relationships.append({
-                        "source_key": cnpj_formatted,
-                        "target_key": finance_id,
-                        "value": valor,
-                        "date": date,
-                        "company_name": nome,
-                    })
+                # In-chunk dedup (keep first), then drop already-seen across chunks.
+                first_in_chunk = ~kept_inscricao.duplicated(keep="first")
+                kept = kept.loc[first_in_chunk]
+                kept_digits = kept_digits.loc[kept.index]
+                kept_inscricao = kept_inscricao.loc[kept.index]
 
-                    if self.limit and len(finances) >= self.limit:
+                cross_chunk_mask = ~kept_inscricao.isin(seen_inscricoes)
+                kept = kept.loc[cross_chunk_mask]
+                if kept.empty:
+                    continue
+                kept_digits = kept_digits.loc[kept.index]
+                kept_inscricao = kept_inscricao.loc[kept.index]
+
+                if self.limit:
+                    remaining = self.limit - len(finances)
+                    if remaining <= 0:
                         break
+                    if len(kept) > remaining:
+                        kept = kept.iloc[:remaining]
+                        kept_digits = kept_digits.iloc[:remaining]
+                        kept_inscricao = kept_inscricao.iloc[:remaining]
+
+                seen_inscricoes.update(kept_inscricao.tolist())
+
+                cnpj_formatted = (
+                    kept_digits.str.slice(0, 2)
+                    + "."
+                    + kept_digits.str.slice(2, 5)
+                    + "."
+                    + kept_digits.str.slice(5, 8)
+                    + "/"
+                    + kept_digits.str.slice(8, 12)
+                    + "-"
+                    + kept_digits.str.slice(12, 14)
+                )
+                finance_ids = "pgfn_" + kept_inscricao
+                values = kept["VALOR_CONSOLIDADO"].map(parse_numeric_comma)
+                dates = kept["DATA_INSCRICAO"].astype(str).map(parse_date)
+                nomes = kept["NOME_DEVEDOR"].astype(str).map(normalize_name)
+                situacoes = kept["SITUACAO_INSCRICAO"].str.strip()
+                receitas = kept["RECEITA_PRINCIPAL"].str.strip()
+                ajuizados = kept["INDICADOR_AJUIZADO"].str.strip()
+
+                finance_frame = pd.DataFrame({
+                    "finance_id": finance_ids.to_numpy(),
+                    "type": "divida_ativa",
+                    "inscription_number": kept_inscricao.to_numpy(),
+                    "value": values.to_numpy(),
+                    "date": dates.to_numpy(),
+                    "situation": situacoes.to_numpy(),
+                    "revenue_type": receitas.to_numpy(),
+                    "court_action": ajuizados.to_numpy(),
+                    "source": "pgfn",
+                })
+                rel_frame = pd.DataFrame({
+                    "source_key": cnpj_formatted.to_numpy(),
+                    "target_key": finance_ids.to_numpy(),
+                    "value": values.to_numpy(),
+                    "date": dates.to_numpy(),
+                    "company_name": nomes.to_numpy(),
+                })
+
+                finances.extend(finance_frame.to_dict(orient="records"))
+                relationships.extend(rel_frame.to_dict(orient="records"))
+
                 if self.limit and len(finances) >= self.limit:
                     break
             if self.limit and len(finances) >= self.limit:
