@@ -145,11 +145,20 @@ ser populado automaticamente em runs futuros do `querido_diario_go`.
 
 **Camada 2 — re-escopada em 2 fases (2026-05-02)**:
 
-### Fase 2a — vereadores 20ª Legislatura ✅ ENTREGUE (2026-05-02)
+### Fase 2a — vereadores 20ª Legislatura ✅ ENTREGUE + INGERIDA (2026-05-02)
 
 Scraping HTML do portal CMG, sem PDF parser. Substituiu integralmente
 os 3 endpoints Plone stub (`@@portalmodelo-json` / `@@transparency-json`
 / `@@pl-json`) que ficaram dead code desde 2026-04-19.
+
+**Rodada end-to-end em 2026-05-02 contra Neo4j local** (bolt://localhost:7687):
+`scripts/download_camara_goiania.py` baixou 41 perfis (a listagem cresceu
+desde a estimativa original de ~28 — provável reorganização interna ou
+inclusão de suplentes); pipeline ingeriu 41 `:GoVereador` em 3s. Cypher
+sanity check: 100% dos 41 nodes com `name`, `party`, `photo_url`,
+`email`, `gabinete`, `bio_summary`, `source_id='camara_goiania'`,
+`source_snapshot_uri` carimbado. Snapshot dir:
+`etl/archival/camara_goiania/2026-05/` (1 listagem + 41 perfis HTML).
 
 Implementação em `etl/src/bracc_etl/pipelines/camara_goiania.py`:
 
@@ -179,7 +188,7 @@ Implementação em `etl/src/bracc_etl/pipelines/camara_goiania.py`:
 `docs/pipeline_status.md` e `docs/source_registry_br_v1.csv` passam pra
 `implemented_partial / partial`.
 
-**Para rodar (não rodado ainda no Neo4j local):**
+**Comando de re-run (idempotente; MERGE no loader):**
 
 ```bash
 uv run --project etl python scripts/download_camara_goiania.py \
