@@ -154,9 +154,7 @@ def _token_match(qt: str, nt: str) -> bool:
     """Fuzzy: igual exato ou edit-distance <=1 quando ambos têm >=4 chars."""
     if qt == nt:
         return True
-    if len(qt) >= 4 and len(nt) >= 4 and _edit_distance_le1(qt, nt):
-        return True
-    return False
+    return len(qt) >= 4 and len(nt) >= 4 and _edit_distance_le1(qt, nt)
 
 
 def _local_relevance(query: str, name: str) -> tuple[int, int, int]:
