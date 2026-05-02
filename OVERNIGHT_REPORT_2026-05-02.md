@@ -232,3 +232,54 @@ buildx_buildkit   Up      — build cache
 
 `fiscal-backend` foi removido. PWA usa `localhost:8000` direto.
 
+---
+
+# Apêndice 3 — Terceira leva (handoff final)
+
+- **`b2658cc` test(custo-mandato)**: atualiza
+  `test_governador_sem_valor_resulta_em_total_zero` (stale) pra
+  `test_governador_go_carrega_subsidio_da_lei_estadual`.
+  Pipeline já carrega R$ 30.585,01 desde 2026-04-30; teste
+  ainda assumia o estado antigo. Removido também o markdown
+  `medium_priority/more_data/08-custo-mandato-governador-go-lei-estadual.md`
+  por estar desatualizado.
+
+## Suite final
+
+```
+api/tests/unit:  880 passed, 1 skipped, 3 failed (pré-existentes —
+  test_health::test_meta_sources, test_meta_stats 130!=128,
+  test_pwa_parity::test_buscar_tudo_dedupes_by_canonical_cluster)
+etl/tests:       2191 passed, 2 skipped, 2 deselected
+```
+
+Os 3 failures pré-existentes não foram causados por mudanças desta
+noite — confirmado com diff verificando que nenhum dos commits novos
+toca arquivos relacionados.
+
+## Commits novos da noite (todos no `main` local, sem push)
+
+```
+b2658cc test(custo-mandato): atualiza governador GO pra refletir Lei 17.254/2011
+10eaed9 docs(overnight): apêndice 2 — segunda leva (até 02h+)
+259d53a feat(er): fase 5.6 shadow_first_last_match (opt-in, audit-only)
+600ae4a chore(todos): remove 3 débitos médios já fechados
+d077b33 chore(todos): cleanup name_corrections + dedup busca Fase 4 design doc
+21de7f5 chore(todos): remove 4 prompts marcados como DONE
+4e7bf0a fix(conexoes): dedup :Person legacy + :CampaignDonor (mesma doação 2×)
+```
+
+7 commits + 4 backfills no Neo4j local + 1 container removido +
+2 memórias atualizadas + 9 markdowns DONE removidos.
+
+## Para você decidir
+
+1. `git push origin main` (7 commits aguardando)
+2. Considerar `/ultrareview` antes do push pra revisar a leva
+3. Se Aura voltar: replicar backfills CNAE+CNPJ+dedup Person 2022
+4. Pipeline `tse_prestacao_contas_go` pra 2024 (18.657 CNPJs novos
+   carimbáveis)
+5. Ativar fase 5.6 ER em audit-only e spot-check
+6. Validação visual no PWA dos 4 perfis de "Histórico de
+   irregularidades"
+
