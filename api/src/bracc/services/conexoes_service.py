@@ -371,6 +371,59 @@ def _build_camp_donor_keys(
     return keys
 
 
+def _build_company_granular_keys(
+    conexoes_raw: list[dict[str, Any]],
+    entidades_conectadas: dict[str, dict[str, Any]],
+    politico_entity_id: str,
+) -> set[tuple[str, int]]:
+    """Coleta ``(cnpj, ano)`` das rels :DOOU com :Company que carregam
+    ``donation_id`` (= pipeline novo ``tse_prestacao_contas_go.py``).
+
+    Usado em :func:`classificar` pra deduplicar a rel legada
+    (``tse.py``, MERGE key ``{year}``) quando há rels granulares por
+    ``donation_id`` cobrindo o mesmo ``(cnpj, ano)``. Sem a dedup, o
+    mesmo doador-empresa contribui 2× pro ``total_doacoes`` (caso
+    Amilton Batista 2022: R$843k ingerido vs R$421,5k declarado).
+    """
+    keys: set[tuple[str, int]] = set()
+    for conn in conexoes_raw:
+        if conn.get("relationship_type") != "DOOU":
+            continue
+        source_id = conn.get("source_id")
+        target_id_raw = conn.get("target_id")
+        if not isinstance(source_id, str) or not isinstance(target_id_raw, str):
+            continue
+        if source_id == politico_entity_id:
+            other_id = target_id_raw
+        elif target_id_raw == politico_entity_id:
+            other_id = source_id
+        else:
+            continue
+        other = entidades_conectadas.get(other_id) or {}
+        if norm_type(other.get("type")) != "company":
+            continue
+        props = other.get("properties") or {}
+        if not isinstance(props, dict):
+            continue
+        cnpj = as_str(props, "cnpj")
+        if not cnpj:
+            continue
+        rel_props = conn.get("properties") or {}
+        if not isinstance(rel_props, dict):
+            continue
+        if rel_props.get("donation_id") is None:
+            continue
+        ano_raw = rel_props.get("ano")
+        try:
+            ano = int(ano_raw) if ano_raw is not None else None
+        except (TypeError, ValueError):
+            ano = None
+        if ano is None:
+            continue
+        keys.add((cnpj, ano))
+    return keys
+
+
 def _situacao_from_props(
     props: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None]:
@@ -450,6 +503,9 @@ def classificar(
     # ``(last5_cpf, ano)``, descartamos a rel :Person legada (sem
     # ``donation_id``) com o mesmo casamento — o canônico é o granular.
     camp_donor_keys = _build_camp_donor_keys(
+        conexoes_raw, entidades_conectadas, politico_entity_id,
+    )
+    company_granular_keys = _build_company_granular_keys(
         conexoes_raw, entidades_conectadas, politico_entity_id,
     )
 
@@ -549,6 +605,20 @@ def classificar(
             # nos ``target_props`` do nó doador pra legados.
             if target_type == "company":
                 cnpj = as_str(target_props, "cnpj")
+                # Dedup contra rel legada do ``tse.py`` (MERGE key ``{year}``,
+                # sem ``donation_id``) quando há rels granulares do
+                # ``tse_prestacao_contas_go.py`` (MERGE key ``{donation_id}``)
+                # cobrindo o mesmo ``(cnpj, ano)``. Os 2 pipelines geram rels
+                # paralelas no Neo4j porque os MERGE keys diferem; no service
+                # canônico é o granular. Caso Amilton 2022: R$843k → R$421,5k
+                # (declarado TSE) ao remover a duplicata.
+                if (
+                    rel_props.get("donation_id") is None
+                    and cnpj
+                    and rel_ano is not None
+                    and (cnpj, rel_ano) in company_granular_keys
+                ):
+                    continue
                 # Gotcha do audit: CNPJ ausente → usa element_id como chave
                 # pra evitar colapsar empresas diferentes em 1 só.
                 chave = cnpj or f"empresa_{target_id}"

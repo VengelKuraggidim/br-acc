@@ -543,6 +543,202 @@ class TestDedupPersonLegacyVsCampaignDonor:
         assert d.n_doacoes == 2
 
 
+# --- 3.4. Dedup :Company legacy vs granular (mesma doação 2× via Company) ---
+
+
+class TestDedupCompanyLegacyVsGranular:
+    """Caso simétrico do dedup :Person/:CampaignDonor mas pra :Company.
+    Ambos pipelines escrevem rels :DOOU contra o mesmo ``:Company``:
+
+    - ``tse.py`` (legado): MERGE ``{year}`` → 1 rel agregada por (donor, ano).
+    - ``tse_prestacao_contas_go.py``: MERGE ``{donation_id}`` → 1 rel granular
+      por doação.
+
+    Como os MERGE keys diferem, o Neo4j cria as 2 rels em paralelo. O service
+    descarta a rel legada (sem ``donation_id``) quando há rels granulares
+    cobrindo ``(cnpj, ano)`` — caso Amilton 2022: R$843k → R$421,5k.
+    """
+
+    def test_company_legacy_descartada_quando_granular_existe(self) -> None:
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="construtora",
+                politico_is_source=False,
+                rel_props={"valor": 100_000.0, "ano": 2022},  # legado, sem donation_id
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="construtora",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 100_000.0,
+                    "ano": 2022,
+                    "donation_id": "PJ-DN-2022-001",
+                },
+            ),
+        ]
+        entidades = {
+            "construtora": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "11.222.333/0001-44",
+                    "razao_social": "CONSTRUTORA AMILTON LTDA",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        # 1 doador empresa, R$100k — não R$200k.
+        assert len(resultado.doadores_empresa) == 1
+        d = resultado.doadores_empresa[0]
+        assert d.valor_total == 100_000.0
+        assert d.n_doacoes == 1
+
+    def test_company_legacy_mantida_sem_granular_matching(self) -> None:
+        """Sem rel granular, a legacy continua sendo somada normalmente."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="solo",
+                politico_is_source=False,
+                rel_props={"valor": 25_000.0, "ano": 2018},  # sem granular pareada
+            ),
+        ]
+        entidades = {
+            "solo": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "55.666.777/0001-88",
+                    "razao_social": "EMPRESA LEGADO",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2018,
+        )
+        assert len(resultado.doadores_empresa) == 1
+        assert resultado.doadores_empresa[0].valor_total == 25_000.0
+
+    def test_company_granular_outro_ano_nao_descarta_legacy(self) -> None:
+        """Granular cobre 2022; rel legacy 2018 não é descartada."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="empresa",
+                politico_is_source=False,
+                rel_props={"valor": 30_000.0, "ano": 2018},  # legacy 2018
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="empresa",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 50_000.0,
+                    "ano": 2022,
+                    "donation_id": "PJ-DN-2022-002",
+                },
+            ),
+        ]
+        entidades = {
+            "empresa": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "99.000.111/0001-22",
+                    "razao_social": "MULTI-ANO",
+                },
+            },
+        }
+        # Sem filtro de ano: ambas rels somam.
+        resultado = classificar(conexoes, entidades, POLITICO_ID)
+        assert len(resultado.doadores_empresa) == 1
+        assert resultado.doadores_empresa[0].valor_total == 80_000.0
+        assert resultado.doadores_empresa[0].n_doacoes == 2
+
+    def test_company_n_legacy_dedupado_contra_n_granulares(self) -> None:
+        """Legacy agrega 5 doações em 1 rel R$500k; granular tem 5 rels de
+        R$100k cada. Pós-dedup: só os 5 granulares contam → R$500k."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="empresa",
+                politico_is_source=False,
+                rel_props={"valor": 500_000.0, "ano": 2022},  # legacy aggregate
+            ),
+        ] + [
+            _conn(
+                rel_type="DOOU",
+                target_id="empresa",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 100_000.0,
+                    "ano": 2022,
+                    "donation_id": f"PJ-DN-{i}",
+                },
+            )
+            for i in range(5)
+        ]
+        entidades = {
+            "empresa": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "33.444.555/0001-66",
+                    "razao_social": "AMILTON CASE",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_empresa) == 1
+        d = resultado.doadores_empresa[0]
+        # 5 granulares × R$100k = R$500k. Sem dedup seria R$1M.
+        assert d.valor_total == 500_000.0
+        assert d.n_doacoes == 5
+
+    def test_company_legacy_com_donation_id_nunca_e_descartada(self) -> None:
+        """Rel :Company com ``donation_id`` é canônica do pipeline novo;
+        nunca é descartada mesmo se outra rel granular cobre ``(cnpj, ano)``."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="empresa",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 40_000.0,
+                    "ano": 2022,
+                    "donation_id": "PJ-DN-A",
+                },
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="empresa",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 60_000.0,
+                    "ano": 2022,
+                    "donation_id": "PJ-DN-B",
+                },
+            ),
+        ]
+        entidades = {
+            "empresa": {
+                "type": "Company",
+                "properties": {
+                    "cnpj": "12.345.678/0001-90",
+                    "razao_social": "TODAS GRANULARES",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_empresa) == 1
+        assert resultado.doadores_empresa[0].valor_total == 100_000.0
+        assert resultado.doadores_empresa[0].n_doacoes == 2
+
+
 # --- 3.5. Filtro por ano em :DOOU (fix duplicação 201,6%) -------------------
 
 
