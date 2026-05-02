@@ -133,6 +133,93 @@ def _to_lucene_query(query: str) -> str:
     return _LUCENE_SPECIAL.sub(r"\\\1", query)
 
 
+def _edit_distance_le1(a: str, b: str) -> bool:
+    """True quando Levenshtein(a, b) <= 1 (cobre CESAR↔CEZAR)."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    i = 0
+    while i < min(la, lb) and a[i] == b[i]:
+        i += 1
+    if la == lb:
+        return a[i + 1 :] == b[i + 1 :]
+    if la > lb:
+        return a[i + 1 :] == b[i:]
+    return a[i:] == b[i + 1 :]
+
+
+def _token_match(qt: str, nt: str) -> bool:
+    """Fuzzy: igual exato ou edit-distance <=1 quando ambos têm >=4 chars."""
+    if qt == nt:
+        return True
+    if len(qt) >= 4 and len(nt) >= 4 and _edit_distance_le1(qt, nt):
+        return True
+    return False
+
+
+def _local_relevance(query: str, name: str) -> tuple[int, int, int]:
+    """Tupla de ranking — menor é melhor.
+
+    Classes (lexicográficas):
+      0 = nome igual à query (normalizado).
+      1 = nome começa com a query (prefix).
+      2 = todos os tokens da query aparecem no nome, na mesma ordem.
+      3 = todos os tokens da query aparecem no nome (ordem livre).
+      4 = só parte dos tokens aparece.
+      9 = nada bate além do que o Lucene já viu.
+
+    Match de token tolera 1 char de diferença (CESAR↔CEZAR) — sem isso,
+    grafias variantes do mesmo nome ficam atrás de homônimos com tokens
+    em ordem trocada.
+    """
+    q = _normalize_name(query)
+    n = _normalize_name(name)
+    if not q or not n:
+        return (9, 0, 999)
+    if n == q:
+        return (0, 0, 0)
+    if n.startswith(q + " "):
+        return (1, 0, 0)
+    q_tokens = q.split()
+    n_tokens = n.split()
+    if not q_tokens or not n_tokens:
+        return (9, 0, 999)
+
+    matches = 0
+    last_pos = -1
+    in_order = True
+    first_pos = -1
+    for qt in q_tokens:
+        found = -1
+        for idx in range(last_pos + 1, len(n_tokens)):
+            if _token_match(qt, n_tokens[idx]):
+                found = idx
+                break
+        if found >= 0:
+            matches += 1
+            last_pos = found
+            if first_pos == -1:
+                first_pos = found
+            continue
+        for idx, nt in enumerate(n_tokens):
+            if _token_match(qt, nt):
+                matches += 1
+                in_order = False
+                if first_pos == -1:
+                    first_pos = idx
+                break
+
+    if matches == len(q_tokens) and in_order:
+        return (2, -matches, first_pos)
+    if matches == len(q_tokens):
+        return (3, -matches, first_pos)
+    if matches > 0:
+        return (4, -matches, first_pos if first_pos >= 0 else 999)
+    return (9, 0, 999)
+
+
 def _fmt_brl(valor: float | int | None) -> str:
     """Reimplements ``backend/app.py::fmt_brl`` 1:1 for PWA parity."""
     if not valor:
@@ -571,8 +658,18 @@ async def pwa_buscar_tudo(
             if bucket_rows:
                 final_results.append(_merge_group(bucket_rows))
 
+    # Reranking final: classe de match (exato > prefix > tokens em ordem >
+    # tokens fora de ordem > parcial) primeiro; só entao desempata pelo
+    # score Lucene. Sem isso, "CESAR HENRIQUE ..." (2 tokens em ordem
+    # trocada) empatava no Lucene com "HENRIQUE CEZAR PEREIRA" (3 tokens
+    # na ordem certa, com CESAR↔CEZAR a 1 char) e o alvo correto caía
+    # pra 7° lugar quando a usuaria buscava "Henrique César Pereira".
+    def _final_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+        relevance = _local_relevance(q, str(row.get("name") or ""))
+        return (*relevance, -float(row.get("score") or 0.0), str(row.get("id")))
+
     items: list[BuscarTudoItem] = []
-    for r in sorted(final_results, key=lambda x: -x.get("score", 0)):
+    for r in sorted(final_results, key=_final_sort_key):
         item = _format_item(r)
         if item is not None:
             cargos_extras = r.get("cargos_relacionados")

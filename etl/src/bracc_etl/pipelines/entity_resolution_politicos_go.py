@@ -129,6 +129,18 @@ regras 1-3 não pegam:
   baixa que ``shadow_name_exact`` porque a evidência de identidade é
   mais fraca).
 
+* **shadow_first_last_match** (fase 5.6, opt-in via
+  ``enable_first_last_match=True``) — pra shadows que ``shadow_prefix_match``
+  não pegou. Casa shadow de **exatamente 2 tokens** com cluster cujo
+  source tem ≥3 tokens compartilhando primeiro **e** último token com
+  o shadow. Caso canônico: shadow ``"KARLOS CABRAL"`` (2 tokens) ↔
+  cluster com source ``"KARLOS MARCIO VIEIRA CABRAL"`` (4 tokens,
+  ``[0]==shadow[0]`` e ``[-1]==shadow[-1]``). Conf 0.65 (mais baixa
+  que ``shadow_prefix_match`` — tokens do meio podem divergir).
+  Default OFF + ``first_last_audit_only=True`` → 1ª passagem só popula
+  audit pra spot-check humano antes de promover (homonímia 2-token no
+  Brasil é alta).
+
 * **manual_override** (fase 6, opcional) — última camada, lê CSV
   versionado em ``docs/entity_resolution_overrides.csv`` (path
   configurável via env ``BRACC_ER_OVERRIDES_PATH``) com linhas
@@ -174,7 +186,8 @@ Arestas ``:REPRESENTS`` (1 por nó-fonte), direcionadas
 * ``method``: ``"cpf_exact" | "name_exact" | "name_exact_partido" |
   "name_stripped" | "cpf_suffix_name" | "cpf_suffix_token_overlap" |
   "cpf_suffix_cargo" | "name_partido_multi" | "name_municipio_vereador" |
-  "shadow_name_exact" | "shadow_prefix_match" | "manual_override" |
+  "shadow_name_exact" | "shadow_prefix_match" | "shadow_first_last_match" |
+  "manual_override" |
   "cargo_root"``.
 * ``confidence``: float [0, 1].
 * Proveniência do próprio pipeline (source_id, run_id, source_url,
@@ -644,6 +657,8 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
         data_dir: str = "./data",
         limit: int | None = None,
         chunk_size: int = 50_000,
+        enable_first_last_match: bool = False,
+        first_last_audit_only: bool = True,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -653,6 +668,15 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
             chunk_size=chunk_size,
             **kwargs,
         )
+        # Fase 5.6 (shadow_first_last_match): casa shadow de 2 tokens com
+        # cluster cujo source tem ≥3 tokens com primeiro+último iguais ao
+        # shadow. Caso canônico: KARLOS CABRAL ↔ KARLOS MARCIO VIEIRA
+        # CABRAL. Default OFF (homonímia 2-token no Brasil é alta —
+        # exige spot-check humano antes de promover). ``first_last_audit_only``
+        # = só popula audit jsonl, sem gravar :REPRESENTS — usar pra
+        # primeira passagem de validação.
+        self.enable_first_last_match = enable_first_last_match
+        self.first_last_audit_only = first_last_audit_only
         # Nós-fonte lidos do grafo, separados por primary label.
         self._nodes_by_label: dict[str, list[dict[str, Any]]] = defaultdict(list)
         # Canonical clusters finais:
@@ -924,6 +948,69 @@ class EntityResolutionPoliticosGoPipeline(Pipeline):
                     "candidate_canonicals": unique_canonicals,
                 })
                 attached_shadows.add(shadow["element_id"])
+
+        # ---- Fase 5.6: shadow_first_last_match (opt-in, default OFF) ----
+        # Casa shadow de exatamente 2 tokens (apelido + sobrenome) com
+        # cluster cujo source tem ≥3 tokens com primeiro==shadow[0] e
+        # último==shadow[-1]. Caso canônico: KARLOS CABRAL ↔ KARLOS
+        # MARCIO VIEIRA CABRAL. Conf 0.65 (mais baixa que prefix_match
+        # porque tokens do meio podem coincidir ou divergir). Audit-only
+        # default — homonímia 2-token no BR é alta, primeiro run é só
+        # spot-check humano.
+        if self.enable_first_last_match:
+            cluster_first_last: dict[tuple[str, str], set[str]] = defaultdict(set)
+            for canonical_id, cluster in self._clusters.items():
+                for edge in cluster["edges"]:
+                    src_name = edge.get("_source_name_norm") or ""
+                    src_tokens = src_name.split()
+                    if len(src_tokens) < 3:
+                        continue
+                    cluster_first_last[
+                        (src_tokens[0], src_tokens[-1])
+                    ].add(canonical_id)
+
+            for shadow in persons_shadow:
+                if shadow["element_id"] in attached_shadows:
+                    continue
+                name_norm = shadow["name_normalized"]
+                if not name_norm:
+                    continue
+                shadow_tokens = name_norm.split()
+                # Gating: shadow precisa ter EXATAMENTE 2 tokens.
+                # 1 token é genérico demais; 3+ já passou por prefix_match.
+                if len(shadow_tokens) != 2:
+                    continue
+                key = (shadow_tokens[0], shadow_tokens[-1])
+                unique_canonicals = sorted(cluster_first_last.get(key, set()))
+                if len(unique_canonicals) == 1:
+                    self._audit_entries.append({
+                        "type": (
+                            "shadow_first_last_match_audit"
+                            if self.first_last_audit_only
+                            else "shadow_first_last_match"
+                        ),
+                        "shadow_element_id": shadow["element_id"],
+                        "shadow_name": shadow["name"],
+                        "canonical_id": unique_canonicals[0],
+                    })
+                    if not self.first_last_audit_only:
+                        self._attach_source(
+                            canonical_id=unique_canonicals[0],
+                            node=shadow,
+                            method="shadow_first_last_match",
+                            confidence=0.65,
+                        )
+                        attached_shadows.add(shadow["element_id"])
+                elif len(unique_canonicals) > 1:
+                    self._audit_entries.append({
+                        "type": "shadow_first_last_ambiguous",
+                        "shadow_element_id": shadow["element_id"],
+                        "shadow_name": shadow["name"],
+                        "candidate_canonicals": unique_canonicals,
+                    })
+                    # Mesmo audit-only marca attached pra não cair no
+                    # shadow_no_match abaixo (semanticamente já tem hit).
+                    attached_shadows.add(shadow["element_id"])
 
         # Shadows que nenhuma regra cobriu: cai pro audit shadow_no_match.
         # (Só name é pouco pra criar cluster canônico próprio.)
