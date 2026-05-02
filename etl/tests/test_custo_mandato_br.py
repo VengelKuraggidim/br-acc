@@ -229,18 +229,28 @@ class TestTransform:
         esperado = df["custo_mensal_individual"] * 12 * 513
         assert df["custo_anual_total"] == pytest.approx(esperado, rel=1e-6)
 
-    def test_governador_sem_valor_resulta_em_total_zero(
+    def test_governador_go_carrega_subsidio_da_lei_estadual(
         self, pipeline: CustoMandatoBrPipeline,
     ) -> None:
+        # Governador GO carrega subsídio fixado pela Lei nº 17.254/2011
+        # (GO) com reajustes posteriores. Vice-Governador entra como
+        # componente extra com ``incluir_no_total=False`` (não soma).
         pipeline.extract()
         pipeline.transform()
         gov = next(
             c for c in pipeline.cargos if c["cargo"] == "governador_go"
         )
-        # Governador GO só tem componente sem valor (cap STF, lei estadual
-        # pendente de archival manual). custo_mensal = 0, custo_anual = 0.
-        assert gov["custo_mensal_individual"] == 0.0
-        assert gov["custo_anual_total"] == 0.0
+        assert gov["custo_mensal_individual"] > 0.0
+        assert gov["custo_anual_total"] == pytest.approx(
+            gov["custo_mensal_individual"] * 12, rel=1e-6,
+        )
+        # Vice-Governador é tracked como componente, mas não somado.
+        vice = [
+            c for c in pipeline.componentes
+            if c["componente_id"] == "governador_go:vice_governador"
+        ]
+        assert len(vice) == 1
+        assert vice[0].get("incluir_no_total") is False
 
     def test_componente_sem_valor_entra_no_grafo(
         self, pipeline: CustoMandatoBrPipeline,
