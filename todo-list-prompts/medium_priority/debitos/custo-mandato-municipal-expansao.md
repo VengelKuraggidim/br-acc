@@ -1,34 +1,68 @@
 # Custo de mandato — esfera municipal (prefeito + vereador)
 
-## Status 2026-04-22 — MVP Goiânia entregue
+## Status 2026-05-02 — Fase 2 (top-10 GO) entregue
+
+Expansão de Goiânia (MVP fase 1, abr/2026) pra top-10 cidades GO por
+população (Censo IBGE 2022): Aparecida de Goiânia, Anápolis, Rio Verde,
+Águas Lindas de Goiás, Luziânia, Valparaíso de Goiás, Trindade, Formosa
+e Senador Canedo. Cobertura via Option 4 (CF cap derivado) — caminho
+recomendado lá embaixo.
 
 - **Pipeline** `etl/src/bracc_etl/pipelines/custo_mandato_municipal_go.py`
-  cobre `prefeito_goiania` e `vereador_goiania`. Mesmo padrão de
-  `custo_mandato_br`; `archive_fetch` das fontes legais;
-  `CustoMandato` + `CustoComponente` + `TEM_COMPONENTE`.
-- **Valores**: vereador = 75% × subsídio dep estadual GO (CF Art. 29 VI)
-  = R$ 26.080,98/mês. Prefeito fica `None` com observação "Lei Orgânica
-  Municipal; consulte DOM-GYN" (padrão do `governador_go`).
-- **API**: router `GET /custo-mandato/{cargo}` aceita os 2 cargos novos
-  via `CargoEnum`. Service `CARGOS_SUPORTADOS` idem. Modelo ganhou
-  campo `municipio`.
-- **Testes**: 18 novos em `etl/tests/test_custo_mandato_municipal_go.py`
-  + atualizados em `api/tests/unit/test_custo_mandato_service.py`. Todos
-  passam.
-- **Runner + registry**: registrado em `runner.py::SOURCES` e
-  `docs/source_registry_br_v1.csv`.
-- **Rodado no Docker Neo4j local**: 2 cargos + 4 componentes + 4 rels
-  gravados. API local responde `/custo-mandato/vereador_goiania`
-  devolvendo R$ 26,1 mil/mês × 35 cadeiras = **R$ 10,95 mi/ano**.
-- **Aura prod NÃO rodado** — bloqueado por quota Free (200k nodes
-  atingidos). Ver `aura-free-quota-estourada.md`. Assim que o Aura
-  liberar espaço, re-rodar o pipeline em prod.
+  ganhou `_GO_MUNICIPIOS` (tabela de cidades + população) +
+  `_vereador_pct_tier` (% CF Art. 29 VI por faixa) + `_vereador_min_seats`
+  (CF Art. 29 IV mínimo de cadeiras) + `_build_components_and_meta`
+  (gera os 20 cargos do `_COMPONENTS`/`_CARGO_META` programaticamente).
+  Goiânia preserva URLs específicas (DOM-GYN, transparência, CMG); as
+  outras 9 cidades caem no padrão genérico (CF + Casa Civil GO).
+- **Valores cap por faixa** (CF Art. 29 VI; base = R$ 34.774,64 do dep
+  estadual):
+  - Goiânia (1.43M) + Aparecida (591k): >500k → 75% → R$ 26.080,98
+  - Anápolis (391k): 300-500k → 60% → R$ 20.864,78
+  - Rio Verde (245k), Águas Lindas (218k), Luziânia (211k), Valparaíso
+    (170k), Trindade (134k), Formosa (123k), Senador Canedo (115k):
+    100-300k → 50% → R$ 17.387,32
+- **n_titulares** vem do `n_vereadores` da tabela quando conhecido
+  (Goiânia=35, legislatura 2025-2028) ou cai no mínimo CF Art. 29 IV
+  pela faixa populacional (ex.: Anápolis tier 300-450k → 23, Aparecida
+  tier 450-600k → 25).
+- **Prefeitos**: continuam `valor_mensal=None` em todas as 10 cidades —
+  Lei Orgânica Municipal não tem formato consolidado. Observação textual
+  aponta pro Diário Oficial Municipal/Casa Civil GO.
+- **API**: router `GET /custo-mandato/{cargo}` migrou de `CargoEnum`
+  (StrEnum gigante) pra Path pattern + validação contra
+  `CARGOS_SUPORTADOS` (frozenset). 422 = slug malformado, 404 = slug
+  bem-formado fora do conjunto. Service `CARGOS_SUPORTADOS` enumera os
+  24 cargos (4 fed/est + 20 municipais) via `_MUNICIPIOS_GO`.
+- **Testes**: 42 cases em `etl/tests/test_custo_mandato_municipal_go.py`
+  (incluindo `TestTierFormula` parametrizado em todas as faixas) +
+  `api/tests/unit/test_custo_mandato_service.py` atualizado pra cobrir
+  o novo conjunto. Todos passam (`pytest etl/tests/test_custo_mandato_municipal_go.py`
+  → 42 pass; `pytest api/tests/unit/test_custo_mandato_service.py` →
+  10 pass).
+- **Runner + registry**: linha do `custo_mandato_municipal_go` em
+  `docs/source_registry_br_v1.csv` reescrita pra refletir top-10 GO.
+- **Rodado no Docker Neo4j local** (bolt://localhost:7687): 20 cargos
+  + 40 componentes + 40 rels gravados. API local
+  `/custo-mandato/vereador_anapolis` devolve R$ 20,9 mil/mês × 23
+  cadeiras = **R$ 5,76 mi/ano** com proveniência clicável (CF Art. 29
+  VI no planalto).
+- **PWA**: seletor `QUANTO_CUSTA_CARGOS` em `pwa/index.html` ainda só
+  expõe os 4 cargos federal/estadual. Adicionar municípios depende de
+  decisão UX (seletor de município? Sub-menu "GO municipal"?). Não
+  bloqueia: o backend serve, basta o front consumir.
+- **Aura prod NÃO rodado** — segue bloqueado por quota Free e congelado
+  por decisão 2026-05-02 (`aura-adiado-sem-grana.md`). Ambiente atual
+  é localhost.
 
-**Escopo restante** (big project separado, não bloqueia o MVP): os
-245 municípios goianos restantes. Cada lei orgânica publicada em DOM
-municipal próprio sem API — mesmo padrão do débito original permanece.
-Candidato a fallback: `basedosdados.org` se materializar tabela
-consolidada.
+**Escopo restante (Fase 3)**: os 236 municípios goianos restantes (todos
+com população ≤ 100k habitantes — caem nas faixas 20%/30%/40% do CF
+Art. 29 VI). Inflar o backend com ~470 cargos sem demanda do PWA é
+ruído sem usuário, então fica como débito. Quando precisar (PWA mostrar
+"custo do vereador da minha cidade"), basta estender `_GO_MUNICIPIOS` —
+toda a geração é mecânica. Mesma fórmula CF Art. 29 VI. Candidato
+adicional: `basedosdados.org` se materializar tabela consolidada de
+subsídio efetivo (não só teto).
 
 ## Contexto
 

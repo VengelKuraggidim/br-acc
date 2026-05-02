@@ -3,10 +3,13 @@
 Cobre a paridade com ``custo_mandato_br`` (metadata, extract archival,
 transform, provenance) + invariantes específicas do escopo municipal GO:
 
-* cargos MVP = {prefeito_goiania, vereador_goiania}
-* esfera = "municipal" e uf = "GO" e municipio = "goiania"
-* cap constitucional do vereador = 75% × subsídio dep estadual GO
-  (CF Art. 29 VI)
+* cargos cobertos = top-10 cidades GO × {prefeito, vereador} = 20 cargos
+  (Censo IBGE 2022). Goiânia é o cargo seed do MVP; expansão fase 2
+  adiciona Aparecida, Anápolis, Rio Verde, Águas Lindas, Luziânia,
+  Valparaíso, Trindade, Formosa, Senador Canedo.
+* esfera = "municipal" e uf = "GO" e municipio = slug correspondente
+* cap do vereador = % × subsídio dep estadual GO conforme CF Art. 29 VI
+  (faixa por população: >500k → 75%; 300-500k → 60%; 100-300k → 50%)
 * prefeito sem valor materializado (Lei Orgânica sem API) → total mensal
   e anual ficam zero — coerente com ``governador_go`` em ``custo_mandato_br``.
 """
@@ -22,10 +25,13 @@ import pytest
 from bracc_etl.pipelines.custo_mandato_municipal_go import (
     _CARGO_META,
     _COMPONENTS,
+    _GO_MUNICIPIOS,
     _SOURCE_ID,
     _SUBSIDIO_DEP_ESTADUAL_GO,
     _VEREADOR_GOIANIA_CAP,
     CustoMandatoMunicipalGoPipeline,
+    _vereador_min_seats,
+    _vereador_pct_tier,
 )
 
 if TYPE_CHECKING:
@@ -91,21 +97,105 @@ class TestMetadata:
     def test_source_id(self) -> None:
         assert CustoMandatoMunicipalGoPipeline.source_id == _SOURCE_ID
 
-    def test_mvp_cargos_cobertos(self) -> None:
-        assert set(_COMPONENTS.keys()) == {
-            "prefeito_goiania", "vereador_goiania",
-        }
+    def test_cargos_cobertos_pareados_com_municipios(self) -> None:
+        # Cada município gera 2 cargos (prefeito + vereador). _COMPONENTS
+        # tem que bater com 2 × len(_GO_MUNICIPIOS).
+        assert len(_COMPONENTS) == 2 * len(_GO_MUNICIPIOS)
+        slugs = {m["slug"] for m in _GO_MUNICIPIOS}
+        for slug in slugs:
+            assert f"prefeito_{slug}" in _COMPONENTS
+            assert f"vereador_{slug}" in _COMPONENTS
+
+    def test_goiania_seed_preservada(self) -> None:
+        # Goiânia foi o cargo seed do MVP — guard contra regressão dos
+        # slugs/keys que o service e o registry referenciam.
+        assert "prefeito_goiania" in _COMPONENTS
+        assert "vereador_goiania" in _COMPONENTS
 
     def test_meta_alinhado_com_components(self) -> None:
         assert set(_COMPONENTS.keys()) == set(_CARGO_META.keys())
 
-    def test_cap_vereador_consistente_com_cf(self) -> None:
+    def test_cap_vereador_goiania_consistente_com_cf(self) -> None:
         # CF Art. 29 VI: vereador em município >500k hab → até 75% do
         # subsídio do dep estadual. Invariante: se o subsídio base mudar
         # em custo_mandato_br, o cap do vereador precisa ser re-derivado.
         assert pytest.approx(
             _SUBSIDIO_DEP_ESTADUAL_GO * 0.75, rel=1e-9,
         ) == _VEREADOR_GOIANIA_CAP
+
+
+class TestTierFormula:
+    """CF Art. 29 VI — % do subsídio do dep estadual por faixa populacional."""
+
+    @pytest.mark.parametrize(
+        ("populacao", "pct_esperado"),
+        [
+            (5_000, 0.20),
+            (10_000, 0.20),
+            (10_001, 0.30),
+            (50_000, 0.30),
+            (50_001, 0.40),
+            (100_000, 0.40),
+            (100_001, 0.50),
+            (300_000, 0.50),
+            (300_001, 0.60),
+            (500_000, 0.60),
+            (500_001, 0.75),
+            (1_437_237, 0.75),  # Goiânia
+        ],
+    )
+    def test_pct_tier_em_cada_faixa(
+        self, populacao: int, pct_esperado: float,
+    ) -> None:
+        assert _vereador_pct_tier(populacao) == pct_esperado
+
+    @pytest.mark.parametrize(
+        ("populacao", "min_esperado"),
+        [
+            (10_000, 9),
+            (15_000, 9),
+            (15_001, 11),
+            (50_000, 13),
+            (100_000, 17),  # 80k-120k → 17
+            (300_000, 21),
+            (591_418, 25),  # Aparecida — 450-600k → 25
+        ],
+    )
+    def test_min_seats_em_cada_faixa(
+        self, populacao: int, min_esperado: int,
+    ) -> None:
+        assert _vereador_min_seats(populacao) == min_esperado
+
+    def test_anapolis_cap_eh_60_pct(self) -> None:
+        # Anápolis (391k) cai na faixa 300-500k → 60% do dep estadual.
+        anapolis = next(m for m in _GO_MUNICIPIOS if m["slug"] == "anapolis")
+        assert _vereador_pct_tier(int(anapolis["populacao"])) == 0.60
+        subsidio_node = next(
+            c for c in _COMPONENTS["vereador_anapolis"]
+            if c["componente_id"] == "vereador_anapolis:subsidio"
+        )
+        assert subsidio_node["valor_mensal"] == pytest.approx(
+            _SUBSIDIO_DEP_ESTADUAL_GO * 0.60, rel=1e-9,
+        )
+
+    def test_rio_verde_cap_eh_50_pct(self) -> None:
+        # Rio Verde (245k) cai na faixa 100-300k → 50%.
+        rv = next(m for m in _GO_MUNICIPIOS if m["slug"] == "rio_verde")
+        assert _vereador_pct_tier(int(rv["populacao"])) == 0.50
+        subsidio_node = next(
+            c for c in _COMPONENTS["vereador_rio_verde"]
+            if c["componente_id"] == "vereador_rio_verde:subsidio"
+        )
+        assert subsidio_node["valor_mensal"] == pytest.approx(
+            _SUBSIDIO_DEP_ESTADUAL_GO * 0.50, rel=1e-9,
+        )
+
+    def test_aparecida_cap_eh_75_pct(self) -> None:
+        # Aparecida de Goiânia (591k) cai na faixa >500k → 75%.
+        ap = next(
+            m for m in _GO_MUNICIPIOS if m["slug"] == "aparecida_de_goiania"
+        )
+        assert _vereador_pct_tier(int(ap["populacao"])) == 0.75
 
 
 # ---------------------------------------------------------------------------
@@ -151,13 +241,17 @@ class TestExtract:
 
 
 class TestTransform:
-    def test_produces_one_cargo_per_mvp(
+    def test_produces_two_cargos_per_municipio(
         self, pipeline: CustoMandatoMunicipalGoPipeline,
     ) -> None:
         pipeline.extract()
         pipeline.transform()
         cargos = {c["cargo"] for c in pipeline.cargos}
-        assert cargos == {"prefeito_goiania", "vereador_goiania"}
+        assert len(cargos) == 2 * len(_GO_MUNICIPIOS)
+        for m in _GO_MUNICIPIOS:
+            slug = m["slug"]
+            assert f"prefeito_{slug}" in cargos
+            assert f"vereador_{slug}" in cargos
 
     def test_componentes_count_matches_constants(
         self, pipeline: CustoMandatoMunicipalGoPipeline,
@@ -194,13 +288,16 @@ class TestTransform:
     def test_esfera_e_municipio_carimbados(
         self, pipeline: CustoMandatoMunicipalGoPipeline,
     ) -> None:
-        # Guard contra regressão do cargo-chave ser municipal.
+        # Guard contra regressão do cargo-chave ser municipal. ``municipio``
+        # tem que bater o slug do cargo.
         pipeline.extract()
         pipeline.transform()
+        slugs_validos = {m["slug"] for m in _GO_MUNICIPIOS}
         for cargo_node in pipeline.cargos:
             assert cargo_node["esfera"] == "municipal"
             assert cargo_node["uf"] == "GO"
-            assert cargo_node["municipio"] == "goiania"
+            assert cargo_node["municipio"] in slugs_validos
+            assert cargo_node["cargo"].endswith(cargo_node["municipio"])
 
     def test_vereador_subsidio_bate_cap_constitucional(
         self, pipeline: CustoMandatoMunicipalGoPipeline,
@@ -229,15 +326,18 @@ class TestTransform:
     def test_prefeito_sem_valor_resulta_em_total_zero(
         self, pipeline: CustoMandatoMunicipalGoPipeline,
     ) -> None:
-        # Lei Orgânica não tem API pública → subsídio fica None, total zera.
-        # Mesmo padrão do governador_go em custo_mandato_br.
+        # Lei Orgânica não tem API pública → subsídio fica None pra todas
+        # as cidades, total zera. Mesmo padrão do governador_go em
+        # custo_mandato_br.
         pipeline.extract()
         pipeline.transform()
-        prefeito = next(
-            c for c in pipeline.cargos if c["cargo"] == "prefeito_goiania"
-        )
-        assert prefeito["custo_mensal_individual"] == 0.0
-        assert prefeito["custo_anual_total"] == 0.0
+        prefeitos = [
+            c for c in pipeline.cargos if c["cargo"].startswith("prefeito_")
+        ]
+        assert len(prefeitos) == len(_GO_MUNICIPIOS)
+        for prefeito in prefeitos:
+            assert prefeito["custo_mensal_individual"] == 0.0, prefeito["cargo"]
+            assert prefeito["custo_anual_total"] == 0.0, prefeito["cargo"]
 
     def test_componente_sem_valor_entra_no_grafo(
         self, pipeline: CustoMandatoMunicipalGoPipeline,
@@ -251,6 +351,23 @@ class TestTransform:
         assert len(opacos) == 1
         assert opacos[0]["valor_mensal"] is None
         assert opacos[0]["valor_observacao"]
+
+    def test_anapolis_custo_anual_usa_min_seats_cf(
+        self, pipeline: CustoMandatoMunicipalGoPipeline,
+    ) -> None:
+        # Anápolis (391k → faixa 300-450k) cai em CF Art. 29 IV mín 23
+        # vereadores. Subsídio = 60% × 34.774,64.
+        pipeline.extract()
+        pipeline.transform()
+        vereador = next(
+            c for c in pipeline.cargos if c["cargo"] == "vereador_anapolis"
+        )
+        assert vereador["n_titulares"] == 23
+        cap = _SUBSIDIO_DEP_ESTADUAL_GO * 0.60
+        esperado_anual = cap * 12 * 23
+        assert vereador["custo_anual_total"] == pytest.approx(
+            esperado_anual, rel=1e-6,
+        )
 
 
 # ---------------------------------------------------------------------------

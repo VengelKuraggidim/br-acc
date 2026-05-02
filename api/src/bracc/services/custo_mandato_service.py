@@ -24,14 +24,28 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Cargos do MVP. Usado pelo router pra validação de path. Manter alinhado
-# com ``etl/src/bracc_etl/pipelines/custo_mandato_br.py::_COMPONENTS`` (federal
-# + estadual) e ``custo_mandato_municipal_go.py::_COMPONENTS`` (municipal GYN).
+# Cargos suportados. O router valida path contra esse frozenset (404 se
+# fora). Manter alinhado com
+# ``etl/src/bracc_etl/pipelines/custo_mandato_br.py`` (federal + estadual)
+# e ``custo_mandato_municipal_go.py::_GO_MUNICIPIOS`` (municipal GO,
+# top-10 cidades por população — Censo IBGE 2022). Quando uma cidade for
+# adicionada/removida do pipeline, ajustar aqui em paralelo.
+_MUNICIPIOS_GO: tuple[str, ...] = (
+    "goiania",
+    "aparecida_de_goiania",
+    "anapolis",
+    "rio_verde",
+    "aguas_lindas_de_goias",
+    "luziania",
+    "valparaiso_de_goias",
+    "trindade",
+    "formosa",
+    "senador_canedo",
+)
 CARGOS_SUPORTADOS: frozenset[str] = frozenset(
-    {
-        "dep_federal", "senador", "dep_estadual_go", "governador_go",
-        "prefeito_goiania", "vereador_goiania",
-    },
+    {"dep_federal", "senador", "dep_estadual_go", "governador_go"}
+    | {f"prefeito_{m}" for m in _MUNICIPIOS_GO}
+    | {f"vereador_{m}" for m in _MUNICIPIOS_GO},
 )
 
 

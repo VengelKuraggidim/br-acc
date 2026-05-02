@@ -106,13 +106,22 @@ def _fake_dep_federal_record() -> MagicMock:
 
 class TestObterCustoMandato:
     def test_cargos_suportados_alinhado_com_pipeline(self) -> None:
-        # MVP federal + estadual (custo_mandato_br) + municipal GYN
-        # (custo_mandato_municipal_go).
+        # Federal + estadual (custo_mandato_br) + municipal GO
+        # (custo_mandato_municipal_go, top-10 cidades por população).
         cargos = set(CARGOS_SUPORTADOS)
-        assert cargos == {
+        federais_estaduais = {
             "dep_federal", "senador", "dep_estadual_go", "governador_go",
-            "prefeito_goiania", "vereador_goiania",
         }
+        municipios_go = {
+            "goiania", "aparecida_de_goiania", "anapolis", "rio_verde",
+            "aguas_lindas_de_goias", "luziania", "valparaiso_de_goias",
+            "trindade", "formosa", "senador_canedo",
+        }
+        municipais = (
+            {f"prefeito_{m}" for m in municipios_go}
+            | {f"vereador_{m}" for m in municipios_go}
+        )
+        assert cargos == federais_estaduais | municipais
 
     @pytest.mark.anyio
     async def test_monta_resposta_completa_pra_dep_federal(self) -> None:
@@ -212,11 +221,20 @@ class TestRouter:
         assert len(body["componentes"]) == 2
 
     @pytest.mark.anyio
-    async def test_cargo_fora_do_enum_422(self, client: AsyncClient) -> None:
-        # FastAPI rejeita antes de tocar o serviço. Note: "prefeito" (sem
-        # município) cai aqui porque só "prefeito_goiania" está no enum.
-        resp = await client.get("/custo-mandato/prefeito")
+    async def test_cargo_malformado_422(self, client: AsyncClient) -> None:
+        # Pattern do path rejeita slugs com caractere fora de [a-z0-9_].
+        resp = await client.get("/custo-mandato/PREFEITO")
         assert resp.status_code == 422
+
+    @pytest.mark.anyio
+    async def test_cargo_bem_formado_mas_fora_do_set_404(
+        self, client: AsyncClient,
+    ) -> None:
+        # Slug bem-formado mas fora de CARGOS_SUPORTADOS (ex.: município
+        # não coberto) → 404 antes de tocar o serviço.
+        resp = await client.get("/custo-mandato/prefeito_jatai")
+        assert resp.status_code == 404
+        assert "prefeito_jatai" in resp.json()["detail"]
 
     @pytest.mark.anyio
     async def test_cargo_valido_sem_no_404(self, client: AsyncClient) -> None:
