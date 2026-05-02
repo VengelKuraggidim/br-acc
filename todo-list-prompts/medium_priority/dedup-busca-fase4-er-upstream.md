@@ -1,7 +1,13 @@
-# Dedup busca PWA — Fase 4: ER upstream para nomes diferentes (proposta)
+# Dedup busca PWA — Fase 4: ER upstream para nomes diferentes
 
-> Proposta criada 2026-05-02. Não implementada — depende de decisão
-> editorial sobre tolerância a falso-positivo.
+> Proposta criada 2026-05-02. **Implementada** como fase 5.6
+> `shadow_first_last_match` no mesmo dia (commit `259d53a` — testes; a
+> implementação caiu no commit `bff0ee1`). Default OFF.
+> **Spot-check 2026-05-02:** 11 candidatos, 0 ambíguos; 6 promovidos
+> manualmente via Cypher (`etl/scripts/promote_first_last_6.py`),
+> 5 rejeitados por risco de homonímia cross-UF.
+> **Gap remanescente:** UF gating não foi codificado — ver
+> `debitos/er-fase56-uf-gating.md`.
 
 ## Contexto
 
