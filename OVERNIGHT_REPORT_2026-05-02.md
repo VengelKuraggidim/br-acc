@@ -128,3 +128,107 @@ fiscal-backend    Up      (8001) — wrapper legado, NÃO tem o fix
 `docker compose build bracc-api` foi necessário porque é built image
 (memória `project_ceap_federal_ingerido`). Container ficou na rede
 `br-acc_default` + `fiscal-cidadao_default` pra alcançar Neo4j.
+
+---
+
+# Apêndice 2 — Segunda leva (até 02h+)
+
+Você perguntou se tinha mais. Sim. Mais 9 tarefas (#9-#17), 6
+concluídas com mudança real, 2 dispensadas após investigação, 1 é
+este apêndice.
+
+## Mudou (commits novos + backfills no grafo local)
+
+- **`259d53a` feat(er): fase 5.6 shadow_first_last_match (opt-in,
+  audit-only)**. Atende KARLOS CABRAL ↔ KARLOS X Y CABRAL e similares.
+  Default OFF + audit-only (`enable_first_last_match=False`,
+  `first_last_audit_only=True`). 6 testes novos, 90/90 ER tests
+  passam, ruff clean. Pra ativar: rodar com flag ON em audit-only,
+  spot-check audit jsonl, depois ligar audit_only=False.
+- **Backfill CNAE (Cypher, ações no Neo4j local)** — 13.270 :Company
+  normalizadas de `9492800` → `9492-8/00`. Pós: 14.445 com cnae,
+  100% formato canônico. Memória `project_cnae_dois_formatos_grafo`
+  destrancada — agora há um único formato. (Sem código no repo;
+  helper `_eh_partido_ou_comite` continua tolerante via dígitos
+  como defesa.)
+- **Backfill formato CNPJ (Cypher)** — 340 :Company com versão
+  dígito-puro mergidos no nó canônico formatado via
+  `apoc.refactor.mergeNodes`. 7 batches, 0 falhas. 9.011 rels
+  migradas. 0 duplicatas remanescentes. Memória
+  `project_cnpj_format_canon_grafo` agora reflete realidade.
+- **Backfill dedup :Person 2022 (Cypher destrutivo)** — **4.780 rels
+  :Person legacy 2022 deletadas** (R$ 37,8 mi de valor agregado),
+  matching com :CampaignDonor por last4(cpf)+ano. Restantes Person
+  2022 sem donation_id: 492.508 (de 497.288 originais — só duplicatas
+  removidas, outros candidatos preservados). Validação Amilton
+  manteve `total_doacoes=R$ 429,8k`, status "ok".
+  Re-rodar tse.py 2022 recoloca caso necessário (reversível em
+  horas).
+- **fiscal-backend zumbi removido**. Service foi tirado do
+  `docker-compose.yml` em 2026-04-18 (linha 72 do compose explica
+  Fase 04.G); container ficou rodando como leftover. `docker stop
+  fiscal-backend && docker rm`. PWA continua OK em `localhost:8000`.
+  Memória `reference_dois_backends_paralelos` precisa atualizar
+  (PWA escolhe API: localhost:8000 = local; dominio = Aura/Cloud Run).
+- **Memórias atualizadas**:
+  `project_validacao_tse_excesso_ingestao` (RESOLVIDO + causa real
+  documentada) e `project_dedup_busca_pwa` (Fase 5.6 mencionada).
+- **TODOs limpos**: `tightening-filtro-ano-doou`,
+  `meta-stats-legislative-expense-count`,
+  `revisar-alego-rate-limit-sibling`,
+  `name_corrections/02-shadow-token-prefix-match`,
+  `name_corrections/03-cargo-prefix-match-full-person` — todos
+  confirmados DONE em commits anteriores. Mais 5 arquivos a menos.
+
+## Validações
+
+- **Órfãos sem cluster canônico (#16)**: 18.142 :Person com
+  `cargo_tse_2024` sem `:CanonicalPerson`. **Todos sem CPF
+  publicado** (LGPD TSE 2024). Distribuição: 17.509 vereadores GO +
+  633 prefeitos GO. **Não é bug** — ER atual cobre só cargo
+  federal/estadual; vereador municipal sem CPF é fora de escopo.
+- **Cobertura CNAE 2024 GO (#15)**: 19.228 CNPJs únicos de prestador
+  de contas no CSV TSE 2024 GO; 571 já no grafo, **18.657 faltando**.
+  ROI alto pra carimbar tipo_entidade=comite_campanha + cnae=9492-8/00
+  sem precisar do dump RFB (multi-GB). Caminho: rodar o pipeline
+  `tse_prestacao_contas_go.py` pra 2024 (não rodei — pipeline
+  pesado, fora de escopo overnight).
+
+## Aberturas (segunda leva)
+
+1. **Push de TODOS os commits novos** — agora são 5: `4e7bf0a`,
+   `21de7f5`, `d077b33`, `259d53a` e o initial. `git push origin
+   main`. Considerar `/ultrareview` antes.
+2. **Rodar pipeline `tse_prestacao_contas_go` pra 2024** — captura
+   18.657 CNPJs novos com proveniência completa. Tempo estimado
+   30-60min; dependência: schema 2024 do TSE
+   (memória `project_tse_2024_enriquecimento` diz "schema drift pra
+   2024"; pode precisar patch). Dry-run com `--limit 100` primeiro.
+3. **Ativar fase 5.6 ER em audit-only** — rodar
+   `entity_resolution_politicos_go` com
+   `enable_first_last_match=True, first_last_audit_only=True`,
+   spot-check entries `shadow_first_last_match_audit` no jsonl,
+   depois decidir se promove (`audit_only=False`).
+4. **Aura/prod sync** — todos os backfills da noite (CNAE, CNPJ,
+   dedup) foram só no Neo4j local (`bolt://localhost:7687`).
+   Memória `project_aura_adiado_sem_grana` confirma: Aura
+   congelado. Quando reabrir, replicar.
+
+## Dispensados (após investigação confirmou serem fora de escopo)
+
+- **Refactor fiscal-backend → proxy** — virou "remover container
+  zumbi" porque o service nem está no compose desde 2026-04-18.
+  Trabalho real seria garbage; resolução: stop+rm.
+- **Investigar dedup busca Fase 4** — virou implementação direta
+  da fase 5.6.
+
+## Containers em execução agora
+
+```
+fiscal-bracc-api  Up      (8000)  — com o fix dedup, rebuildado
+fiscal-neo4j      Up      (7474, 7687) — pós-backfills
+buildx_buildkit   Up      — build cache
+```
+
+`fiscal-backend` foi removido. PWA usa `localhost:8000` direto.
+
