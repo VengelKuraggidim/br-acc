@@ -392,9 +392,13 @@ def run(
 def _resolve_rf_release_inline(year_month: str | None = None) -> str:
     """Resolve Receita Federal CNPJ release URL.
 
-    Tries the current arquivos.receitafederal.gov.br monthly archive path first,
-    then Nextcloud shares, then older dadosabertos fallbacks.
+    The authoritative source is now the SERPRO+ Nextcloud share at
+    arquivos.receitafederal.gov.br. Releases live in
+    /Dados/Cadastros/CNPJ/{YYYY-MM}/ and must be fetched via WebDAV directly
+    — the /index.php/s/{token}/download?path=&files= zip-wrap endpoint
+    silently returns 0 bytes for the multi-hundred-MB CNPJ files.
     """
+    import re
     from datetime import UTC, datetime
 
     import httpx
@@ -412,49 +416,75 @@ def _resolve_rf_release_inline(year_month: str | None = None) -> str:
             else:
                 cursor = cursor.replace(month=cursor.month - 1)
 
-    # --- Current archive path (authoritative monthly releases) ---
-    archive_base = "https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/{ym}/"
-    for ym in candidates:
-        url = archive_base.format(ym=ym)
-        try:
-            resp = httpx.head(url, follow_redirects=True, timeout=30)
-            if resp.status_code < 400:
-                return url
-        except httpx.HTTPError:
-            pass
-
-    # --- Nextcloud (legacy interim path) ---
-    nextcloud_dl = "https://arquivos.receitafederal.gov.br/s/{token}/download?path=%2F&files="
+    # --- Nextcloud WebDAV (authoritative) ---
     tokens: list[str] = []
     env_token = os.environ.get("CNPJ_SHARE_TOKEN")
     if env_token:
         tokens.append(env_token)
     tokens.extend(["gn672Ad4CF8N6TK", "YggdBLfdninEJX9"])
 
+    propfind_body = (
+        '<?xml version="1.0"?>'
+        '<d:propfind xmlns:d="DAV:"><d:prop><d:displayname/></d:prop></d:propfind>'
+    )
     for token in tokens:
-        share_url = f"https://arquivos.receitafederal.gov.br/s/{token}"
+        listing_url = (
+            f"https://arquivos.receitafederal.gov.br/public.php/dav/files/{token}/"
+            "Dados/Cadastros/CNPJ/"
+        )
         try:
-            resp = httpx.head(share_url, follow_redirects=True, timeout=30)
+            resp = httpx.request(
+                "PROPFIND",
+                listing_url,
+                content=propfind_body,
+                headers={"Depth": "1", "Content-Type": "application/xml"},
+                auth=(token, ""),
+                timeout=30,
+            )
+        except httpx.HTTPError:
+            continue
+        if resp.status_code >= 400:
+            continue
+        names = sorted(set(re.findall(r"<d:displayname>(\d{4}-\d{2})</d:displayname>", resp.text)))
+        if not names:
+            continue
+        if year_month is not None:
+            chosen = year_month if year_month in names else None
+        else:
+            chosen = names[-1]
+        if chosen is None:
+            continue
+        return (
+            f"https://arquivos.receitafederal.gov.br/public.php/dav/files/{token}/"
+            f"Dados/Cadastros/CNPJ/{chosen}/"
+        )
+
+    # --- Legacy archive path (kept in case RFB restores it) ---
+    archive_base = "https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/{ym}/"
+    for ym in candidates:
+        url = archive_base.format(ym=ym)
+        try:
+            resp = httpx.head(url, follow_redirects=True, timeout=10)
             if resp.status_code < 400:
-                return nextcloud_dl.format(token=token)
+                return url
         except httpx.HTTPError:
             pass
 
-    # --- Legacy dadosabertos (fallback) ---
+    # --- Legacy dadosabertos (host often unreachable) ---
     new_base = "https://dadosabertos.rfb.gov.br/CNPJ/dados_abertos_cnpj/{ym}/"
     legacy_url = "https://dadosabertos.rfb.gov.br/CNPJ/"
 
     for ym in candidates:
         url = new_base.format(ym=ym)
         try:
-            resp = httpx.head(url, follow_redirects=True, timeout=30)
+            resp = httpx.head(url, follow_redirects=True, timeout=10)
             if resp.status_code < 400:
                 return url
         except httpx.HTTPError:
             pass
 
     try:
-        resp = httpx.head(legacy_url, follow_redirects=True, timeout=30)
+        resp = httpx.head(legacy_url, follow_redirects=True, timeout=10)
         if resp.status_code < 400:
             return legacy_url
     except httpx.HTTPError:
