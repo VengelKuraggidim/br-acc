@@ -342,6 +342,207 @@ class TestDoadoresCampaignDonorStub:
         assert d.valor_total == 350.0
 
 
+# --- 3.2. Dedup :Person legacy + :CampaignDonor (mesma doação 2×) -----------
+
+
+class TestDedupPersonLegacyVsCampaignDonor:
+    """Bug investigado em 2026-05-02: pipeline ``tse.py`` (legado) cria
+    ``:Person {cpf=pleno}`` agregada por ano; pipeline novo
+    ``tse_prestacao_contas_go.py`` cria ``:CampaignDonor {doador_id=mascarado}``
+    granular. A mesma doação cai 2× → ``total_doacoes`` dobra. Spot-check:
+    Amilton Batista R$843k vs TSE R$421,5k.
+
+    O service descarta a rel :Person legada (sem ``donation_id``) quando
+    há :CampaignDonor com ``(last5_cpf, ano)`` matching — o canônico é o
+    granular do pipeline novo.
+    """
+
+    def test_person_legacy_descartada_quando_campaigndonor_existe(self) -> None:
+        """Mesma doação aparece como :Person {cpf=pleno} (legado, sem
+        donation_id) e :CampaignDonor {doador_id=mascarado, donation_id=X}.
+        Service deve manter só a :CampaignDonor."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="leonardo_pleno",
+                politico_is_source=False,
+                rel_props={"valor": 50_000.0, "ano": 2022},  # legado, sem donation_id
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="leonardo_mascarado",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 50_000.0,
+                    "ano": 2022,
+                    "donation_id": "DN-2022-001",
+                },
+            ),
+        ]
+        entidades = {
+            "leonardo_pleno": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "000.046.511-97",
+                    "name": "LEONARDO MELO DE OLIVEIRA",
+                },
+            },
+            "leonardo_mascarado": {
+                "type": "CampaignDonor",
+                "properties": {
+                    "doador_id": "***.***.*11-97",
+                    "doador_nome": "LEONARDO MELO DE OLIVEIRA",
+                    "doador_tipo": "pf",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        # 1 doador agregado (CampaignDonor canônico), R$50k — não R$100k.
+        assert len(resultado.doadores_pessoa) == 1
+        d = resultado.doadores_pessoa[0]
+        assert d.valor_total == 50_000.0
+        assert d.n_doacoes == 1
+        assert d.cpf_mascarado == "***.***.*11-97"
+
+    def test_person_legacy_mantida_sem_campaigndonor_matching(self) -> None:
+        """Se NÃO existe rel :CampaignDonor matching ``(last5, ano)``, a
+        :Person legada continua sendo somada — não filtramos cegamente."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="solo_pleno",
+                politico_is_source=False,
+                rel_props={"valor": 25_000.0, "ano": 2018},
+            ),
+        ]
+        entidades = {
+            "solo_pleno": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "111.222.333-44",
+                    "name": "DOADOR SEM PIPELINE NOVO",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2018,
+        )
+        assert len(resultado.doadores_pessoa) == 1
+        assert resultado.doadores_pessoa[0].valor_total == 25_000.0
+
+    def test_person_com_donation_id_nunca_e_descartada(self) -> None:
+        """Rel :Person com ``donation_id`` carimbado vem do pipeline novo
+        (caminho frio do ``tse_prestacao_contas_go.py`` quando o CPF pleno
+        veio na CSV). Não é legado — não pode ser descartada mesmo se há
+        :CampaignDonor com mesmo last5."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pleno_granular",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 30_000.0,
+                    "ano": 2022,
+                    "donation_id": "DN-2022-002",
+                },
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="outro_mascarado",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 10_000.0,
+                    "ano": 2022,
+                    "donation_id": "DN-2022-003",
+                },
+            ),
+        ]
+        entidades = {
+            "pleno_granular": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "555.666.777-88",
+                    "name": "DOADOR GRANULAR",
+                },
+            },
+            "outro_mascarado": {
+                "type": "CampaignDonor",
+                "properties": {
+                    "doador_id": "***.***.*77-88",
+                    "doador_tipo": "pf",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        # Mesmo last5=77788 entre os 2: o :Person tem donation_id,
+        # então NÃO é descartado. Soma = 40k.
+        assert len(resultado.doadores_pessoa) == 2
+        total = sum(d.valor_total for d in resultado.doadores_pessoa)
+        assert total == 40_000.0
+
+    def test_n_pessoas_legacy_agregadas_dedupadas_contra_n_camp_granulares(
+        self,
+    ) -> None:
+        """Caso real: ``tse.py`` agrega 2 doações de R$25k em 1 :Person R$50k;
+        ``tse_prestacao_contas_go.py`` cria 2 :CampaignDonor de R$25k cada.
+        Pós-dedup: só os 2 granulares contam → R$50k total (não R$100k)."""
+        conexoes = [
+            _conn(
+                rel_type="DOOU",
+                target_id="pleno",
+                politico_is_source=False,
+                rel_props={"valor": 50_000.0, "ano": 2022},  # agregado legado
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="masc",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 25_000.0,
+                    "ano": 2022,
+                    "donation_id": "DN-2022-A",
+                },
+            ),
+            _conn(
+                rel_type="DOOU",
+                target_id="masc",
+                politico_is_source=False,
+                rel_props={
+                    "valor": 25_000.0,
+                    "ano": 2022,
+                    "donation_id": "DN-2022-B",
+                },
+            ),
+        ]
+        entidades = {
+            "pleno": {
+                "type": "Person",
+                "properties": {
+                    "cpf": "999.888.777-66",
+                    "name": "DOADOR AGREGADO",
+                },
+            },
+            "masc": {
+                "type": "CampaignDonor",
+                "properties": {
+                    "doador_id": "***.***.*77-66",
+                    "doador_tipo": "pf",
+                },
+            },
+        }
+        resultado = classificar(
+            conexoes, entidades, POLITICO_ID, ano_doacao=2022,
+        )
+        assert len(resultado.doadores_pessoa) == 1
+        d = resultado.doadores_pessoa[0]
+        assert d.valor_total == 50_000.0
+        assert d.n_doacoes == 2
+
+
 # --- 3.5. Filtro por ano em :DOOU (fix duplicação 201,6%) -------------------
 
 

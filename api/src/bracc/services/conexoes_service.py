@@ -298,6 +298,79 @@ def _nome_empresa(props: dict[str, Any]) -> str:
 from bracc.services.rfb_status import LABEL_LEIGA as _SITUACAO_LEIGA  # noqa: E402
 
 
+def _last4_digits(value: str | None) -> str:
+    """Últimos 4 dígitos numéricos de um CPF (pleno ou mascarado).
+
+    O TSE 2022+ publica CPF de doador PF no formato mascarado
+    ``***.***.*XX-YY`` (1 dígito oculto + 2 visíveis no bloco 3 + 2 finais)
+    = exatamente **4 dígitos visíveis**. Pleno é ``XXX.XXX.XXX-XX``
+    (11 dígitos). Pegar os últimos 4 caracteres numéricos isola os 4
+    visíveis em ambos os formatos — permite casar :Person {cpf=pleno} com
+    :CampaignDonor {doador_id=mascarado} pra deduplicar a mesma doação
+    que cai duas vezes no grafo (pipeline legado ``tse.py`` agrega por
+    ano em :Person; pipeline novo ``tse_prestacao_contas_go.py`` cria 1
+    :CampaignDonor por donation_id).
+
+    Falsos positivos: dois doadores com 4 últimos dígitos de CPF iguais
+    doando pro mesmo candidato no mesmo ano. Probabilidade da ordem 1e-4
+    por par; aceitável pro ganho de eliminar ~497k duplicatas confirmadas
+    no Neo4j local (2026-05-02).
+    """
+    if not value:
+        return ""
+    digits = "".join(c for c in value if c.isdigit())
+    return digits[-4:] if len(digits) >= 4 else ""
+
+
+def _build_camp_donor_keys(
+    conexoes_raw: list[dict[str, Any]],
+    entidades_conectadas: dict[str, dict[str, Any]],
+    politico_entity_id: str,
+) -> set[tuple[str, int]]:
+    """Coleta ``(last4_doador_id, ano)`` das rels :DOOU com :CampaignDonor.
+
+    Usado em :func:`classificar` antes do loop principal pra deduplicar
+    rels :Person legadas (sem ``donation_id``) que representam a mesma
+    doação ingerida pelo pipeline novo :class:`CampaignDonor`. Veja
+    docstring de :func:`_last4_digits` pro racional do casamento.
+    """
+    keys: set[tuple[str, int]] = set()
+    for conn in conexoes_raw:
+        if conn.get("relationship_type") != "DOOU":
+            continue
+        source_id = conn.get("source_id")
+        target_id_raw = conn.get("target_id")
+        if not isinstance(source_id, str) or not isinstance(target_id_raw, str):
+            continue
+        if source_id == politico_entity_id:
+            other_id = target_id_raw
+        elif target_id_raw == politico_entity_id:
+            other_id = source_id
+        else:
+            continue
+        other = entidades_conectadas.get(other_id) or {}
+        if norm_type(other.get("type")) != "campaigndonor":
+            continue
+        props = other.get("properties") or {}
+        if not isinstance(props, dict):
+            continue
+        last4 = _last4_digits(as_str(props, "doador_id"))
+        if not last4:
+            continue
+        rel_props = conn.get("properties") or {}
+        if not isinstance(rel_props, dict):
+            continue
+        ano_raw = rel_props.get("ano")
+        try:
+            ano = int(ano_raw) if ano_raw is not None else None
+        except (TypeError, ValueError):
+            ano = None
+        if ano is None:
+            continue
+        keys.add((last4, ano))
+    return keys
+
+
 def _situacao_from_props(
     props: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None]:
@@ -370,6 +443,16 @@ def classificar(
     doacoes_empresa: dict[str, _DoacaoEmpresaAcc] = {}
     doacoes_pessoa: dict[str, _DoacaoPessoaAcc] = {}
 
+    # Dedup de doações que caem 2× no grafo: o pipeline legado ``tse.py``
+    # cria :Person {cpf=pleno} agregada por ano; o pipeline novo
+    # ``tse_prestacao_contas_go.py`` cria :CampaignDonor {doador_id=mascarado}
+    # granular (1 por donation_id). Quando há rel :CampaignDonor pra um
+    # ``(last5_cpf, ano)``, descartamos a rel :Person legada (sem
+    # ``donation_id``) com o mesmo casamento — o canônico é o granular.
+    camp_donor_keys = _build_camp_donor_keys(
+        conexoes_raw, entidades_conectadas, politico_entity_id,
+    )
+
     for conn in conexoes_raw:
         source_id = conn.get("source_id")
         target_id_raw = conn.get("target_id")
@@ -435,15 +518,29 @@ def classificar(
             # + pipelines ativos tse.py e tse_prestacao_contas_go.py
             # carimbam). Rels sem ``ano`` são descartadas quando o filtro
             # está ativo — falha rápido se pipeline futuro regredir.
-            if ano_doacao is not None:
-                rel_ano_raw = rel_props.get("ano")
-                try:
-                    rel_ano = (
-                        int(rel_ano_raw) if rel_ano_raw is not None else None
-                    )
-                except (TypeError, ValueError):
-                    rel_ano = None
-                if rel_ano != ano_doacao:
+            rel_ano_raw = rel_props.get("ano")
+            try:
+                rel_ano = (
+                    int(rel_ano_raw) if rel_ano_raw is not None else None
+                )
+            except (TypeError, ValueError):
+                rel_ano = None
+            if ano_doacao is not None and rel_ano != ano_doacao:
+                continue
+            # Descarta rel :Person legada (pipeline ``tse.py`` agregado, sem
+            # ``donation_id``) quando há :CampaignDonor granular do pipeline
+            # ``tse_prestacao_contas_go.py`` cobrindo ``(last4_cpf, ano)``.
+            # Ver :func:`_build_camp_donor_keys` pro racional.
+            if (
+                target_type == "person"
+                and rel_props.get("donation_id") is None
+                and rel_ano is not None
+            ):
+                last4_check = _last4_digits(as_str(target_props, "cpf"))
+                if (
+                    last4_check
+                    and (last4_check, rel_ano) in camp_donor_keys
+                ):
                     continue
             valor = _valor_doacao(rel_props)
             donated_at = _donated_at_iso(rel_props)
