@@ -143,12 +143,82 @@ patterns. 5 testes novos em
 integration). `MunicipalGazetteAct {act_type='ato_vereador'}` passa a
 ser populado automaticamente em runs futuros do `querido_diario_go`.
 
-**Camada 2 — pendente (big project)**: continua valendo a opção (4) —
-scraper dedicado do portal CMG. Re-avaliar ROI a cada 6 meses; escopo
-(a) listagem parlamentares via HTML simples, (b) PDF parser pras
-despesas via `pypdf` (já dep), (c) archival por URL.
+**Camada 2 — re-escopada em 2 fases (2026-05-02)**:
 
-Se alguma das fontes alternativas materializar mais dado equivalente
-(basedosdados.org `vereador_goiania_despesas` é o candidato mais realista
-à médio prazo), a camada 2 vira deletable. Este débito pode viver agora
-em `medium_priority/debitos/` pois só a Camada 2 (opcional) resta.
+### Fase 2a — vereadores 20ª Legislatura ✅ ENTREGUE (2026-05-02)
+
+Scraping HTML do portal CMG, sem PDF parser. Substituiu integralmente
+os 3 endpoints Plone stub (`@@portalmodelo-json` / `@@transparency-json`
+/ `@@pl-json`) que ficaram dead code desde 2026-04-19.
+
+Implementação em `etl/src/bracc_etl/pipelines/camara_goiania.py`:
+
+- `fetch_to_disk(output_dir, limit, archival)`:
+  1. `GET /institucional/parlamentares/` → extrai slugs ativos (28 na 20ª
+     Legislatura), filtra `legislaturas-anteriores`.
+  2. `GET /institucional/parlamentares/<slug>` por perfil; parser regex
+     extrai `Partido`, `Nascimento`, `Telefones`, `E-mail`, `Gabinete`,
+     biografia (após `Natural`) e foto (`/Fotos-de-parlamentares/...`).
+  3. Salva HTML cru em `data/camara_goiania/raw/` (1 listagem + N perfis).
+  4. Salva JSON consolidado em `data/camara_goiania/vereadores.json`.
+  5. Archival opt-in via `archive_fetch` por HTML (URI carimbada em
+     `__snapshot_uri` por vereador, propagada ao :GoVereador via
+     `attach_provenance`).
+  6. UA realista (`Mozilla/5.0 ... Chrome/124.0`) + 0.5s entre requests
+     pra não martelar o portal Plone.
+- `extract` lê só `vereadores.json` local — sem fallback online no
+  pipeline (download é responsabilidade do `fetch_to_disk` via
+  `scripts/download_camara_goiania.py`).
+- `transform` cria `:GoVereador` rico: `name`, `party`, `photo_url`,
+  `gabinete`, `phones`, `email`, `birth_date` (ISO), `bio_summary`,
+  `profile_url`, `legislature='20'`, + provenance.
+- 24 testes em `etl/tests/test_camara_goiania_pipeline.py` cobrindo
+  parsers (slugs, perfil HTML, bio truncation), pipeline offline,
+  archival round-trip e cap de `--limit`.
+
+`docs/pipeline_status.md` e `docs/source_registry_br_v1.csv` passam pra
+`implemented_partial / partial`.
+
+**Para rodar (não rodado ainda no Neo4j local):**
+
+```bash
+uv run --project etl python scripts/download_camara_goiania.py \
+    --output-dir data/camara_goiania
+cd etl && uv run bracc-etl run --source camara_goiania
+```
+
+### Fase 2b — despesas / folha / diárias (PENDENTE)
+
+Despesas de gabinete, combustível, folha de pagamento e diárias **não
+estão** no portal CMG (`www.goiania.go.leg.br`). A página
+"Gastos de gabinetes" da transparência redireciona pro NúcleoGov:
+
+`https://camaragoiania.nucleogov.com.br/cidadao/transparencia/...`
+
+NúcleoGov é SPA RequireJS — HTML inicial só diz "Habilite o JavaScript".
+Endpoints disponíveis na navegação JS:
+
+- `/cidadao/transparencia/mp/id=18` — Duodécimo
+- `/cidadao/transparencia/mp/id=23` — Diárias
+- `/cidadao/transparencia/mp/id=34` — Devolução de Duodécimo
+- `/cidadao/transparencia/cntservidores` — Folha de Pagamento (302)
+- `/cidadao/transparencia/padraoremuneratorio` — Estrutura Remuneratória
+- `/cidadao/transparencia/tabeladiarias` — Tabela de Diárias
+- (combustível / gastos de gabinete sob outras rotas internas)
+
+**Plano da Fase 2b** (escopo: dias, igual TCE-GO Qlik):
+
+1. Scraper Selenium/Playwright reaproveitando infra do
+   `etl/src/bracc_etl/pipelines/tce_go_qlik.py` (mesma stack de driver
+   headless + waits).
+2. Mapear cada rota NúcleoGov pra um schema canônico
+   (`GoCouncilExpense`, `GoCouncilDiaria`, `GoCouncilPayroll`).
+3. Reintroduzir `expenses` / rels `DESPESA_GABINETE` no pipeline
+   `camara_goiania` (foram removidos na Fase 2a por não terem fonte).
+4. Resolver entity match `:GoVereador` ↔ despesa por nome
+   normalizado (CPF não publicado pelo NúcleoGov, pelo padrão de outras
+   câmaras GO).
+5. Archival por URL/screenshot HTML pré-render do estado SPA.
+
+Reabrir este TODO quando começar. Trigger: usuária pedir (ou Fase 2a
+gerar interesse de stakeholder em ver R$ no perfil de cada vereador).

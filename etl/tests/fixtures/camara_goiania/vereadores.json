@@ -1,12 +1,28 @@
 [
   {
-    "nome": "JOAO DA SILVA",
-    "partido": "PSD",
-    "legislatura": "2025-2028"
+    "slug": "Joao-da-Silva",
+    "name": "Joao da Silva",
+    "party": "PSD",
+    "photo_url": "https://www.goiania.go.leg.br/institucional/parlamentares/Fotos-de-parlamentares/joao.jpeg",
+    "gabinete": "1",
+    "phones": "62 3524-4001",
+    "email": "joao@cmg.go.leg.br",
+    "birth_date": "1980-05-15",
+    "bio_summary": "Natural de Goiania, advogado, eleito em 2024.",
+    "profile_url": "https://www.goiania.go.leg.br/institucional/parlamentares/Joao-da-Silva",
+    "legislature": "20"
   },
   {
-    "nome": "MARIA OLIVEIRA",
-    "partido": "PT",
-    "legislatura": "2025-2028"
+    "slug": "Maria-Oliveira",
+    "name": "Maria Oliveira",
+    "party": "PT",
+    "photo_url": "https://www.goiania.go.leg.br/institucional/parlamentares/Fotos-de-parlamentares/maria.jpeg",
+    "gabinete": "2",
+    "phones": "62 3524-4002",
+    "email": "maria@cmg.go.leg.br",
+    "birth_date": "1975-09-20",
+    "bio_summary": "Natural de Anapolis, professora, primeiro mandato.",
+    "profile_url": "https://www.goiania.go.leg.br/institucional/parlamentares/Maria-Oliveira",
+    "legislature": "20"
   }
 ]
