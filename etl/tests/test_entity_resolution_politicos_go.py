@@ -95,11 +95,16 @@ def _row_to_record(row: dict[str, Any]) -> MagicMock:
 def _make_pipeline(
     discovery_rows: list[dict[str, Any]],
     tmp_path: Path,
+    *,
+    enable_first_last_match: bool = False,
+    first_last_audit_only: bool = True,
 ) -> tuple[EntityResolutionPoliticosGoPipeline, MagicMock, list[tuple[str, dict[str, Any]]]]:
     driver, calls = _build_driver(discovery_rows)
     pipeline = EntityResolutionPoliticosGoPipeline(
         driver=driver,
         data_dir=str(tmp_path),
+        enable_first_last_match=enable_first_last_match,
+        first_last_audit_only=first_last_audit_only,
     )
     pipeline.run_id = f"{_SOURCE_ID}_20260418120000"
     return pipeline, driver, calls
@@ -1199,6 +1204,167 @@ class TestShadowPrefixMatch:
         ]
         assert len(prefix_edges) == 1
         assert prefix_edges[0]["target_element_id"] == "n3"
+
+
+class TestShadowFirstLastMatch:
+    """Fase 5.6 — shadow de 2 tokens casa cluster com source ≥3 tokens
+    compartilhando primeiro+último token. Default OFF + audit-only."""
+
+    def test_default_off_nao_attach_nem_audita(self, tmp_path: Path) -> None:
+        # Sem flag, nada acontece — shadow vai pra shadow_no_match.
+        rows = [
+            _fed(
+                "n1", "KARLOS MARCIO VIEIRA CABRAL",
+                id_camara="100", partido="PSDB",
+            ),
+            _shadow("n2", "KARLOS CABRAL"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(rows, tmp_path)
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_first_last_match" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        # Sem flag, vai pra shadow_no_match (tem ≥2 tokens mas nada do
+        # 5.5 prefix-bate "KARLOS CABRAL" como prefixo de "KARLOS MARCIO
+        # VIEIRA CABRAL" — tokens do meio divergem).
+        assert any(
+            e["type"] == "shadow_no_match" and e["shadow_element_id"] == "n2"
+            for e in entries
+        )
+        assert not any(
+            "first_last" in e["type"] for e in entries
+        )
+
+    def test_audit_only_default_quando_flag_ligada(
+        self, tmp_path: Path,
+    ) -> None:
+        # Flag ON + audit_only default → audit popula, sem :REPRESENTS.
+        rows = [
+            _fed(
+                "n1", "KARLOS MARCIO VIEIRA CABRAL",
+                id_camara="100", partido="PSDB",
+            ),
+            _shadow("n2", "KARLOS CABRAL"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(
+            rows, tmp_path, enable_first_last_match=True,
+        )
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_first_last_match" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        audit_hits = [
+            e for e in entries
+            if e["type"] == "shadow_first_last_match_audit"
+        ]
+        assert len(audit_hits) == 1
+        assert audit_hits[0]["shadow_element_id"] == "n2"
+        assert audit_hits[0]["canonical_id"] == "canon_camara_100"
+
+    def test_attach_quando_audit_only_false(self, tmp_path: Path) -> None:
+        rows = [
+            _fed(
+                "n1", "KARLOS MARCIO VIEIRA CABRAL",
+                id_camara="100", partido="PSDB",
+            ),
+            _shadow("n2", "KARLOS CABRAL"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(
+            rows, tmp_path,
+            enable_first_last_match=True,
+            first_last_audit_only=False,
+        )
+        pipeline.run()
+
+        first_last_edges = [
+            e for e in pipeline.represents_rels
+            if e["method"] == "shadow_first_last_match"
+        ]
+        assert len(first_last_edges) == 1
+        assert first_last_edges[0]["target_element_id"] == "n2"
+        assert first_last_edges[0]["confidence"] == pytest.approx(0.65)
+
+    def test_ambiguidade_skip_e_audita(self, tmp_path: Path) -> None:
+        # 2 clusters com (first, last) iguais → skip + audit ambiguous.
+        rows = [
+            _fed("n1", "MARIA APARECIDA SILVA", id_camara="201", partido="PT"),
+            _fed("n2", "MARIA DAS DORES SILVA", id_camara="202", partido="PSD"),
+            _shadow("n3", "MARIA SILVA"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(
+            rows, tmp_path,
+            enable_first_last_match=True,
+            first_last_audit_only=False,
+        )
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_first_last_match" not in methods
+        audit_files = list((tmp_path / _SOURCE_ID).glob("audit_*.jsonl"))
+        entries = [
+            json.loads(line)
+            for line in audit_files[0].read_text(encoding="utf-8").splitlines()
+        ]
+        ambig = [
+            e for e in entries if e["type"] == "shadow_first_last_ambiguous"
+        ]
+        assert len(ambig) == 1
+        assert ambig[0]["shadow_element_id"] == "n3"
+        assert sorted(ambig[0]["candidate_canonicals"]) == sorted([
+            "canon_camara_201", "canon_camara_202",
+        ])
+
+    def test_shadow_3_tokens_nao_passa_pela_5_6(self, tmp_path: Path) -> None:
+        # Shadow ≥3 tokens é coberto pela fase 5.5 ou cai em no_match.
+        # 5.6 só age em shadow == 2 tokens.
+        rows = [
+            _fed(
+                "n1", "JOSE MARIA PEREIRA SANTOS",
+                id_camara="300", partido="MDB",
+            ),
+            _shadow("n2", "JOSE MARIA SANTOS"),  # 3 tokens, NÃO é prefix
+        ]
+        pipeline, _driver, _calls = _make_pipeline(
+            rows, tmp_path,
+            enable_first_last_match=True,
+            first_last_audit_only=False,
+        )
+        pipeline.run()
+
+        # 3-token shadow não vira first_last_match.
+        methods = [e["method"] for e in pipeline.represents_rels]
+        assert "shadow_first_last_match" not in methods
+
+    def test_shadow_2_tokens_source_2_tokens_skip(
+        self, tmp_path: Path,
+    ) -> None:
+        # Source com 2 tokens mesmo (não ≥3) — fase 5.6 NÃO indexa.
+        # Esse caso já é coberto por shadow_name_exact (fase 5).
+        rows = [
+            _fed("n1", "KARLOS CABRAL", id_camara="400", partido="PT"),
+            _shadow("n2", "KARLOS CABRAL"),
+        ]
+        pipeline, _driver, _calls = _make_pipeline(
+            rows, tmp_path,
+            enable_first_last_match=True,
+            first_last_audit_only=False,
+        )
+        pipeline.run()
+
+        methods = [e["method"] for e in pipeline.represents_rels]
+        # shadow_name_exact pega antes (fase 5), 5.6 nem corre.
+        assert "shadow_name_exact" in methods
+        assert "shadow_first_last_match" not in methods
 
 
 class TestManualOverrides:
